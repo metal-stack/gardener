@@ -559,7 +559,7 @@ func (c *validationContext) validateProvider() field.ErrorList {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("volume", "size"), worker.Volume.VolumeSize, fmt.Sprintf("size must be >= %s", minSize)))
 		}
 
-		if worker.Kubernetes.Version != nil {
+		if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
 			oldWorkerKubernetesVersion := c.oldShoot.Spec.Kubernetes.Version
 			if oldWorker.Kubernetes.Version != nil {
 				oldWorkerKubernetesVersion = *oldWorker.Kubernetes.Version

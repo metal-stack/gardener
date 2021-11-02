@@ -1302,6 +1302,16 @@ var _ = Describe("validator", func() {
 
 					Expect(err).To(BeForbiddenError())
 				})
+
+				// TODO Hackathon
+				// default version is choosen if only major.minor is given for create and update
+				// create a shoot without specified worker k8s version
+				// create a shoot with worker version != control plane version specified
+				// create a shoot with worker version == control plane version specified
+				// update nil worker version to control plane version
+				// update nil worker version to != control plane version
+				// update worker version to nil
+
 			})
 
 			Context("machine image checks", func() {

@@ -1049,8 +1049,15 @@ func ValidateWorker(worker core.Worker, kubernetesVersion string, fldPath *field
 	if len(worker.Taints) > 0 {
 		allErrs = append(allErrs, validateTaints(worker.Taints, fldPath.Child("taints"))...)
 	}
-	if worker.Kubernetes != nil && worker.Kubernetes.Kubelet != nil {
-		allErrs = append(allErrs, ValidateKubeletConfig(*worker.Kubernetes.Kubelet, kubernetesVersion, isDockerConfigured([]core.Worker{worker}), fldPath.Child("kubernetes", "kubelet"))...)
+	if worker.Kubernetes != nil {
+		if worker.Kubernetes.Version != nil {
+			workerGroupKubernetesVersion := *worker.Kubernetes.Version
+			allErrs = append(allErrs, validateKubernetesVersionUpdate(kubernetesVersion, workerGroupKubernetesVersion, fldPath.Child("kubernetes", "version"))...)
+			kubernetesVersion = workerGroupKubernetesVersion
+		}
+		if worker.Kubernetes.Kubelet != nil {
+			allErrs = append(allErrs, ValidateKubeletConfig(*worker.Kubernetes.Kubelet, kubernetesVersion, isDockerConfigured([]core.Worker{worker}), fldPath.Child("kubernetes", "kubelet"))...)
+		}
 	}
 
 	if worker.CABundle != nil {

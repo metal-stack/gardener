@@ -559,6 +559,25 @@ func (c *validationContext) validateProvider() field.ErrorList {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("volume", "size"), worker.Volume.VolumeSize, fmt.Sprintf("size must be >= %s", minSize)))
 		}
 
+		if worker.Kubernetes.Version != nil {
+			oldWorkerKubernetesVersion := c.oldShoot.Spec.Kubernetes.Version
+			if oldWorker.Kubernetes.Version != nil {
+				oldWorkerKubernetesVersion = *oldWorker.Kubernetes.Version
+			}
+			ok, isDefaulted, validKubernetesVersions, versionDefault := validateKubernetesVersionConstraints(c.cloudProfile.Spec.Kubernetes.Versions, *worker.Kubernetes.Version, oldWorkerKubernetesVersion)
+			if !ok {
+				err := field.NotSupported(path.Child("version"), worker.Kubernetes.Version, validKubernetesVersions)
+				if isDefaulted {
+					err.Detail = fmt.Sprintf("unable to default version - couldn't find a suitable patch version for %s. Suitable patch versions have a non-expired expiration date and are no 'preview' versions. 'Preview'-classified versions have to be selected explicitly -  %s", *worker.Kubernetes.Version, err.Detail)
+				}
+				allErrs = append(allErrs, err)
+			} else if versionDefault != nil {
+				// TODO clarify what to do with the versiondefault for worker group k8s version
+				ver := versionDefault.String()
+				worker.Kubernetes.Version = &ver
+			}
+		}
+
 		allErrs = append(allErrs, validateZones(c.cloudProfile.Spec.Regions, c.shoot.Spec.Region, c.oldShoot.Spec.Region, worker, oldWorker, idxPath)...)
 	}
 

@@ -561,7 +561,7 @@ func (c *validationContext) validateProvider() field.ErrorList {
 
 		if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
 			oldWorkerKubernetesVersion := c.oldShoot.Spec.Kubernetes.Version
-			if oldWorker.Kubernetes.Version != nil {
+			if oldWorker.Kubernetes != nil && oldWorker.Kubernetes.Version != nil {
 				oldWorkerKubernetesVersion = *oldWorker.Kubernetes.Version
 			}
 			ok, isDefaulted, validKubernetesVersions, versionDefault := validateKubernetesVersionConstraints(c.cloudProfile.Spec.Kubernetes.Versions, *worker.Kubernetes.Version, oldWorkerKubernetesVersion)

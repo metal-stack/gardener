@@ -21,6 +21,7 @@ import (
 	"github.com/gardener/gardener/charts"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/operation/botanist/component/extensions/operatingsystemconfig"
 	"github.com/gardener/gardener/pkg/operation/botanist/component/extensions/operatingsystemconfig/downloader"
@@ -168,6 +169,13 @@ func (b *Botanist) DeployManagedResourceForCloudConfigExecutor(ctx context.Conte
 			return fmt.Errorf("did not find osc data for worker pool %q", worker.Name)
 		}
 
+		if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
+			hyperkubeImage, err = b.ImageVector.FindImage(charts.ImageNameHyperkube, imagevector.RuntimeVersion(*worker.Kubernetes.Version), imagevector.TargetVersion(*worker.Kubernetes.Version))
+			if err != nil {
+				return err
+			}
+		}
+
 		secretName, data, err := b.generateCloudConfigExecutorResourcesForWorker(worker, oscData.Original, hyperkubeImage)
 		if err != nil {
 			return err
@@ -234,9 +242,13 @@ func (b *Botanist) generateCloudConfigExecutorResourcesForWorker(
 	map[string][]byte,
 	error,
 ) {
+	kubernetesVersion, err := helper.CalculateEffectiveKubernetesVersion(b.Shoot.KubernetesVersion, worker.Kubernetes)
+	if err != nil {
+		return "", nil, err
+	}
 	var (
 		registry   = managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
-		secretName = operatingsystemconfig.Key(worker.Name, b.Shoot.KubernetesVersion)
+		secretName = operatingsystemconfig.Key(worker.Name, kubernetesVersion)
 	)
 
 	var kubeletDataVolume *gardencorev1beta1.DataVolume
@@ -250,7 +262,7 @@ func (b *Botanist) generateCloudConfigExecutorResourcesForWorker(
 		}
 	}
 
-	executorScript, err := ExecutorScriptFn([]byte(oscDataOriginal.Content), hyperkubeImage, b.Shoot.KubernetesVersion.String(), kubeletDataVolume, *oscDataOriginal.Command, oscDataOriginal.Units)
+	executorScript, err := ExecutorScriptFn([]byte(oscDataOriginal.Content), hyperkubeImage, kubernetesVersion.String(), kubeletDataVolume, *oscDataOriginal.Command, oscDataOriginal.Units)
 	if err != nil {
 		return "", nil, err
 	}

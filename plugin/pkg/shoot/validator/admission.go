@@ -566,7 +566,7 @@ func (c *validationContext) validateProvider() field.ErrorList {
 			}
 			ok, isDefaulted, validKubernetesVersions, versionDefault := validateKubernetesVersionConstraints(c.cloudProfile.Spec.Kubernetes.Versions, *worker.Kubernetes.Version, oldWorkerKubernetesVersion)
 			if !ok {
-				err := field.NotSupported(path.Child("version"), worker.Kubernetes.Version, validKubernetesVersions)
+				err := field.NotSupported(idxPath.Child("kubernetes", "version"), worker.Kubernetes.Version, validKubernetesVersions)
 				if isDefaulted {
 					err.Detail = fmt.Sprintf("unable to default version - couldn't find a suitable patch version for %s. Suitable patch versions have a non-expired expiration date and are no 'preview' versions. 'Preview'-classified versions have to be selected explicitly -  %s", *worker.Kubernetes.Version, err.Detail)
 				}

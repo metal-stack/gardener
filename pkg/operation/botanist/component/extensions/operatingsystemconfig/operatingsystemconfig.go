@@ -23,6 +23,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core/v1alpha1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/extensions"
@@ -313,12 +314,20 @@ func (o *operatingSystemConfig) WaitCleanup(ctx context.Context) error {
 
 // DeleteStaleResources deletes unused OperatingSystemConfig resources from the shoot namespace in the seed.
 func (o *operatingSystemConfig) DeleteStaleResources(ctx context.Context) error {
-	return o.deleteOperatingSystemConfigResources(ctx, o.getWantedOSCNames())
+	wantedOSCs, err := o.getWantedOSCNames()
+	if err != nil {
+		return err
+	}
+	return o.deleteOperatingSystemConfigResources(ctx, wantedOSCs)
 }
 
 // WaitCleanupStaleResources waits until all unused OperatingSystemConfig resources are cleaned up.
 func (o *operatingSystemConfig) WaitCleanupStaleResources(ctx context.Context) error {
-	return o.waitCleanup(ctx, o.getWantedOSCNames())
+	wantedOSCs, err := o.getWantedOSCNames()
+	if err != nil {
+		return err
+	}
+	return o.waitCleanup(ctx, wantedOSCs)
 }
 
 func (o *operatingSystemConfig) waitCleanup(ctx context.Context, wantedOSCNames sets.String) error {
@@ -339,7 +348,7 @@ func (o *operatingSystemConfig) waitCleanup(ctx context.Context, wantedOSCNames 
 
 // getWantedOSCNames returns the names of all OSC resources, that are currently needed based
 // on the configured worker pools.
-func (o *operatingSystemConfig) getWantedOSCNames() sets.String {
+func (o *operatingSystemConfig) getWantedOSCNames() (sets.String, error) {
 	wantedOSCNames := sets.NewString()
 
 	for _, worker := range o.values.Workers {
@@ -351,11 +360,15 @@ func (o *operatingSystemConfig) getWantedOSCNames() sets.String {
 			extensionsv1alpha1.OperatingSystemConfigPurposeProvision,
 			extensionsv1alpha1.OperatingSystemConfigPurposeReconcile,
 		} {
-			wantedOSCNames.Insert(Key(worker.Name, o.values.KubernetesVersion) + keySuffix(worker.Machine.Image.Name, purpose))
+			kubernetesVersion, err := helper.CalculateEffectiveKubernetesVersion(o.values.KubernetesVersion, worker.Kubernetes)
+			if err != nil {
+				return nil, err
+			}
+			wantedOSCNames.Insert(Key(worker.Name, kubernetesVersion) + keySuffix(worker.Machine.Image.Name, purpose))
 		}
 	}
 
-	return wantedOSCNames
+	return wantedOSCNames, nil
 }
 
 func (o *operatingSystemConfig) forEachWorkerPoolAndPurpose(fn func(*extensionsv1alpha1.OperatingSystemConfig, gardencorev1beta1.Worker, extensionsv1alpha1.OperatingSystemConfigPurpose) error) error {
@@ -368,7 +381,11 @@ func (o *operatingSystemConfig) forEachWorkerPoolAndPurpose(fn func(*extensionsv
 			extensionsv1alpha1.OperatingSystemConfigPurposeProvision,
 			extensionsv1alpha1.OperatingSystemConfigPurposeReconcile,
 		} {
-			oscName := Key(worker.Name, o.values.KubernetesVersion) + keySuffix(worker.Machine.Image.Name, purpose)
+			kubernetesVersion, err := helper.CalculateEffectiveKubernetesVersion(o.values.KubernetesVersion, worker.Kubernetes)
+			if err != nil {
+				return err
+			}
+			oscName := Key(worker.Name, kubernetesVersion) + keySuffix(worker.Machine.Image.Name, purpose)
 
 			osc, ok := o.oscs[oscName]
 			if !ok {
@@ -458,13 +475,9 @@ func (o *operatingSystemConfig) newDeployer(osc *extensionsv1alpha1.OperatingSys
 	}
 	setDefaultEvictionMemoryAvailable(kubeletConfigParameters.EvictionHard, kubeletConfigParameters.EvictionSoft, o.values.MachineTypes, worker.Machine.Type)
 
-	kubernetesVersion := o.values.KubernetesVersion
-	if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
-		var err error
-		kubernetesVersion, err = semver.NewVersion(*worker.Kubernetes.Version)
-		if err != nil {
-			return deployer{}, err
-		}
+	kubernetesVersion, err := helper.CalculateEffectiveKubernetesVersion(o.values.KubernetesVersion, worker.Kubernetes)
+	if err != nil {
+		return deployer{}, err
 	}
 
 	return deployer{

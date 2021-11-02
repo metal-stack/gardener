@@ -67,6 +67,7 @@ spec:
     #   effect: NoSchedule
     # caBundle: <some-ca-bundle-to-be-installed-to-all-nodes-in-this-pool>
     # kubernetes:
+    #   version: 1.14.3
     #   kubelet:
     #     cpuCFSQuota: true
     #     failSwapOn: true

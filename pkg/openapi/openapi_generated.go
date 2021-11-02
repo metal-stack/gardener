@@ -5337,7 +5337,7 @@ func schema_pkg_apis_core_v1alpha1_Provider(ref common.ReferenceCallback) common
 						},
 					},
 				},
-				Required: []string{"type", "workers"},
+				Required: []string{"type"},
 			},
 		},
 		Dependencies: []string{
@@ -12070,7 +12070,7 @@ func schema_pkg_apis_core_v1beta1_Provider(ref common.ReferenceCallback) common.
 						},
 					},
 				},
-				Required: []string{"type", "workers"},
+				Required: []string{"type"},
 			},
 		},
 		Dependencies: []string{

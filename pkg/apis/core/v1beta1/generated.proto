@@ -1591,6 +1591,7 @@ message Provider {
   // Workers is a list of worker groups.
   // +patchMergeKey=name
   // +patchStrategy=merge
+  // +optional
   repeated Worker workers = 4;
 }
 

@@ -1337,7 +1337,7 @@ func ValidateWorkers(workers []core.Worker, fldPath *field.Path) field.ErrorList
 		}
 	}
 
-	if !atLeastOneActivePool {
+	if !atLeastOneActivePool && len(workers) > 0 {
 		allErrs = append(allErrs, field.Forbidden(fldPath, "at least one worker pool with min>0 and max> 0 needed"))
 	}
 
@@ -1345,7 +1345,7 @@ func ValidateWorkers(workers []core.Worker, fldPath *field.Path) field.ErrorList
 		allErrs = append(allErrs, field.Forbidden(fldPath, fmt.Sprintf("at least one worker pool must exist having either no taints or only the %q taint", corev1.TaintEffectPreferNoSchedule)))
 	}
 
-	if !atLeastOnePoolWithAllowedSystemComponents {
+	if !atLeastOnePoolWithAllowedSystemComponents && len(workers) > 0 {
 		allErrs = append(allErrs, field.Forbidden(fldPath, "at least one active worker pool with allowSystemComponents=true needed"))
 	}
 

@@ -156,6 +156,23 @@ func (r *shootMaintenanceReconciler) reconcile(ctx context.Context, shoot *garde
 		shootLogger.Error(fmt.Sprintf("Could not maintain kubernetes version: %s", err.Error()))
 	}
 
+	// Now its time to update worker pool kubernetes version if specified
+	var reasonsForWorkerPoolKubernetesUpdate = make(map[string]string)
+	for i, w := range shoot.Spec.Provider.Workers {
+		if w.Kubernetes == nil || w.Kubernetes.Version == nil {
+			continue
+		}
+
+		reasonForWorkerPoolKubernetesUpdate, err := maintainKubernetesVersion(*w.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+			shoot.Spec.Provider.Workers[i].Kubernetes.Version = &v
+		})
+		if err != nil {
+			// continue execution to allow the machine image version update
+			shootLogger.Error(fmt.Sprintf("Could not maintain kubernetes version for worker pool:%s: %s", w.Name, err.Error()))
+		}
+		reasonsForWorkerPoolKubernetesUpdate[w.Name] = reasonForWorkerPoolKubernetesUpdate
+	}
+
 	// do not add reconcile annotation if shoot was once set to failed or if shoot is already in an ongoing reconciliation
 	if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.State == gardencorev1beta1.LastOperationStateSucceeded {
 		metav1.SetMetaDataAnnotation(&shoot.ObjectMeta, v1beta1constants.GardenerOperation, v1beta1constants.GardenerOperationReconcile)
@@ -205,6 +222,12 @@ func (r *shootMaintenanceReconciler) reconcile(ctx context.Context, shoot *garde
 		r.recorder.Eventf(shoot, corev1.EventTypeNormal, gardencorev1beta1.ShootEventK8sVersionMaintenance, "%s",
 			fmt.Sprintf("Updated %s.", reasonForKubernetesUpdate))
 		shootLogger.Debugf("[SHOOT MAINTENANCE] Updating %s", reasonForKubernetesUpdate)
+	}
+
+	for name, reason := range reasonsForWorkerPoolKubernetesUpdate {
+		r.recorder.Eventf(shoot, corev1.EventTypeNormal, gardencorev1beta1.ShootEventK8sVersionMaintenance, "%s",
+			fmt.Sprintf("Updated worker pool %q %s.", name, reason))
+		shootLogger.Debugf("[SHOOT MAINTENANCE] Updating worker pool %q %s", name, reason)
 	}
 
 	shootLogger.Infof("[SHOOT MAINTENANCE] completed")

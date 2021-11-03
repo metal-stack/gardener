@@ -144,11 +144,6 @@ var (
 // 1. A secret containing the dedicated cloud config execution script for each worker group
 // 2. A secret containing some shared RBAC policies for downloading the cloud config execution script
 func (b *Botanist) DeployManagedResourceForCloudConfigExecutor(ctx context.Context) error {
-	hyperkubeImage, err := b.ImageVector.FindImage(charts.ImageNameHyperkube, imagevector.RuntimeVersion(b.ShootVersion()), imagevector.TargetVersion(b.ShootVersion()))
-	if err != nil {
-		return err
-	}
-
 	var (
 		managedResource                  = managedresources.NewForShoot(b.K8sSeedClient.Client(), b.Shoot.SeedNamespace, CloudConfigExecutionManagedResourceName, false)
 		managedResourceSecretsCount      = len(b.Shoot.GetInfo().Spec.Provider.Workers) + 1
@@ -169,11 +164,14 @@ func (b *Botanist) DeployManagedResourceForCloudConfigExecutor(ctx context.Conte
 			return fmt.Errorf("did not find osc data for worker pool %q", worker.Name)
 		}
 
-		if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
-			hyperkubeImage, err = b.ImageVector.FindImage(charts.ImageNameHyperkube, imagevector.RuntimeVersion(*worker.Kubernetes.Version), imagevector.TargetVersion(*worker.Kubernetes.Version))
-			if err != nil {
-				return err
-			}
+		kubernetesVersion, err := helper.CalculateEffectiveKubernetesVersion(b.Shoot.KubernetesVersion, worker.Kubernetes)
+		if err != nil {
+			return err
+		}
+
+		hyperkubeImage, err := b.ImageVector.FindImage(charts.ImageNameHyperkube, imagevector.RuntimeVersion(kubernetesVersion.String()), imagevector.TargetVersion(kubernetesVersion.String()))
+		if err != nil {
+			return err
 		}
 
 		secretName, data, err := b.generateCloudConfigExecutorResourcesForWorker(worker, oscData.Original, hyperkubeImage)

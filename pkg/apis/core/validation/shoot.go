@@ -268,7 +268,19 @@ func ValidateShootSpecUpdate(newSpec, oldSpec *core.ShootSpec, newObjectMeta met
 
 // ValidateProviderUpdate validates the specification of a Provider object.
 func ValidateProviderUpdate(newProvider, oldProvider *core.Provider, fldPath *field.Path) field.ErrorList {
-	return apivalidation.ValidateImmutableField(newProvider.Type, oldProvider.Type, fldPath.Child("type"))
+	var (
+		allErrs       = field.ErrorList{}
+		oldHasWorkers = len(oldProvider.Workers) > 0
+		newHasWorkers = len(newProvider.Workers) > 0
+	)
+
+	if oldHasWorkers && !newHasWorkers {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("workers"), fmt.Sprintf("forbidden to remove all workers")))
+	}
+	if !oldHasWorkers && newHasWorkers {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("workers"), fmt.Sprintf("forbidden to add workers to workless shoot")))
+	}
+	return append(allErrs, apivalidation.ValidateImmutableField(newProvider.Type, oldProvider.Type, fldPath.Child("type"))...)
 }
 
 // ValidateShootStatusUpdate validates the status field of a Shoot object.

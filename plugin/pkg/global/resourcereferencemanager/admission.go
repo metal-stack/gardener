@@ -603,8 +603,10 @@ func (r *ReferenceManager) ensureShootReferences(ctx context.Context, attributes
 	}
 
 	if !equality.Semantic.DeepEqual(oldShoot.Spec.SecretBindingName, shoot.Spec.SecretBindingName) {
-		if _, err := r.secretBindingLister.SecretBindings(shoot.Namespace).Get(shoot.Spec.SecretBindingName); err != nil {
-			return err
+		if len(shoot.Spec.Provider.Workers) > 0 || shoot.Spec.SecretBindingName != "" {
+			if _, err := r.secretBindingLister.SecretBindings(shoot.Namespace).Get(shoot.Spec.SecretBindingName); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -191,6 +191,10 @@ func (b *Botanist) DeploySecrets(ctx context.Context) error {
 // DeployCloudProviderSecret creates or updates the cloud provider secret in the Shoot namespace
 // in the Seed cluster.
 func (b *Botanist) DeployCloudProviderSecret(ctx context.Context) error {
+	if b.Shoot.Secret == nil && b.Shoot.IsWorkerless {
+		return nil
+	}
+
 	var (
 		checksum = utils.ComputeSecretChecksum(b.Shoot.Secret.Data)
 		secret   = &corev1.Secret{

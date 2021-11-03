@@ -192,8 +192,8 @@ func ValidateShootSpec(meta metav1.ObjectMeta, spec *core.ShootSpec, fldPath *fi
 	if len(spec.CloudProfileName) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("cloudProfileName"), "must specify a cloud profile"))
 	}
-	if len(spec.SecretBindingName) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath.Child("secretBindingName"), "must specify a name"))
+	if len(spec.SecretBindingName) == 0 && len(spec.Provider.Workers) > 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("secretBindingName"), "must specify a SecretBinding name"))
 	}
 	if spec.SeedName != nil && len(*spec.SeedName) == 0 {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("seedName"), spec.SeedName, "seed name must not be empty when providing the key"))

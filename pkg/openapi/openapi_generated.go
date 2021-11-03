@@ -6955,7 +6955,6 @@ func schema_pkg_apis_core_v1alpha1_ShootSpec(ref common.ReferenceCallback) commo
 					"secretBindingName": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SecretBindingName is the name of the a SecretBinding that has a reference to the provider secret. The credentials inside the provider secret will be used to create the shoot in the respective account.",
-							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -7015,7 +7014,7 @@ func schema_pkg_apis_core_v1alpha1_ShootSpec(ref common.ReferenceCallback) commo
 						},
 					},
 				},
-				Required: []string{"cloudProfileName", "kubernetes", "networking", "provider", "region", "secretBindingName"},
+				Required: []string{"cloudProfileName", "kubernetes", "networking", "provider", "region"},
 			},
 		},
 		Dependencies: []string{
@@ -13601,7 +13600,6 @@ func schema_pkg_apis_core_v1beta1_ShootSpec(ref common.ReferenceCallback) common
 					"secretBindingName": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SecretBindingName is the name of the a SecretBinding that has a reference to the provider secret. The credentials inside the provider secret will be used to create the shoot in the respective account.",
-							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -13661,7 +13659,7 @@ func schema_pkg_apis_core_v1beta1_ShootSpec(ref common.ReferenceCallback) common
 						},
 					},
 				},
-				Required: []string{"cloudProfileName", "kubernetes", "networking", "provider", "region", "secretBindingName"},
+				Required: []string{"cloudProfileName", "kubernetes", "networking", "provider", "region"},
 			},
 		},
 		Dependencies: []string{

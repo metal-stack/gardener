@@ -52,7 +52,7 @@ type Builder struct {
 	shootObjectFunc   func(context.Context) (*gardencorev1beta1.Shoot, error)
 	cloudProfileFunc  func(context.Context, string) (*gardencorev1beta1.CloudProfile, error)
 	exposureClassFunc func(context.Context, string) (*gardencorev1alpha1.ExposureClass, error)
-	shootSecretFunc   func(context.Context, string, string) (*corev1.Secret, error)
+	shootSecretFunc   func(context.Context, string, string, bool) (*corev1.Secret, error)
 	projectName       string
 	internalDomain    *garden.Domain
 	defaultDomains    []*garden.Domain

@@ -335,10 +335,6 @@ var _ = Describe("Shoot Validation Tests", func() {
 					"Type":  Equal(field.ErrorTypeRequired),
 					"Field": Equal("spec.region"),
 				})),
-				PointTo(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeRequired),
-					"Field": Equal("spec.secretBindingName"),
-				})),
 			))
 		})
 
@@ -546,6 +542,27 @@ var _ = Describe("Shoot Validation Tests", func() {
 					"Field": Equal("spec.provider.type"),
 				})),
 			))
+		})
+
+		It("should require a secretBindingName if there are workers", func() {
+			shoot.Spec.SecretBindingName = ""
+			errorList := ValidateShoot(shoot)
+
+			Expect(errorList).To(ConsistOf(
+				PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":   Equal(field.ErrorTypeRequired),
+					"Field":  Equal("spec.secretBindingName"),
+					"Detail": Equal("must specify a SecretBinding name"),
+				})),
+			))
+		})
+
+		It("should allow omitting secretBindingName if there are no workers", func() {
+			shoot.Spec.SecretBindingName = ""
+			shoot.Spec.Provider.Workers = nil
+			errorList := ValidateShoot(shoot)
+
+			Expect(errorList).To(BeEmpty())
 		})
 
 		It("should forbid adding invalid/duplicate emails", func() {

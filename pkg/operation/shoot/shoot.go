@@ -55,7 +55,7 @@ func NewBuilder() *Builder {
 		cloudProfileFunc: func(context.Context, string) (*gardencorev1beta1.CloudProfile, error) {
 			return nil, fmt.Errorf("cloudprofile object is required but not set")
 		},
-		shootSecretFunc: func(context.Context, string, string) (*corev1.Secret, error) {
+		shootSecretFunc: func(context.Context, string, string, bool) (*corev1.Secret, error) {
 			return nil, fmt.Errorf("shoot secret object is required but not set")
 		},
 		exposureClassFunc: func(context.Context, string) (*gardencorev1alpha1.ExposureClass, error) {
@@ -112,13 +112,17 @@ func (b *Builder) WithCloudProfileObjectFromCluster(seedClient kubernetes.Interf
 
 // WithShootSecret sets the shootSecretFunc attribute at the Builder.
 func (b *Builder) WithShootSecret(secret *corev1.Secret) *Builder {
-	b.shootSecretFunc = func(context.Context, string, string) (*corev1.Secret, error) { return secret, nil }
+	b.shootSecretFunc = func(context.Context, string, string, bool) (*corev1.Secret, error) { return secret, nil }
 	return b
 }
 
 // WithShootSecretFrom sets the shootSecretFunc attribute at the Builder after fetching it from the given reader.
 func (b *Builder) WithShootSecretFrom(c client.Reader) *Builder {
-	b.shootSecretFunc = func(ctx context.Context, namespace, secretBindingName string) (*corev1.Secret, error) {
+	b.shootSecretFunc = func(ctx context.Context, namespace, secretBindingName string, isWorkerless bool) (*corev1.Secret, error) {
+		if secretBindingName == "" && isWorkerless {
+			return nil, nil
+		}
+
 		binding := &gardencorev1beta1.SecretBinding{}
 		if err := c.Get(ctx, kutil.Key(namespace, secretBindingName), binding); err != nil {
 			return nil, err
@@ -187,7 +191,9 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 	}
 	shoot.CloudProfile = cloudProfile
 
-	secret, err := b.shootSecretFunc(ctx, shootObject.Namespace, shootObject.Spec.SecretBindingName)
+	shoot.IsWorkerless = len(shootObject.Spec.Provider.Workers) == 0
+
+	secret, err := b.shootSecretFunc(ctx, shootObject.Namespace, shootObject.Spec.SecretBindingName, shoot.IsWorkerless)
 	if err != nil {
 		return nil, err
 	}
@@ -262,8 +268,6 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 	if nodeLocalDNSEnabled, err := strconv.ParseBool(shoot.GetInfo().Annotations[v1beta1constants.AnnotationNodeLocalDNS]); err == nil {
 		shoot.NodeLocalDNSEnabled = nodeLocalDNSEnabled
 	}
-
-	shoot.IsWorkerless = len(shootObject.Spec.Provider.Workers) == 0
 
 	shoot.Purpose = gardencorev1beta1helper.GetPurpose(shootObject)
 

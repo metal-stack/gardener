@@ -182,6 +182,10 @@ func (q *QuotaValidator) Validate(ctx context.Context, a admission.Attributes, o
 		checkLifetime = lifetimeVerificationNeeded(*shoot, *oldShoot)
 	}
 
+	if len(shoot.Spec.Provider.Workers) == 0 && shoot.Spec.SecretBindingName == "" {
+		return nil
+	}
+
 	secretBinding, err := q.secretBindingLister.SecretBindings(shoot.Namespace).Get(shoot.Spec.SecretBindingName)
 	if err != nil {
 		return apierrors.NewInternalError(err)

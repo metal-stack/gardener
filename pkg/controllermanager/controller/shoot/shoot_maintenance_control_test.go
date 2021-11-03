@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package shoot_test
+package shoot
 
 import (
 	"time"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	. "github.com/gardener/gardener/pkg/controllermanager/controller/shoot"
 	"github.com/gardener/gardener/pkg/logger"
 
 	. "github.com/onsi/ginkgo"
@@ -449,7 +448,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			cloudProfile.Spec.Kubernetes.Versions[4].ExpirationDate = &expirationDateInThePast
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.1"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.0.2"))
@@ -464,7 +465,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			// mark latest version 1.02 as preview
 			cloudProfile.Spec.Kubernetes.Versions[3].Classification = &previewClassification
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).To(Not(HaveOccurred()))
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.0.1"))
@@ -475,7 +478,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			cloudProfile.Spec.Kubernetes.Versions[3].ExpirationDate = &expirationDateInThePast
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.2"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.1.2"))
@@ -486,7 +491,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			cloudProfile.Spec.Kubernetes.Versions[3].ExpirationDate = &expirationDateInThePast
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.2"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.1.2"))
@@ -504,7 +511,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			cloudProfile.Spec.Kubernetes.Versions[1].ExpirationDate = &expirationDateInThePast
 			cloudProfile.Spec.Kubernetes.Versions[2].ExpirationDate = &expirationDateInThePast
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.1.2"))
@@ -519,7 +528,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			cloudProfile.Spec.Kubernetes.Versions[3].ExpirationDate = &expirationDateInThePast
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.2"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).To(HaveOccurred())
 		})
@@ -528,7 +539,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion = true
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.1"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.0.2"))
@@ -539,7 +552,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			cloudProfile.Spec.Kubernetes.Versions[4].ExpirationDate = &expirationDateInTheFuture
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.1"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.0.1"))
@@ -550,7 +565,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion = true
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.0"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.0.2"))
@@ -561,7 +578,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion = true
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.0.2"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.1.2"))
@@ -572,7 +591,9 @@ var _ = Describe("Shoot Maintenance", func() {
 			cloudProfile.Spec.Kubernetes.Versions[3].ExpirationDate = &expirationDateInThePast
 			shoot.Spec.Kubernetes = gardencorev1beta1.Kubernetes{Version: "1.1.2"}
 
-			_, err := MaintainKubernetesVersion(shoot, cloudProfile)
+			_, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+				shoot.Spec.Kubernetes.Version = v
+			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal("1.1.2"))

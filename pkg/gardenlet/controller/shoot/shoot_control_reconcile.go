@@ -173,17 +173,17 @@ func (r *shootReconciler) runReconcileShootFlow(ctx context.Context, o *operatio
 		})
 		deployInfrastructure = g.Add(flow.Task{
 			Name:         "Deploying Shoot infrastructure",
-			Fn:           flow.TaskFn(botanist.DeployInfrastructure).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.TaskFn(botanist.DeployInfrastructure).RetryUntilTimeout(defaultInterval, defaultTimeout).SkipIf(withoutWorkers),
 			Dependencies: flow.NewTaskIDs(deploySecrets, deployCloudProviderSecret, deployReferencedResources, deployOwnerDomainDNSRecord),
 		})
 		waitUntilInfrastructureReady = g.Add(flow.Task{
 			Name: "Waiting until shoot infrastructure has been reconciled",
-			Fn: func(ctx context.Context) error {
+			Fn: flow.TaskFn(func(ctx context.Context) error {
 				if err := botanist.WaitForInfrastructure(ctx); err != nil {
 					return err
 				}
 				return removeTaskAnnotation(ctx, o, generation, v1beta1constants.ShootTaskDeployInfrastructure)
-			},
+			}).SkipIf(withoutWorkers),
 			Dependencies: flow.NewTaskIDs(deployInfrastructure),
 		})
 		_ = g.Add(flow.Task{

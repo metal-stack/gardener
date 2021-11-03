@@ -33,10 +33,12 @@ import (
 	"github.com/gardener/gardener/pkg/operation/botanist/component/kubeapiserver"
 	"github.com/gardener/gardener/pkg/operation/botanist/component/vpnseedserver"
 	"github.com/gardener/gardener/pkg/operation/common"
+	"github.com/gardener/gardener/pkg/utils/imagevector"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/gardener/gardener/pkg/utils/secrets"
 	versionutils "github.com/gardener/gardener/pkg/utils/version"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -288,12 +290,13 @@ func (b *Botanist) generateCoreAddonsChart(ctx context.Context) (*chartrenderer.
 			"allowPrivilegedContainers": *b.Shoot.GetInfo().Spec.Kubernetes.AllowPrivilegedContainers,
 		}
 		kubeProxyConfig = map[string]interface{}{
-			"kubeconfig":        kubeProxySecret.Data["kubeconfig"],
-			"kubernetesVersion": b.Shoot.GetInfo().Spec.Kubernetes.Version,
+			"kubeconfig": kubeProxySecret.Data["kubeconfig"],
 			"podAnnotations": map[string]interface{}{
 				"checksum/secret-kube-proxy": b.LoadCheckSum("kube-proxy"),
 			},
 			"enableIPVS": b.Shoot.IPVSEnabled(),
+			"podNetwork": b.Shoot.Networks.Pods.String(),
+			"vpaEnabled": b.Shoot.WantsVerticalPodAutoscaler,
 		}
 		verticalPodAutoscaler = map[string]interface{}{
 			"application": map[string]interface{}{
@@ -359,6 +362,66 @@ func (b *Botanist) generateCoreAddonsChart(ctx context.Context) (*chartrenderer.
 		}
 	}
 
+	poolNameVersionToImage := make(map[string]string)
+	for _, worker := range b.Shoot.GetInfo().Spec.Provider.Workers {
+		kubernetesVersion, err := gardencorev1beta1helper.CalculateEffectiveKubernetesVersion(b.Shoot.KubernetesVersion, worker.Kubernetes)
+		if err != nil {
+			return nil, err
+		}
+
+		image, err := b.ImageVector.FindImage(charts.ImageNameKubeProxy, imagevector.RuntimeVersion(kubernetesVersion.String()), imagevector.TargetVersion(kubernetesVersion.String()))
+		if err != nil {
+			return nil, err
+		}
+
+		poolNameVersionToImage[worker.Name+"@"+kubernetesVersion.String()] = image.String()
+	}
+
+	nodeList := &corev1.NodeList{}
+	if err := b.K8sShootClient.Client().List(ctx, nodeList); err != nil {
+		return nil, err
+	}
+
+	for _, node := range nodeList.Items {
+		poolName, ok1 := node.Labels[v1beta1constants.LabelWorkerPool]
+		kubernetesVersion, ok2 := node.Labels[v1beta1constants.LabelWorkerKubernetesVersion]
+
+		if ok1 && ok2 {
+			image, err := b.ImageVector.FindImage(charts.ImageNameKubeProxy, imagevector.RuntimeVersion(kubernetesVersion), imagevector.TargetVersion(kubernetesVersion))
+			if err != nil {
+				return nil, err
+			}
+
+			poolNameVersionToImage[poolName+"@"+kubernetesVersion] = image.String()
+		}
+	}
+
+	var workerPools []map[string]string
+
+	// TODO(rfranzke): Delete this in a future version.
+	{
+		kubeProxyImage, err := b.ImageVector.FindImage(charts.ImageNameKubeProxy, imagevector.RuntimeVersion(b.ShootVersion()), imagevector.TargetVersion(b.ShootVersion()))
+		if err != nil {
+			return nil, err
+		}
+
+		workerPools = append(workerPools, map[string]string{
+			"name":              "",
+			"kubernetesVersion": b.Shoot.GetInfo().Spec.Kubernetes.Version,
+			"kubeProxyImage":    kubeProxyImage.String(),
+		})
+	}
+
+	for poolName, image := range poolNameVersionToImage {
+		split := strings.Split(poolName, "@")
+		workerPools = append(workerPools, map[string]string{
+			"name":              split[0],
+			"kubernetesVersion": split[1],
+			"kubeProxyImage":    image,
+		})
+	}
+	kubeProxyConfig["workerPools"] = workerPools
+
 	if domain := b.Shoot.ExternalClusterDomain; domain != nil {
 		shootInfo["domain"] = *domain
 	}
@@ -386,7 +449,7 @@ func (b *Botanist) generateCoreAddonsChart(ctx context.Context) (*chartrenderer.
 		return nil, err
 	}
 
-	kubeProxy, err := b.InjectShootShootImages(kubeProxyConfig, charts.ImageNameKubeProxy, charts.ImageNameAlpine)
+	kubeProxy, err := b.InjectShootShootImages(kubeProxyConfig, charts.ImageNameAlpine)
 	if err != nil {
 		return nil, err
 	}

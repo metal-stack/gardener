@@ -263,6 +263,8 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 		shoot.NodeLocalDNSEnabled = nodeLocalDNSEnabled
 	}
 
+	shoot.IsWorkerless = len(shootObject.Spec.Provider.Workers) == 0
+
 	shoot.Purpose = gardencorev1beta1helper.GetPurpose(shootObject)
 
 	// Determine backup entry name

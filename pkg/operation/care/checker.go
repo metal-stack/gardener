@@ -25,16 +25,14 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/operation/botanist"
-	"github.com/gardener/gardener/pkg/operation/botanist/component/metricsserver"
 	"github.com/gardener/gardener/pkg/operation/botanist/component/namespaces"
-	"github.com/gardener/gardener/pkg/operation/common"
 	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/kubernetes/health"
 
 	"github.com/Masterminds/semver"
 	druidv1alpha1 "github.com/gardener/etcd-druid/api/v1alpha1"
-	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +47,6 @@ var (
 		v1beta1constants.DeploymentNameGardenerResourceManager,
 		v1beta1constants.DeploymentNameKubeAPIServer,
 		v1beta1constants.DeploymentNameKubeControllerManager,
-		v1beta1constants.DeploymentNameKubeScheduler,
 	)
 
 	requiredControlPlaneEtcds = sets.NewString(
@@ -325,6 +322,10 @@ func computeRequiredControlPlaneDeployments(
 		}
 	}
 
+	if len(shoot.Spec.Provider.Workers) > 0 {
+		requiredControlPlaneDeployments.Insert(v1beta1constants.DeploymentNameKubeScheduler)
+	}
+
 	return requiredControlPlaneDeployments, nil
 }
 
@@ -540,12 +541,7 @@ func (b *HealthChecker) CheckExtensionCondition(condition gardencorev1beta1.Cond
 	return nil
 }
 
-var managedResourcesShoot = sets.NewString(
-	namespaces.ManagedResourceName,
-	common.ManagedResourceShootCoreName,
-	common.ManagedResourceAddonsName,
-	metricsserver.ManagedResourceName,
-)
+var managedResourcesShoot = sets.NewString(namespaces.ManagedResourceName)
 
 func makeDeploymentLister(ctx context.Context, c client.Client, namespace string, selector labels.Selector) kutil.DeploymentLister {
 	var (

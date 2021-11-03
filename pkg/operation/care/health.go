@@ -23,6 +23,7 @@ import (
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencorev1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/features"
 	gardenletfeatures "github.com/gardener/gardener/pkg/gardenlet/features"
@@ -31,20 +32,21 @@ import (
 	"github.com/gardener/gardener/pkg/operation/botanist"
 	"github.com/gardener/gardener/pkg/operation/botanist/component/coredns"
 	"github.com/gardener/gardener/pkg/operation/botanist/component/kubeapiserver"
+	"github.com/gardener/gardener/pkg/operation/botanist/component/metricsserver"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/shoot"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/kubernetes/health"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"github.com/Masterminds/semver"
-	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -312,18 +314,22 @@ func (h *Health) checkSystemComponents(
 	*gardencorev1beta1.Condition,
 	error,
 ) {
-	managedResources := managedResourcesShoot.List()
+	requiredManagedResources := sets.NewString(managedResourcesShoot.List()...)
 	if versionConstraintGreaterEqual131.Check(checker.gardenerVersion) {
 		// TODO: Add this ManagedResource unconditionally to the `managedResourcesShoot` in a future version.
-		managedResources = append(managedResources, kubeapiserver.ManagedResourceName)
+		requiredManagedResources.Insert(kubeapiserver.ManagedResourceName)
 	}
 
 	if versionConstraintGreaterEqual132.Check(checker.gardenerVersion) {
 		// TODO: Add this ManagedResource unconditionally to the `managedResourcesShoot` in a future version.
-		managedResources = append(managedResources, coredns.ManagedResourceName)
+		requiredManagedResources.Insert(coredns.ManagedResourceName)
 	}
 
-	for _, name := range managedResources {
+	if !h.shoot.IsWorkerless {
+		requiredManagedResources.Insert(common.ManagedResourceAddonsName, metricsserver.ManagedResourceName, common.ManagedResourceShootCoreName)
+	}
+
+	for name := range requiredManagedResources {
 		mr := &resourcesv1alpha1.ManagedResource{}
 		if err := h.seedClient.Client().Get(ctx, kutil.Key(h.shoot.SeedNamespace, name), mr); err != nil {
 			return nil, err
@@ -338,13 +344,25 @@ func (h *Health) checkSystemComponents(
 		return exitCondition, nil
 	}
 
+	if !h.shoot.IsWorkerless {
+		g, err, done := h.checkTunnelConnection(ctx, checker, condition)
+		if done {
+			return g, err
+		}
+	}
+
+	c := gardencorev1beta1helper.UpdatedCondition(condition, gardencorev1beta1.ConditionTrue, "SystemComponentsRunning", "All system components are healthy.")
+	return &c, nil
+}
+
+func (h *Health) checkTunnelConnection(ctx context.Context, checker *HealthChecker, condition gardencorev1beta1.Condition) (*gardencorev1beta1.Condition, error, bool) {
 	podsList := &corev1.PodList{}
 	if err := h.shootClient.Client().List(ctx, podsList, client.InNamespace(metav1.NamespaceSystem), client.MatchingLabels{"type": "tunnel"}); err != nil {
-		return nil, err
+		return nil, err, true
 	}
 	if len(podsList.Items) == 0 {
 		c := checker.FailedCondition(condition, "NoTunnelDeployed", "no tunnels are currently deployed to perform health-check on")
-		return &c, nil
+		return &c, nil, true
 	}
 
 	if established, err := botanist.CheckTunnelConnection(ctx, h.shootClient, logrus.NewEntry(logger.NewNopLogger()), common.VPNTunnel); err != nil || !established {
@@ -353,11 +371,9 @@ func (h *Health) checkSystemComponents(
 			msg += fmt.Sprintf(" (%+v)", err)
 		}
 		c := checker.FailedCondition(condition, "TunnelConnectionBroken", msg)
-		return &c, nil
+		return &c, nil, true
 	}
-
-	c := gardencorev1beta1helper.UpdatedCondition(condition, gardencorev1beta1.ConditionTrue, "SystemComponentsRunning", "All system components are healthy.")
-	return &c, nil
+	return nil, nil, false
 }
 
 // checkClusterNodes checks whether every node registered at the Shoot cluster is in "Ready" state, that

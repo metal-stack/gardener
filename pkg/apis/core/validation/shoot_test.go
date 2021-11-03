@@ -328,14 +328,6 @@ var _ = Describe("Shoot Validation Tests", func() {
 					"Field": Equal("spec.provider.type"),
 				})),
 				PointTo(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeForbidden),
-					"Field": Equal("spec.provider.workers"),
-				})),
-				PointTo(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeForbidden),
-					"Field": Equal("spec.provider.workers"),
-				})),
-				PointTo(MatchFields(IgnoreExtras, Fields{
 					"Type":  Equal(field.ErrorTypeRequired),
 					"Field": Equal("spec.cloudProfileName"),
 				})),
@@ -826,21 +818,12 @@ var _ = Describe("Shoot Validation Tests", func() {
 				}))
 			})
 
-			It("should forbid an empty worker list", func() {
+			It("should allow an empty worker list", func() {
 				shoot.Spec.Provider.Workers = []core.Worker{}
 
 				errorList := ValidateShoot(shoot)
 
-				Expect(errorList).To(ConsistOf(
-					PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":  Equal(field.ErrorTypeForbidden),
-						"Field": Equal("spec.provider.workers"),
-					})),
-					PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":  Equal(field.ErrorTypeForbidden),
-						"Field": Equal("spec.provider.workers"),
-					})),
-				))
+				Expect(errorList).To(BeEmpty())
 			})
 
 			It("should enforce unique worker names", func() {
@@ -1024,6 +1007,36 @@ var _ = Describe("Shoot Validation Tests", func() {
 				errorList := ValidateShootUpdate(newShoot, shoot)
 
 				Expect(errorList).To(HaveLen(0))
+			})
+
+			It("should forbid adding workers to a workerless shoot", func() {
+				worders := shoot.Spec.Provider.Workers
+				shoot.Spec.Provider.Workers = nil
+				newShoot := prepareShootForUpdate(shoot)
+
+				newShoot.Spec.Provider.Workers = worders
+
+				errorList := ValidateShootUpdate(newShoot, shoot)
+
+				Expect(errorList).To(ConsistOfFields(Fields{
+					"Type":   Equal(field.ErrorTypeForbidden),
+					"Field":  Equal("spec.provider.workers"),
+					"Detail": ContainSubstring("forbidden to add workers to workless shoot"),
+				}))
+			})
+
+			It("should forbid removing all workers from shoot", func() {
+				newShoot := prepareShootForUpdate(shoot)
+
+				newShoot.Spec.Provider.Workers = nil
+
+				errorList := ValidateShootUpdate(newShoot, shoot)
+
+				Expect(errorList).To(ConsistOfFields(Fields{
+					"Type":   Equal(field.ErrorTypeForbidden),
+					"Field":  Equal("spec.provider.workers"),
+					"Detail": ContainSubstring("forbidden to remove all workers"),
+				}))
 			})
 
 			It("should allow removing a worker pool", func() {

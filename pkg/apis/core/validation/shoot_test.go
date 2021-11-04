@@ -2153,10 +2153,8 @@ var _ = Describe("Shoot Validation Tests", func() {
 			errorList := ValidateShootUpdate(newShoot, shoot)
 
 			Expect(errorList).To(BeEmpty())
-
 		})
 
-		// FIXME
 		It("should work to set worker pool kubernetes version lower one minor than control plane version", func() {
 			shoot.Spec.Provider.Workers[0].Kubernetes = &core.WorkerKubernetes{Version: pointer.String("1.15.2")}
 			newShoot := prepareShootForUpdate(shoot)
@@ -2166,6 +2164,7 @@ var _ = Describe("Shoot Validation Tests", func() {
 
 			Expect(errorList).To(BeEmpty())
 		})
+
 		It("should work to set worker pool kubernetes version lower two minor than control plane version", func() {
 			shoot.Spec.Kubernetes.Version = "1.16.0"
 			shoot.Spec.Provider.Workers[0].Kubernetes = &core.WorkerKubernetes{Version: pointer.String("1.15.2")}
@@ -2176,6 +2175,7 @@ var _ = Describe("Shoot Validation Tests", func() {
 
 			Expect(errorList).To(BeEmpty())
 		})
+
 		It("forbid to set worker pool kubernetes version lower three minor than control plane version", func() {
 			shoot.Spec.Kubernetes.Version = "1.17.0"
 			shoot.Spec.Provider.Workers[0].Kubernetes = &core.WorkerKubernetes{Version: pointer.String("1.15.2")}

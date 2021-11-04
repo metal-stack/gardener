@@ -302,7 +302,6 @@ var _ = Describe("Shoot Maintenance controller tests", func() {
 			}).Should(Equal(testKubernetesVersionHighestPatchConsecutiveMinor.Version))
 		})
 
-		// FIXME
 		It("Worker Pool Kubernetes version should be updated, but control plane version stays: force update minor of worker pool version", func() {
 			// set the shoots Kubernetes version to be the highest patch version of the minor version
 			patch := client.MergeFrom(shoot.DeepCopy())
@@ -321,7 +320,7 @@ var _ = Describe("Shoot Maintenance controller tests", func() {
 				err := testClient.Get(ctx, client.ObjectKeyFromObject(shoot), shoot)
 				Expect(err).NotTo(HaveOccurred())
 				return *shoot.Spec.Provider.Workers[0].Kubernetes.Version
-			}).Should(Equal(testKubernetesVersionHighestPatchConsecutiveMinor.Version))
+			}).Should(Equal(testKubernetesVersionLowPatchConsecutiveMinor.Version))
 
 			Expect(shoot.Spec.Kubernetes.Version).To(Equal(testKubernetesVersionLowPatchConsecutiveMinor.Version))
 		})

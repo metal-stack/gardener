@@ -148,12 +148,18 @@ func (r *shootMaintenanceReconciler) reconcile(ctx context.Context, shoot *garde
 		shootLogger.Error(fmt.Sprintf("Could not maintain machine image version: %s", err.Error()))
 	}
 
-	reasonForKubernetesUpdate, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+	reasonForKubernetesUpdate, err := maintainKubernetesVersion(shoot.Spec.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) error {
 		shoot.Spec.Kubernetes.Version = v
+		return nil
 	})
 	if err != nil {
 		// continue execution to allow the machine image version update
 		shootLogger.Error(fmt.Sprintf("Could not maintain kubernetes version: %s", err.Error()))
+	}
+
+	shootSemver, err := semver.NewVersion(shoot.Spec.Kubernetes.Version)
+	if err != nil {
+		return err
 	}
 
 	// Now its time to update worker pool kubernetes version if specified
@@ -163,8 +169,18 @@ func (r *shootMaintenanceReconciler) reconcile(ctx context.Context, shoot *garde
 			continue
 		}
 
-		reasonForWorkerPoolKubernetesUpdate, err := maintainKubernetesVersion(*w.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) {
+		reasonForWorkerPoolKubernetesUpdate, err := maintainKubernetesVersion(*w.Kubernetes.Version, shoot.Spec.Maintenance.AutoUpdate.KubernetesVersion, cloudProfile, func(v string) error {
+			workerPoolSemver, err := semver.NewVersion(v)
+			if err != nil {
+				return err
+			}
+			// If during autoupdate a worker pool kubernetes gets forcefully updated to the next minor which might be higher than the same minor of the shoot, take this
+			if workerPoolSemver.GreaterThan(shootSemver) {
+				workerPoolSemver = shootSemver
+			}
+			v = workerPoolSemver.String()
 			shoot.Spec.Provider.Workers[i].Kubernetes.Version = &v
+			return nil
 		})
 		if err != nil {
 			// continue execution to allow the machine image version update
@@ -265,7 +281,7 @@ func MaintainMachineImages(shootLogger *logrus.Entry, shoot *gardencorev1beta1.S
 }
 
 // maintainKubernetesVersion updates a Shoot's Kubernetes version if necessary and returns the reason why an update was done
-func maintainKubernetesVersion(kubernetesVersion string, autoUpdate bool, profile *gardencorev1beta1.CloudProfile, updateFunc func(string)) (string, error) {
+func maintainKubernetesVersion(kubernetesVersion string, autoUpdate bool, profile *gardencorev1beta1.CloudProfile, updateFunc func(string) error) (string, error) {
 	shouldBeUpdated, reason, isExpired, err := shouldKubernetesVersionBeUpdated(kubernetesVersion, autoUpdate, profile)
 	if err != nil {
 		return "", err
@@ -282,7 +298,10 @@ func maintainKubernetesVersion(kubernetesVersion string, autoUpdate bool, profil
 		return "", nil
 	}
 	reasonForKubernetesUpdate := fmt.Sprintf("Kubernetes version %q to version %q. Reason: %s", kubernetesVersion, updatedKubernetesVersion, reason)
-	updateFunc(updatedKubernetesVersion)
+	err = updateFunc(updatedKubernetesVersion)
+	if err != nil {
+		return "", err
+	}
 	return reasonForKubernetesUpdate, err
 }
 

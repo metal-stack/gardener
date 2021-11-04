@@ -1302,6 +1302,7 @@ var _ = Describe("validator", func() {
 
 					Expect(err).To(BeForbiddenError())
 				})
+
 				It("should choose the default kubernetes version if only major.minor is given in a worker group", func() {
 					shoot.Spec.Provider.Workers[0].Kubernetes = &core.WorkerKubernetes{Version: pointer.String("1.18")}
 					highestPatchVersion := core.ExpirableVersion{Version: "1.18.5"}
@@ -1349,6 +1350,7 @@ var _ = Describe("validator", func() {
 
 					Expect(shoot.Spec.Provider.Workers[0].Kubernetes.Version).To(Equal(pointer.String("1.17.0")))
 				})
+
 				It("should work to create a cluster with a worker group kubernetes version set equal to control plane version", func() {
 					shoot.Spec.Kubernetes.Version = "1.18.5"
 					shoot.Spec.Provider.Workers[0].Kubernetes = &core.WorkerKubernetes{Version: pointer.String("1.18.5")}
@@ -1364,7 +1366,6 @@ var _ = Describe("validator", func() {
 
 					Expect(shoot.Spec.Provider.Workers[0].Kubernetes.Version).To(Equal(pointer.String("1.18.5")))
 				})
-
 			})
 
 			Context("machine image checks", func() {

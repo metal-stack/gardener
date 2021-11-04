@@ -362,7 +362,7 @@ func (b *Botanist) generateCoreAddonsChart(ctx context.Context) (*chartrenderer.
 		}
 	}
 
-	poolNameVersionToImage := make(map[string]string)
+	poolNameVersionToImage := make(workerPoolKubeProxyImages)
 	for _, worker := range b.Shoot.GetInfo().Spec.Provider.Workers {
 		kubernetesVersion, err := gardencorev1beta1helper.CalculateEffectiveKubernetesVersion(b.Shoot.KubernetesVersion, worker.Kubernetes)
 		if err != nil {
@@ -374,7 +374,7 @@ func (b *Botanist) generateCoreAddonsChart(ctx context.Context) (*chartrenderer.
 			return nil, err
 		}
 
-		poolNameVersionToImage[worker.Name+"@"+kubernetesVersion.String()] = image.String()
+		poolNameVersionToImage.Upsert(worker.Name, kubernetesVersion.String(), image.String())
 	}
 
 	nodeList := &corev1.NodeList{}
@@ -385,15 +385,16 @@ func (b *Botanist) generateCoreAddonsChart(ctx context.Context) (*chartrenderer.
 	for _, node := range nodeList.Items {
 		poolName, ok1 := node.Labels[v1beta1constants.LabelWorkerPool]
 		kubernetesVersion, ok2 := node.Labels[v1beta1constants.LabelWorkerKubernetesVersion]
-
-		if ok1 && ok2 {
-			image, err := b.ImageVector.FindImage(charts.ImageNameKubeProxy, imagevector.RuntimeVersion(kubernetesVersion), imagevector.TargetVersion(kubernetesVersion))
-			if err != nil {
-				return nil, err
-			}
-
-			poolNameVersionToImage[poolName+"@"+kubernetesVersion] = image.String()
+		if !ok1 || !ok2 {
+			continue
 		}
+
+		image, err := b.ImageVector.FindImage(charts.ImageNameKubeProxy, imagevector.RuntimeVersion(kubernetesVersion), imagevector.TargetVersion(kubernetesVersion))
+		if err != nil {
+			return nil, err
+		}
+
+		poolNameVersionToImage.Upsert(poolName, kubernetesVersion, image.String())
 	}
 
 	var workerPools []map[string]string
@@ -412,12 +413,11 @@ func (b *Botanist) generateCoreAddonsChart(ctx context.Context) (*chartrenderer.
 		})
 	}
 
-	for poolName, image := range poolNameVersionToImage {
-		split := strings.Split(poolName, "@")
+	for _, obj := range poolNameVersionToImage {
 		workerPools = append(workerPools, map[string]string{
-			"name":              split[0],
-			"kubernetesVersion": split[1],
-			"kubeProxyImage":    image,
+			"name":              obj.poolName,
+			"kubernetesVersion": obj.kubernetesVersion,
+			"kubeProxyImage":    obj.image,
 		})
 	}
 	kubeProxyConfig["workerPools"] = workerPools
@@ -627,4 +627,21 @@ func (b *Botanist) generateOptionalAddonsChart(_ context.Context) (*chartrendere
 // available.
 func (b *Botanist) outOfClusterAPIServerFQDN() string {
 	return fmt.Sprintf("%s.", b.Shoot.ComputeOutOfClusterAPIServerAddress(b.APIServerAddress, true))
+}
+
+type (
+	workerPoolKubeProxyImage struct {
+		poolName          string
+		kubernetesVersion string
+		image             string
+	}
+	workerPoolKubeProxyImages map[string]workerPoolKubeProxyImage
+)
+
+func (w workerPoolKubeProxyImages) Upsert(poolName, kubernetesVersion, image string) {
+	w[w.key(poolName, kubernetesVersion)] = workerPoolKubeProxyImage{poolName, kubernetesVersion, image}
+}
+
+func (w workerPoolKubeProxyImages) key(poolName, kubernetesVersion string) string {
+	return poolName + "@" + kubernetesVersion
 }

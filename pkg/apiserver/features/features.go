@@ -27,6 +27,7 @@ var featureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	features.AdminKubeconfigRequest:                       {Default: false, PreRelease: featuregate.Alpha},
 	features.UseDNSRecords:                                {Default: false, PreRelease: featuregate.Alpha},
 	features.DisallowKubeconfigRotationForShootInDeletion: {Default: true, PreRelease: featuregate.Beta},
+	features.WorkerPoolKubernetesVersion:                  {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // RegisterFeatureGates registers the feature gates of the Gardener API Server.

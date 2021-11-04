@@ -1,32 +1,35 @@
-# Kubernetes versions for worker pools
+# Controlling the Kubernetes versions for specific worker pools
 
-Since Gardener **`1.36.x`** worker pools can have different kubernetes versions specified than the control plane.
+Since Gardener `v1.36`, worker pools can have different Kubernetes versions specified than the control plane.
 
-It must be enabled by setting the featureGate: `enableWorkerPoolKubernetesVersion: true` in the gardenlet.
+It must be enabled by setting the featureGate `WorkerPoolKubernetesVersion: true` in the gardenlet's component configuration.
 
-Before, all worker pools inherited the kubernetes version of the control plane. Once the kubernetes version of the control plane was modified, all worker pools have been updated as well. Either by rolling the nodes in case of a minor kubernetes change, or in place for patch version updates.
+In earlier Gardener versions all worker pools inherited the Kubernetes version of the control plane. Once the Kubernetes version of the control plane was modified, all worker pools have been updated as well (either by rolling the nodes in case of a minor version change, or in-place for patch version changes).
 
-Some workloads, especially dealing with lots of data, wanted to be able to gradually update the kubernetes version, first the control plane, then provide new workers with the new version set, but keep existing worker. Then reschedule the pods to the new workers.
+In order to gracefully perform Kubernetes upgrades (triggering a rolling update of the nodes) with workloads sensitive to restarts (e.g., those dealing with lots of data), it might be required to be able to gradually perform the upgrade process.
+In such cases, the Kubernetes version for the worker pools can be pinned (`.spec.provider.workers[].kubernetes.version`) while the control plane Kubernetes version (`.spec.kubernetes.version`) is updated.
+This results in the nodes being untouched while the control plane is upgraded. 
+Now a new worker pool (with the version equal to the control plane version) can be added.
+Administrators can then reschedule their workloads to the new worekr pool according to their upgrade requirements and processes.
 
-## Constraints
+## Example Usage in a `Shoot`
 
 ```yaml
 spec:
-    kubernetes:
-        version: 1.20.1
-    provider:
-        workers:
-            - name: data1
-              kubernetes:
-                version: 1.19.1
-            - name: data2
+  kubernetes:
+    version: 1.20.1
+  provider:
+    workers:
+    - name: data1
+      kubernetes:
+        version: 1.19.1
+    - name: data2
 ```
 
-- If the version is not specified in a worker pool, the kubernetes version of the kubelet is inherited from the control plane
-- If the version is specified, it must meet the following constraints:
-  - equal to the control plane version specified
-  - up to two minor versions lower than the control plane version
-  - if it was not specified before, no downgrade is possible, a two minor skew is only possible if the worker pool version is set to control plane version and then the control plane is updated gradually two minor version.
-  - if the version is removed from the worker pool, only one minor version difference is allowed to the control plane.
+- If `.kubernetes.version` is not specified in a worker pool then the Kubernetes version of the kubelet is inherited from the control plane (`.spec.kubernetes.version`), i.e., in above example the `data2` pool will use `1.20.1`.
+- If `.kubernetes.version` is specified in a worker pool then it must meet the following constraints:
+  - It must be at most two minor versions lower than the control plane version.
+  - If it was not specified before then no downgrade is possible (you cannot set it to `1.19.1` while `.spec.kubernetes.version` is already `1.20.1`). The "two minor version skew" is only possible if the worker pool version is set to control plane version and then the control plane was updated gradually two minor versions.
+  - If the version is removed from the worker pool, only one minor version difference is allowed to the control plane (you cannot upgrade a pool from version `1.18.0` to `1.20.0` in one go).
 
-Automatic updates of kubernetes versions also apply to worker pool kubernetes versions.
+Automatic updates of Kubernetes versions (see [this document](shoot_maintenance.md#automatic-version-updates)) also apply to worker pool Kubernetes versions.

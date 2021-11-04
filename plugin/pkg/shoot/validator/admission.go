@@ -572,7 +572,6 @@ func (c *validationContext) validateProvider() field.ErrorList {
 				}
 				allErrs = append(allErrs, err)
 			} else if versionDefault != nil {
-				// TODO clarify what to do with the versiondefault for worker group k8s version
 				ver := versionDefault.String()
 				worker.Kubernetes.Version = &ver
 			}

@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	istioapimetav1alpha1 "istio.io/api/meta/v1alpha1"
 	istioapinetworkingv1beta1 "istio.io/api/networking/v1beta1"
+	istioapisecurityv1beta1 "istio.io/api/security/v1beta1"
 )
 
 // CmpOptsForDestinationRule returns a compare option to ignore unexported fields in types related to destination rules
@@ -58,6 +59,18 @@ func CmpOptsForVirtualService() cmp.Option {
 		istioapinetworkingv1beta1.TLSRoute{},
 		istioapinetworkingv1beta1.TLSMatchAttributes{},
 		istioapinetworkingv1beta1.RouteDestination{},
+		istioapimetav1alpha1.IstioStatus{},
+	)
+}
+
+// CmpOptsForAuthorizationPolicy returns a compare option to ignore unexported fields in types related to authorization policy
+func CmpOptsForAuthorizationPolicy() cmp.Option {
+	return cmpopts.IgnoreUnexported(
+		istioapisecurityv1beta1.AuthorizationPolicy{},
+		istioapisecurityv1beta1.Rule{},
+		istioapisecurityv1beta1.Rule_From{},
+		istioapisecurityv1beta1.Rule_To{},
+		istioapisecurityv1beta1.Source{},
 		istioapimetav1alpha1.IstioStatus{},
 	)
 }

@@ -801,11 +801,13 @@ istio.io/api/analysis/v1alpha1
 istio.io/api/meta/v1alpha1
 istio.io/api/networking/v1alpha3
 istio.io/api/networking/v1beta1
+istio.io/api/security/v1beta1
 istio.io/api/type/v1beta1
 # istio.io/client-go v1.14.0
 ## explicit; go 1.17
 istio.io/client-go/pkg/apis/networking/v1alpha3
 istio.io/client-go/pkg/apis/networking/v1beta1
+istio.io/client-go/pkg/apis/security/v1beta1
 # k8s.io/api v0.24.3 => k8s.io/api v0.24.3
 ## explicit; go 1.16
 k8s.io/api/admission/v1

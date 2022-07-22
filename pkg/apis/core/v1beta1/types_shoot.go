@@ -681,6 +681,35 @@ type KubeAPIServerConfig struct {
 	// Defaults to 1h.
 	// +optional
 	EventTTL *metav1.Duration `json:"eventTTL,omitempty" protobuf:"bytes,12,opt,name=eventTTL"`
+	// AccessControl provides authorization mechanisms for Shoot-API-Server.
+	// +optional
+	AccessControl *AccessControl `json:"accessControl,omitempty" protobuf:"bytes,13,opt,name=accessControl"`
+}
+
+// AccessControl provides authorization mechanisms for Shoot-API-Server.
+// Note: The schema (incl. child structs) and documentation resembles istio's AuthorizationPolicy.
+type AccessControl struct {
+	// The action to take on the source of request.
+	Action AuthorizationAction `json:"action" protobuf:"bytes,1,opt,name=authorizationAction"`
+	// Origin of request to run defined authorization action against.
+	Source Source `json:"source" protobuf:"bytes,2,opt,name=source"`
+}
+
+// AuthorizationAction is the operation (e.g. DENY) to apply on requests.
+type AuthorizationAction string
+
+const (
+	// AuthorizationActionAllow allows the request from a source.
+	AuthorizationActionAllow AuthorizationAction = "ALLOW"
+	// AuthorizationActionDeny denies the request from a source.
+	AuthorizationActionDeny AuthorizationAction = "DENY"
+)
+
+// Source holds origin of requests.
+type Source struct {
+	// A list of IP blocks (Ipv4 & Ipv6), populated from the source address of the IP packet.
+	// Single IP (e.g. "1.2.3.4") and CIDR (e.g. "1.2.3.0/24") are supported.
+	IPBlocks []string `json:"ipBlocks" protobuf:"bytes,1,opt,name=ipBlocks"`
 }
 
 // KubeAPIServerRequests contains configuration for request-specific settings for the kube-apiserver.

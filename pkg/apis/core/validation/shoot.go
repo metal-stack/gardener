@@ -123,6 +123,11 @@ var (
 		"PS512",
 		"none",
 	)
+
+	availableAccessControlAction = sets.NewString(
+		string(core.AuthorizationActionAllow),
+		string(core.AuthorizationActionDeny),
+	)
 )
 
 // ValidateShoot validates a Shoot object.
@@ -847,6 +852,16 @@ func validateKubernetes(kubernetes core.Kubernetes, dockerConfigured, shootHasDe
 			}
 		}
 
+		if kubeAPIServer.AccessControl != nil {
+			allErrs = append(allErrs, validateAccessControlAction(kubeAPIServer.AccessControl.Action, fldPath.Child("kubeAPIServer", "accessControl"))...)
+
+			if kubeAPIServer.AccessControl.Source.IPBlocks == nil {
+				allErrs = append(allErrs, field.Required(fldPath.Child("kubeAPIServer", "accessControl", "source", "ipBlocks"), "is required when access control action provided"))
+			} else {
+				allErrs = append(allErrs, validateIPAddresses(kubeAPIServer.AccessControl.Source.IPBlocks, fldPath.Child("kubeAPIServer", "accessControl", "source", "ipBlocks"))...)
+			}
+		}
+
 		allErrs = append(allErrs, featuresvalidation.ValidateFeatureGates(kubeAPIServer.FeatureGates, kubernetes.Version, fldPath.Child("kubeAPIServer", "featureGates"))...)
 	}
 
@@ -862,6 +877,30 @@ func validateKubernetes(kubernetes core.Kubernetes, dockerConfigured, shootHasDe
 	}
 	if verticalPodAutoscaler := kubernetes.VerticalPodAutoscaler; verticalPodAutoscaler != nil {
 		allErrs = append(allErrs, ValidateVerticalPodAutoscaler(*verticalPodAutoscaler, fldPath.Child("verticalPodAutoscaler"))...)
+	}
+
+	return allErrs
+}
+
+func validateIPAddresses(ips []string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	for _, ip := range ips {
+		if parsedIp := net.ParseIP(ip); parsedIp == nil {
+			if _, _, err := net.ParseCIDR(ip); err != nil {
+				allErrs = append(allErrs, field.Invalid(fldPath, ip, "is neither a valid IP address nor a valid CIDR"))
+			}
+		}
+	}
+
+	return allErrs
+}
+
+func validateAccessControlAction(action core.AuthorizationAction, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if !availableAccessControlAction.Has(string(action)) {
+		allErrs = append(allErrs, field.NotSupported(fldPath.Child("action"), action, availableAccessControlAction.List()))
 	}
 
 	return allErrs

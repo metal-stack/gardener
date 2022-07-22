@@ -536,6 +536,34 @@ type KubeAPIServerConfig struct {
 	EnableAnonymousAuthentication *bool
 	// EventTTL controls the amount of time to retain events.
 	EventTTL *metav1.Duration
+	// AccessControl provides access control configurations for the API server.
+	AccessControl *AccessControl
+}
+
+// AccessControl provides authorization mechanisms for Shoot-API-Server.
+// Note: The schema (incl. child structs) and documentation resembles istio's AuthorizationPolicy, but is heavily simplified.
+type AccessControl struct {
+	// The action to take on the source of request.
+	Action AuthorizationAction
+	// Origin of request to run defined authorization action against.
+	Source Source
+}
+
+// AuthorizationAction is the operation (e.g. DENY) to apply on requests.
+type AuthorizationAction string
+
+const (
+	// AuthorizationActionAllow allows the request from a source.
+	AuthorizationActionAllow AuthorizationAction = "ALLOW"
+	// AuthorizationActionDeny denies the request from a source.
+	AuthorizationActionDeny AuthorizationAction = "DENY"
+)
+
+// Source contains the origin of request to which access control is applied to.
+type Source struct {
+	// A list of IP blocks, populated from the source address of the IP packet.
+	// Single IP (e.g. "1.2.3.4") and CIDR (e.g. "1.2.3.0/24") are supported.
+	IPBlocks []string
 }
 
 // KubeAPIServerRequests contains configuration for request-specific settings for the kube-apiserver.

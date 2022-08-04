@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	istioapinetworkingv1beta1 "istio.io/api/networking/v1beta1"
 	istioapisecurityv1beta1 "istio.io/api/security/v1beta1"
+	istiov1beta1 "istio.io/api/type/v1beta1"
 	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	istiosecurity1beta1 "istio.io/client-go/pkg/apis/security/v1beta1"
@@ -217,6 +218,12 @@ func (s *sni) Deploy(ctx context.Context) error {
 		accessControl.Spec = istioapisecurityv1beta1.AuthorizationPolicy{
 			Action: accessControlSpec.Action,
 			Rules:  accessControlSpec.Rules,
+			Selector: &istiov1beta1.WorkloadSelector{
+				MatchLabels: map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				},
+			},
 		}
 
 		for i := range accessControl.Spec.Rules {

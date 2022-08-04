@@ -202,7 +202,10 @@ func (s *sni) Deploy(ctx context.Context) error {
 			Rules: []*istioapisecurityv1beta1.Rule{{
 				From: []*istioapisecurityv1beta1.Rule_From{{
 					Source: &istioapisecurityv1beta1.Source{
-						IpBlocks: s.values.AccessControl.Source.IPBlocks,
+						IpBlocks:          s.values.AccessControl.Source.IPBlocks,
+						NotIpBlocks:       s.values.AccessControl.Source.NotIPBlocks,
+						RemoteIpBlocks:    s.values.AccessControl.Source.RemoteIPBlocks,
+						NotRemoteIpBlocks: s.values.AccessControl.Source.NotRemoteIPBlocks,
 					},
 				}},
 			}},
@@ -214,6 +217,13 @@ func (s *sni) Deploy(ctx context.Context) error {
 		accessControl.Spec = istioapisecurityv1beta1.AuthorizationPolicy{
 			Action: accessControlSpec.Action,
 			Rules:  accessControlSpec.Rules,
+		}
+
+		for i := range accessControl.Spec.Rules {
+			accessControl.Spec.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
+				Key:    "connection.sni",
+				Values: s.values.Hosts,
+			}}
 		}
 		return nil
 	}); err != nil {
@@ -257,8 +267,8 @@ func (s *sni) emptyVirtualService() *istionetworkingv1beta1.VirtualService {
 func (s *sni) allowAllAuthorizationPolicy() *istiosecurity1beta1.AuthorizationPolicy {
 	return &istiosecurity1beta1.AuthorizationPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      v1beta1constants.DeploymentNameKubeAPIServer,
-			Namespace: s.namespace,
+			Name:      s.namespace,
+			Namespace: "istio-ingress",
 		},
 		Spec: istioapisecurityv1beta1.AuthorizationPolicy{
 			Action: istioapisecurityv1beta1.AuthorizationPolicy_ALLOW,

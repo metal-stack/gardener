@@ -10473,6 +10473,40 @@ SystemComponents
 Single IP (e.g. &ldquo;1.2.3.4&rdquo;) and CIDR (e.g. &ldquo;1.2.3.0/24&rdquo;) are supported.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>notIpBlocks</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>A list of negative match of IP blocks.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>remoteIpBlocks</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>A list of IP blocks, populated from X-Forwarded-For header or proxy protocol.
+Single IP (e.g. “1.2.3.4”) and CIDR (e.g. “1.2.3.0/24”) are supported.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>notRemoteIpBlocks</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>A list of negative match of remote IP blocks.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="core.gardener.cloud/v1beta1.SystemComponents">SystemComponents

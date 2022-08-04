@@ -7898,8 +7898,53 @@ func schema_pkg_apis_core_v1alpha1_Source(ref common.ReferenceCallback) common.O
 							},
 						},
 					},
+					"notIpBlocks": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A list of negative match of IP blocks.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"remoteIpBlocks": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A list of IP blocks, populated from X-Forwarded-For header or proxy protocol. Single IP (e.g. “1.2.3.4”) and CIDR (e.g. “1.2.3.0/24”) are supported.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"notRemoteIpBlocks": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A list of negative match of remote IP blocks.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"ipBlocks"},
+				Required: []string{"ipBlocks", "notIpBlocks", "remoteIpBlocks", "notRemoteIpBlocks"},
 			},
 		},
 	}

@@ -5733,6 +5733,9 @@ func autoConvert_core_ShootStatus_To_v1alpha1_ShootStatus(in *core.ShootStatus, 
 
 func autoConvert_v1alpha1_Source_To_core_Source(in *Source, out *core.Source, s conversion.Scope) error {
 	out.IPBlocks = *(*[]string)(unsafe.Pointer(&in.IPBlocks))
+	out.NotIPBlocks = *(*[]string)(unsafe.Pointer(&in.NotIPBlocks))
+	out.RemoteIPBlocks = *(*[]string)(unsafe.Pointer(&in.RemoteIPBlocks))
+	out.NotRemoteIPBlocks = *(*[]string)(unsafe.Pointer(&in.NotRemoteIPBlocks))
 	return nil
 }
 
@@ -5743,6 +5746,9 @@ func Convert_v1alpha1_Source_To_core_Source(in *Source, out *core.Source, s conv
 
 func autoConvert_core_Source_To_v1alpha1_Source(in *core.Source, out *Source, s conversion.Scope) error {
 	out.IPBlocks = *(*[]string)(unsafe.Pointer(&in.IPBlocks))
+	out.NotIPBlocks = *(*[]string)(unsafe.Pointer(&in.NotIPBlocks))
+	out.RemoteIPBlocks = *(*[]string)(unsafe.Pointer(&in.RemoteIPBlocks))
+	out.NotRemoteIPBlocks = *(*[]string)(unsafe.Pointer(&in.NotRemoteIPBlocks))
 	return nil
 }
 

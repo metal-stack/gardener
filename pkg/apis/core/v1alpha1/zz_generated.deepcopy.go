@@ -4565,6 +4565,21 @@ func (in *Source) DeepCopyInto(out *Source) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.NotIPBlocks != nil {
+		in, out := &in.NotIPBlocks, &out.NotIPBlocks
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.RemoteIPBlocks != nil {
+		in, out := &in.RemoteIPBlocks, &out.RemoteIPBlocks
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.NotRemoteIPBlocks != nil {
+		in, out := &in.NotRemoteIPBlocks, &out.NotRemoteIPBlocks
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

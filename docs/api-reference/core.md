@@ -1761,6 +1761,52 @@ ShootStatus
 </tr>
 </tbody>
 </table>
+<h3 id="core.gardener.cloud/v1beta1.AccessControl">AccessControl
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.KubeAPIServerConfig">KubeAPIServerConfig</a>)
+</p>
+<p>
+<p>AccessControl provides authorization mechanisms for Shoot-API-Server.
+Note: The schema (incl. child structs) and documentation resembles istio&rsquo;s AuthorizationPolicy.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>action</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.AuthorizationAction">
+AuthorizationAction
+</a>
+</em>
+</td>
+<td>
+<p>The action to take on the source of request.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>source</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.AuthorizationSource">
+AuthorizationSource
+</a>
+</em>
+</td>
+<td>
+<p>Origin of request to run defined authorization action against.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.gardener.cloud/v1beta1.Addon">Addon
 </h3>
 <p>
@@ -1989,6 +2035,84 @@ Kubernetes core/v1.ObjectReference
 <em>(Optional)</em>
 <p>ConfigMapRef is a reference to a ConfigMap object in the same namespace,
 which contains the audit policy for the kube-apiserver.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.gardener.cloud/v1beta1.AuthorizationAction">AuthorizationAction
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.AccessControl">AccessControl</a>)
+</p>
+<p>
+<p>AuthorizationAction is the operation (e.g. DENY) to apply on requests.</p>
+</p>
+<h3 id="core.gardener.cloud/v1beta1.AuthorizationSource">AuthorizationSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.AccessControl">AccessControl</a>)
+</p>
+<p>
+<p>AuthorizationSource holds origin of requests.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ipBlocks</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>A list of IP blocks (Ipv4 &amp; Ipv6), populated from the source address of the IP packet.
+Single IP (e.g. &ldquo;1.2.3.4&rdquo;) and CIDR (e.g. &ldquo;1.2.3.0/24&rdquo;) are supported.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>notIpBlocks</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>A list of negative match of IP blocks.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>remoteIpBlocks</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>A list of IP blocks, populated from X-Forwarded-For header or proxy protocol.
+Single IP (e.g. “1.2.3.4”) and CIDR (e.g. “1.2.3.0/24”) are supported.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>notRemoteIpBlocks</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>A list of negative match of remote IP blocks.</p>
 </td>
 </tr>
 </tbody>
@@ -4350,6 +4474,20 @@ Kubernetes meta/v1.Duration
 <em>(Optional)</em>
 <p>EventTTL controls the amount of time to retain events.
 Defaults to 1h.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>accessControl</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.AccessControl">
+AccessControl
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>AccessControl provides authorization mechanisms for Shoot-API-Server.</p>
 </td>
 </tr>
 </tbody>

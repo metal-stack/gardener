@@ -22,17 +22,19 @@ import (
 	mockclient "github.com/gardener/gardener/pkg/mock/controller-runtime/client"
 	"github.com/gardener/gardener/pkg/operation/botanist/component"
 	. "github.com/gardener/gardener/pkg/operation/botanist/component/kubeapiserverexposure"
-	comptest "github.com/gardener/gardener/pkg/operation/botanist/component/test"
 	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
+	"github.com/google/go-cmp/cmp"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 	istioapinetworkingv1beta1 "istio.io/api/networking/v1beta1"
 	istioapisecurityv1beta1 "istio.io/api/security/v1beta1"
+	istiov1beta1 "istio.io/api/type/v1beta1"
 	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	istiosecurity1beta1 "istio.io/client-go/pkg/apis/security/v1beta1"
@@ -214,9 +216,16 @@ var _ = Describe("#SNI", func() {
 					From: []*istioapisecurityv1beta1.Rule_From{{
 						Source: &istioapisecurityv1beta1.Source{
 							IpBlocks: ipBlocks,
-						}},
-					},
+						},
+					}},
+					When: []*istioapisecurityv1beta1.Condition{{
+						Key:    "connection.sni",
+						Values: hosts,
+					}},
 				}},
+				Selector: &istiov1beta1.WorkloadSelector{
+					MatchLabels: istioLabels,
+				},
 			},
 		}
 	})
@@ -245,20 +254,19 @@ var _ = Describe("#SNI", func() {
 
 			actualDestinationRule := &istionetworkingv1beta1.DestinationRule{}
 			Expect(c.Get(ctx, kutil.Key(expectedDestinationRule.Namespace, expectedDestinationRule.Name), actualDestinationRule)).To(Succeed())
-			Expect(actualDestinationRule).To(BeComparableTo(expectedDestinationRule, comptest.CmpOptsForDestinationRule()))
+			Expect(cmp.Diff(expectedDestinationRule, actualDestinationRule, protocmp.Transform())).To(BeEmpty())
 
 			actualGateway := &istionetworkingv1beta1.Gateway{}
 			Expect(c.Get(ctx, kutil.Key(expectedGateway.Namespace, expectedGateway.Name), actualGateway)).To(Succeed())
-			Expect(actualGateway).To(BeComparableTo(expectedGateway, comptest.CmpOptsForGateway()))
+			Expect(cmp.Diff(expectedGateway, actualGateway, protocmp.Transform())).To(BeEmpty())
 
 			actualVirtualService := &istionetworkingv1beta1.VirtualService{}
 			Expect(c.Get(ctx, kutil.Key(expectedVirtualService.Namespace, expectedVirtualService.Name), actualVirtualService)).To(Succeed())
-			Expect(actualVirtualService).To(BeComparableTo(expectedVirtualService, comptest.CmpOptsForVirtualService()))
+			Expect(cmp.Diff(expectedVirtualService, actualVirtualService, protocmp.Transform())).To(BeEmpty())
 
 			actualAccessControl := &istiosecurity1beta1.AuthorizationPolicy{}
 			Expect(c.Get(ctx, kutil.Key(expectedAccessControl.Namespace, expectedAccessControl.Name), actualAccessControl)).To(Succeed())
-			// FIXME: somehow it still complains about unexported fields
-			// Expect(actualAccessControl).To(BeComparableTo(expectedAccessControl, comptest.CmpOptsForAuthorizationPolicy()))
+			Expect(cmp.Diff(expectedAccessControl, actualAccessControl, protocmp.Transform())).To(BeEmpty())
 
 			actualEnvoyFilter := &istionetworkingv1alpha3.EnvoyFilter{}
 			Expect(c.Get(ctx, kutil.Key(expectedEnvoyFilterObjectMeta.Namespace, expectedEnvoyFilterObjectMeta.Name), actualEnvoyFilter)).To(Succeed())

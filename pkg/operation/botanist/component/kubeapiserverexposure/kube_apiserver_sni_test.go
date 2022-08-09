@@ -16,6 +16,7 @@ package kubeapiserverexposure_test
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/client/kubernetes/test"
@@ -70,7 +71,8 @@ var _ = Describe("#SNI", func() {
 		expectedDestinationRule       *istionetworkingv1beta1.DestinationRule
 		expectedGateway               *istionetworkingv1beta1.Gateway
 		expectedVirtualService        *istionetworkingv1beta1.VirtualService
-		expectedAccessControl         *istiosecurity1beta1.AuthorizationPolicy
+		expectedAccessControlVpn      *istiosecurity1beta1.AuthorizationPolicy
+		expectedAccessControlApi      *istiosecurity1beta1.AuthorizationPolicy
 		expectedEnvoyFilterObjectMeta metav1.ObjectMeta
 	)
 
@@ -197,13 +199,13 @@ var _ = Describe("#SNI", func() {
 				}},
 			},
 		}
-		expectedAccessControl = &istiosecurity1beta1.AuthorizationPolicy{
+		expectedAccessControlApi = &istiosecurity1beta1.AuthorizationPolicy{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: istiosecurity1beta1.SchemeGroupVersion.String(),
 				Kind:       "AuthorizationPolicy",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      namespace,
+				Name:      namespace + "-api-server",
 				Namespace: istioNamespace,
 				Labels: map[string]string{
 					"app":  "kubernetes",
@@ -221,6 +223,38 @@ var _ = Describe("#SNI", func() {
 					When: []*istioapisecurityv1beta1.Condition{{
 						Key:    "connection.sni",
 						Values: hosts,
+					}},
+				}},
+				Selector: &istiov1beta1.WorkloadSelector{
+					MatchLabels: istioLabels,
+				},
+			},
+		}
+
+		expectedAccessControlVpn = &istiosecurity1beta1.AuthorizationPolicy{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: istiosecurity1beta1.SchemeGroupVersion.String(),
+				Kind:       "AuthorizationPolicy",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      namespace + "-vpn-server",
+				Namespace: istioNamespace,
+				Labels: map[string]string{
+					"app":  "kubernetes",
+					"role": "apiserver",
+				},
+				ResourceVersion: "1",
+			},
+			Spec: istioapisecurityv1beta1.AuthorizationPolicy{
+				Rules: []*istioapisecurityv1beta1.Rule{{
+					From: []*istioapisecurityv1beta1.Rule_From{{
+						Source: &istioapisecurityv1beta1.Source{
+							IpBlocks: ipBlocks,
+						},
+					}},
+					When: []*istioapisecurityv1beta1.Condition{{
+						Key:    "request.headers[reversed-vpn]",
+						Values: []string{fmt.Sprintf("outbound|1194||vpn-seed-server.%s.svc.cluster.local", namespace)},
 					}},
 				}},
 				Selector: &istiov1beta1.WorkloadSelector{
@@ -264,9 +298,13 @@ var _ = Describe("#SNI", func() {
 			Expect(c.Get(ctx, kutil.Key(expectedVirtualService.Namespace, expectedVirtualService.Name), actualVirtualService)).To(Succeed())
 			Expect(cmp.Diff(expectedVirtualService, actualVirtualService, protocmp.Transform())).To(BeEmpty())
 
-			actualAccessControl := &istiosecurity1beta1.AuthorizationPolicy{}
-			Expect(c.Get(ctx, kutil.Key(expectedAccessControl.Namespace, expectedAccessControl.Name), actualAccessControl)).To(Succeed())
-			Expect(cmp.Diff(expectedAccessControl, actualAccessControl, protocmp.Transform())).To(BeEmpty())
+			actualAccessControlApi := &istiosecurity1beta1.AuthorizationPolicy{}
+			Expect(c.Get(ctx, kutil.Key(expectedAccessControlApi.Namespace, expectedAccessControlApi.Name), actualAccessControlApi)).To(Succeed())
+			Expect(cmp.Diff(expectedAccessControlApi, actualAccessControlApi, protocmp.Transform())).To(BeEmpty())
+
+			actualAccessControlVpn := &istiosecurity1beta1.AuthorizationPolicy{}
+			Expect(c.Get(ctx, kutil.Key(expectedAccessControlVpn.Namespace, expectedAccessControlVpn.Name), actualAccessControlVpn)).To(Succeed())
+			Expect(cmp.Diff(expectedAccessControlVpn, actualAccessControlVpn, protocmp.Transform())).To(BeEmpty())
 
 			actualEnvoyFilter := &istionetworkingv1alpha3.EnvoyFilter{}
 			Expect(c.Get(ctx, kutil.Key(expectedEnvoyFilterObjectMeta.Namespace, expectedEnvoyFilterObjectMeta.Name), actualEnvoyFilter)).To(Succeed())
@@ -281,7 +319,8 @@ var _ = Describe("#SNI", func() {
 		Expect(c.Get(ctx, kutil.Key(expectedDestinationRule.Namespace, expectedDestinationRule.Name), &istionetworkingv1beta1.DestinationRule{})).To(Succeed())
 		Expect(c.Get(ctx, kutil.Key(expectedGateway.Namespace, expectedGateway.Name), &istionetworkingv1beta1.Gateway{})).To(Succeed())
 		Expect(c.Get(ctx, kutil.Key(expectedVirtualService.Namespace, expectedVirtualService.Name), &istionetworkingv1beta1.VirtualService{})).To(Succeed())
-		Expect(c.Get(ctx, kutil.Key(expectedAccessControl.Namespace, expectedAccessControl.Name), &istiosecurity1beta1.AuthorizationPolicy{})).To(Succeed())
+		Expect(c.Get(ctx, kutil.Key(expectedAccessControlApi.Namespace, expectedAccessControlApi.Name), &istiosecurity1beta1.AuthorizationPolicy{})).To(Succeed())
+		Expect(c.Get(ctx, kutil.Key(expectedAccessControlVpn.Namespace, expectedAccessControlVpn.Name), &istiosecurity1beta1.AuthorizationPolicy{})).To(Succeed())
 		Expect(c.Get(ctx, kutil.Key(expectedEnvoyFilterObjectMeta.Namespace, expectedEnvoyFilterObjectMeta.Name), &istionetworkingv1alpha3.EnvoyFilter{})).To(Succeed())
 
 		Expect(defaultDepWaiter.Destroy(ctx)).To(Succeed())
@@ -289,7 +328,8 @@ var _ = Describe("#SNI", func() {
 		Expect(c.Get(ctx, kutil.Key(expectedDestinationRule.Namespace, expectedDestinationRule.Name), &istionetworkingv1beta1.DestinationRule{})).To(BeNotFoundError())
 		Expect(c.Get(ctx, kutil.Key(expectedGateway.Namespace, expectedGateway.Name), &istionetworkingv1beta1.Gateway{})).To(BeNotFoundError())
 		Expect(c.Get(ctx, kutil.Key(expectedVirtualService.Namespace, expectedVirtualService.Name), &istionetworkingv1beta1.VirtualService{})).To(BeNotFoundError())
-		Expect(c.Get(ctx, kutil.Key(expectedAccessControl.Namespace, expectedAccessControl.Name), &istiosecurity1beta1.AuthorizationPolicy{})).To(BeNotFoundError())
+		Expect(c.Get(ctx, kutil.Key(expectedAccessControlApi.Namespace, expectedAccessControlApi.Name), &istiosecurity1beta1.AuthorizationPolicy{})).To(BeNotFoundError())
+		Expect(c.Get(ctx, kutil.Key(expectedAccessControlVpn.Namespace, expectedAccessControlVpn.Name), &istiosecurity1beta1.AuthorizationPolicy{})).To(BeNotFoundError())
 		Expect(c.Get(ctx, kutil.Key(expectedEnvoyFilterObjectMeta.Namespace, expectedEnvoyFilterObjectMeta.Name), &istionetworkingv1alpha3.EnvoyFilter{})).To(BeNotFoundError())
 	})
 

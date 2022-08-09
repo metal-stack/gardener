@@ -98,11 +98,12 @@ type envoyFilterTemplateValues struct {
 
 func (s *sni) Deploy(ctx context.Context) error {
 	var (
-		destinationRule = s.emptyDestinationRule()
-		envoyFilter     = s.emptyEnvoyFilter()
-		gateway         = s.emptyGateway()
-		virtualService  = s.emptyVirtualService()
-		accessControl   = s.allowAllAuthorizationPolicy()
+		destinationRule        = s.emptyDestinationRule()
+		envoyFilter            = s.emptyEnvoyFilter()
+		gateway                = s.emptyGateway()
+		virtualService         = s.emptyVirtualService()
+		accessControlAPIServer = s.emptyAuthorizationPolicyApiServer()
+		accessControlVPNServer = s.emptyAuthorizationPolicyVpnServer()
 
 		hostName        = fmt.Sprintf("%s.%s.svc.%s", v1beta1constants.DeploymentNameKubeAPIServer, s.namespace, gardencorev1beta1.DefaultDomain)
 		envoyFilterSpec bytes.Buffer
@@ -191,44 +192,27 @@ func (s *sni) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	accessControlSpec := accessControl.Spec.DeepCopy()
-	if s.values.AccessControl != nil {
-		action, err := toIstioAuthPolicyAction(s.values.AccessControl.Action)
+	if _, err := controllerutils.GetAndCreateOrMergePatch(ctx, s.client, accessControlAPIServer, func() error {
+		accessControlAPIServer.Labels = getLabels()
+		spec, err := s.getAccessControlAPIServerSpec()
 		if err != nil {
 			return err
 		}
 
-		accessControlSpec = &istioapisecurityv1beta1.AuthorizationPolicy{
-			Action: action,
-			Rules: []*istioapisecurityv1beta1.Rule{{
-				From: []*istioapisecurityv1beta1.Rule_From{{
-					Source: &istioapisecurityv1beta1.Source{
-						IpBlocks:          notNilSlice(s.values.AccessControl.Source.IPBlocks),
-						NotIpBlocks:       notNilSlice(s.values.AccessControl.Source.NotIPBlocks),
-						RemoteIpBlocks:    notNilSlice(s.values.AccessControl.Source.RemoteIPBlocks),
-						NotRemoteIpBlocks: notNilSlice(s.values.AccessControl.Source.NotRemoteIPBlocks),
-					},
-				}},
-			}},
-		}
+		accessControlAPIServer.Spec = *spec.DeepCopy()
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	if _, err := controllerutils.GetAndCreateOrMergePatch(ctx, s.client, accessControl, func() error {
-		accessControl.Labels = getLabels()
-		accessControl.Spec = istioapisecurityv1beta1.AuthorizationPolicy{
-			Action: accessControlSpec.Action,
-			Rules:  accessControlSpec.Rules,
-			Selector: &istiov1beta1.WorkloadSelector{
-				MatchLabels: s.values.IstioIngressGateway.Labels,
-			},
+	if _, err := controllerutils.GetAndCreateOrMergePatch(ctx, s.client, accessControlVPNServer, func() error {
+		accessControlVPNServer.Labels = getLabels()
+		spec, err := s.getAccessControlVpnServerSpec()
+		if err != nil {
+			return err
 		}
 
-		for i := range accessControl.Spec.Rules {
-			accessControl.Spec.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
-				Key:    "connection.sni",
-				Values: s.values.Hosts,
-			}}
-		}
+		accessControlVPNServer.Spec = *spec.DeepCopy()
 		return nil
 	}); err != nil {
 		return err
@@ -245,7 +229,8 @@ func (s *sni) Destroy(ctx context.Context) error {
 		s.emptyEnvoyFilter(),
 		s.emptyGateway(),
 		s.emptyVirtualService(),
-		s.allowAllAuthorizationPolicy(),
+		s.emptyAuthorizationPolicyApiServer(),
+		s.emptyAuthorizationPolicyVpnServer(),
 	)
 }
 
@@ -268,17 +253,82 @@ func (s *sni) emptyVirtualService() *istionetworkingv1beta1.VirtualService {
 	return &istionetworkingv1beta1.VirtualService{ObjectMeta: metav1.ObjectMeta{Name: v1beta1constants.DeploymentNameKubeAPIServer, Namespace: s.namespace}}
 }
 
-func (s *sni) allowAllAuthorizationPolicy() *istiosecurity1beta1.AuthorizationPolicy {
-	return &istiosecurity1beta1.AuthorizationPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      s.namespace,
-			Namespace: s.values.IstioIngressGateway.Namespace,
-		},
-		Spec: istioapisecurityv1beta1.AuthorizationPolicy{
-			Action: istioapisecurityv1beta1.AuthorizationPolicy_ALLOW,
-			Rules:  []*istioapisecurityv1beta1.Rule{{From: []*istioapisecurityv1beta1.Rule_From{}}},
-		},
+func (s *sni) emptyAuthorizationPolicy(name string) *istiosecurity1beta1.AuthorizationPolicy {
+	return &istiosecurity1beta1.AuthorizationPolicy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: s.values.IstioIngressGateway.Namespace}}
+}
+
+func (s *sni) emptyAuthorizationPolicyApiServer() *istiosecurity1beta1.AuthorizationPolicy {
+	return s.emptyAuthorizationPolicy(s.namespace + "-api-server")
+}
+
+func (s *sni) emptyAuthorizationPolicyVpnServer() *istiosecurity1beta1.AuthorizationPolicy {
+	return s.emptyAuthorizationPolicy(s.namespace + "-vpn-server")
+}
+
+func (s *sni) getAccessControlSpec() (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+	var err error
+	action := istioapisecurityv1beta1.AuthorizationPolicy_ALLOW
+	rules := []*istioapisecurityv1beta1.Rule{{From: []*istioapisecurityv1beta1.Rule_From{}}}
+
+	if s.values.AccessControl != nil {
+		ac := s.values.AccessControl
+		action, err = toIstioAuthPolicyAction(ac.Action)
+		if err != nil {
+			return nil, err
+		}
+
+		rules = []*istioapisecurityv1beta1.Rule{{
+			From: []*istioapisecurityv1beta1.Rule_From{{
+				Source: &istioapisecurityv1beta1.Source{
+					IpBlocks:          notNilSlice(ac.Source.IPBlocks),
+					NotIpBlocks:       notNilSlice(ac.Source.NotIPBlocks),
+					RemoteIpBlocks:    notNilSlice(ac.Source.RemoteIPBlocks),
+					NotRemoteIpBlocks: notNilSlice(ac.Source.NotRemoteIPBlocks),
+				},
+			}},
+		}}
 	}
+
+	accessControlSpec := istioapisecurityv1beta1.AuthorizationPolicy{
+		Selector: &istiov1beta1.WorkloadSelector{
+			MatchLabels: s.values.IstioIngressGateway.Labels,
+		},
+		Action: action,
+		Rules:  rules,
+	}
+	return &accessControlSpec, nil
+}
+
+func (s *sni) getAccessControlAPIServerSpec() (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+	control, err := s.getAccessControlSpec()
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range control.Rules {
+		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
+			Key:    "connection.sni",
+			Values: s.values.Hosts,
+		}}
+	}
+
+	return control, nil
+}
+
+func (s *sni) getAccessControlVpnServerSpec() (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+	control, err := s.getAccessControlSpec()
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range control.Rules {
+		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
+			Key:    "request.headers[reversed-vpn]",
+			Values: []string{fmt.Sprintf("outbound|1194||vpn-seed-server.%s.svc.cluster.local", s.namespace)},
+		}}
+	}
+
+	return control, nil
 }
 
 // AnyDeployedSNI returns true if any SNI is deployed in the cluster.

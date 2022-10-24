@@ -63,7 +63,7 @@ envoy.yaml: |-
     - name: metrics
       address:
         socket_address:
-          address: 0.0.0.0
+          address: "::"
           port_value: {{ .Values.adminPort }}
       filter_chains:
       - filters:
@@ -110,7 +110,7 @@ envoy.yaml: |-
       connect_timeout: 5s
       per_connection_buffer_limit_bytes: 32768 # 32 KiB
       type: LOGICAL_DNS
-      dns_lookup_family: V4_ONLY
+      dns_lookup_family: AUTO
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: kube_apiserver

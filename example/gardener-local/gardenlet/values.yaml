@@ -15,7 +15,7 @@ global:
             clusters:
             - cluster:
                 insecure-skip-tls-verify: true
-                server: https://gardener-local-control-plane:6443
+                server: https://kubernetes.default.svc:443
               name: default
             contexts:
             - context:

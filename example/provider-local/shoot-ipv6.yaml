@@ -16,9 +16,11 @@ spec:
     providerConfig:
       apiVersion: calico.networking.extensions.gardener.cloud/v1alpha1
       kind: NetworkConfig
-      backend: none
+      backend: bird
       typha:
         enabled: false
+      ipv6:
+        autoDetectionMethod: kubernetes-internal-ip
     pods: 2001:0db8:1234::/112
     nodes: 2001:0db8:1235::/56
     services: 2001:0db8:1236::/112

@@ -142,6 +142,7 @@ func (k *kubeAPIServer) reconcileNetworkPolicyAllowKubeAPIServer(ctx context.Con
 						{PodSelector: &metav1.LabelSelector{}, NamespaceSelector: &metav1.LabelSelector{}},
 						// kube-apiserver can be accessed from anywhere using the LoadBalancer.
 						{IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"}},
+						{IPBlock: &networkingv1.IPBlock{CIDR: "::/0"}},
 					},
 					Ports: []networkingv1.NetworkPolicyPort{{
 						Protocol: &protocol,

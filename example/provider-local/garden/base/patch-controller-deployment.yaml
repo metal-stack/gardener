@@ -7,4 +7,71 @@ providerConfig:
     image:
       # TODO(shafeeqes): Use v1.27.0 image in the resources once it's released.
       # Currently dev image is used to include https://github.com/gardener/gardener-extension-networking-calico/pull/210
-      tag: v1.27.0-dev-6e539ffcb2a52c926be99bed5c5681ab08f15d40
+      repository: docker.io/einfachnuralex/networking-calico
+      tag: v1.27.0-dev-1acc062002d35cb0ef12fe1cb826b21b5af238f7
+    imageVectorOverwrite: |
+      images:
+      - name: calico-node
+        sourceRepository: github.com/projectcalico/calico
+        repository: registry.ipv6.docker.com/calico/node
+        tag: v3.23.3
+        targetVersion: ">= 1.21"
+      - name: calico-node
+        sourceRepository: github.com/projectcalico/calico
+        repository: registry.ipv6.docker.com/calico/node
+        tag: v3.22.2
+        targetVersion: "< 1.21"
+      - name: calico-cni
+        sourceRepository: github.com/projectcalico/cni-plugin
+        repository: registry.ipv6.docker.com/calico/cni
+        tag: v3.23.3
+        targetVersion: ">= 1.21"
+      - name: calico-cni
+        sourceRepository: github.com/projectcalico/cni-plugin
+        repository: registry.ipv6.docker.com/calico/cni
+        tag: v3.22.2
+        targetVersion: "< 1.21"
+      - name: calico-typha
+        sourceRepository: github.com/projectcalico/typha
+        repository: registry.ipv6.docker.com/calico/typha
+        tag: v3.23.3
+        targetVersion: ">= 1.21"
+        labels:
+        - name: cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1
+          value:
+            policy: skip
+            comment: payload are two statically linked ELF-binaries and some configuration/license files - not suitable for binary-id-scanning
+      - name: calico-typha
+        sourceRepository: github.com/projectcalico/typha
+        repository: registry.ipv6.docker.com/calico/typha
+        tag: v3.22.2
+        targetVersion: "< 1.21"
+        labels:
+        - name: cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1
+          value:
+            policy: skip
+            comment: payload are two statically linked ELF-binaries and some configuration/license files - not suitable for binary-id-scanning
+      - name: calico-kube-controllers
+        sourceRepository: github.com/projectcalico/kube-controllers
+        repository: registry.ipv6.docker.com/calico/kube-controllers
+        tag: v3.23.3
+        targetVersion: ">= 1.21"
+      - name: calico-kube-controllers
+        sourceRepository: github.com/projectcalico/kube-controllers
+        repository: registry.ipv6.docker.com/calico/kube-controllers
+        tag: v3.22.2
+        targetVersion: "< 1.21"
+      - name: calico-podtodaemon-flex
+        sourceRepository: github.com/projectcalico/pod2daemon
+        repository: registry.ipv6.docker.com/calico/pod2daemon-flexvol
+        tag: v3.22.2
+        # targetVersion is removed to avoid a panic in imagevector.findImage function.
+        # targetVersion: "< 1.21"
+      - name: calico-cpa
+        sourceRepository: github.com/kubernetes-sigs/cluster-proportional-autoscaler
+        repository: k8s.gcr.io/cpa/cluster-proportional-autoscaler
+        tag: 1.8.6
+      - name: calico-cpva
+        sourceRepository: github.com/kubernetes-sigs/cluster-proportional-vertical-autoscaler
+        repository: k8s.gcr.io/cpa/cpvpa
+        tag: v0.8.4

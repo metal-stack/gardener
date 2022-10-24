@@ -16,13 +16,10 @@ package app
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net"
 	"os"
 	"time"
-
-	"github.com/spf13/pflag"
 
 	druidv1alpha1 "github.com/gardener/etcd-druid/api/v1alpha1"
 
@@ -70,7 +67,6 @@ import (
 // NewControllerManagerCommand creates a new command for running a local provider controller.
 func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 	var (
-		is6      = flag.Bool("is6", false, "Provider should work with IPv6")
 		restOpts = &controllercmd.RESTOptions{}
 		mgrOpts  = &controllercmd.ManagerOptions{
 			LeaderElection:             true,
@@ -210,7 +206,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			metav1.AddToGroupVersion(scheme, machinev1alpha1.SchemeGroupVersion)
 
 			// Set HostIP
-			hostIP, err := getHostIP(*is6)
+			hostIP, err := getHostIP(true)
 			if err != nil {
 				return err
 			}
@@ -270,9 +266,6 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	is6Flag := flag.Lookup("is6")
-	is6PFlag := pflag.PFlagFromGoFlag(is6Flag)
-	cmd.Flags().AddFlag(is6PFlag)
 	aggOption.AddFlags(cmd.Flags())
 
 	return cmd

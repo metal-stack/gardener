@@ -167,7 +167,7 @@ global:
   admission:
     enabled: true
     service:
-      clusterIP: 10.2.2.10
+      clusterIP: fc00:10:96::1000
     seedRestriction:
       enabled: true
     config:

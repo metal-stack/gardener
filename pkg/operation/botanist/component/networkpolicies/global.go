@@ -364,17 +364,25 @@ func getGlobalNetworkPolicyTransformers(values GlobalValues) []networkPolicyTran
 							},
 						},
 						Egress: []networkingv1.NetworkPolicyEgressRule{{
-							To: []networkingv1.NetworkPolicyPeer{{
-								IPBlock: &networkingv1.IPBlock{
-									CIDR: "0.0.0.0/0",
-									Except: append([]string{
-										Private8BitBlock().String(),
-										Private12BitBlock().String(),
-										Private16BitBlock().String(),
-										CarrierGradeNATBlock().String(),
-									}, values.BlockedAddresses...),
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									IPBlock: &networkingv1.IPBlock{
+										CIDR: "0.0.0.0/0",
+										Except: append([]string{
+											Private8BitBlock().String(),
+											Private12BitBlock().String(),
+											Private16BitBlock().String(),
+											CarrierGradeNATBlock().String(),
+										}, values.BlockedAddresses...),
+									},
 								},
-							}},
+								{
+									//TODO(nschad): Add except Block for ipv6 like for ipv4? What about BlockedAddresses?!
+									IPBlock: &networkingv1.IPBlock{
+										CIDR: "::/0",
+									},
+								},
+							},
 						}},
 						PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 					}

@@ -2,19 +2,19 @@
   path: /spec/template/spec/containers/0/env/-
   value: 
     name: IP6
-    value: autodetect
+    value: "autodetect"
 - op: add
   path: /spec/template/spec/containers/0/env/-
   value: 
     name: CALICO_IPV6POOL_NAT_OUTGOING
-    value: true
+    value: "true"
 - op: add
   path: /spec/template/spec/containers/0/env/-
   value: 
     name: CALICO_NAT_OUTGOING
-    value: true
+    value: "true"
 - op: replace
-  path: /spec/template/spec/containers/0/env/17
+  path: /spec/template/spec/containers/0/env/14
   value: 
     name: FELIX_IPV6SUPPORT
-    value: true
+    value: "true"

@@ -418,7 +418,7 @@ func (v *vpnShoot) computeResourcesData(secretCAVPN, secretVPNShoot *corev1.Secr
 								ImagePullPolicy: corev1.PullIfNotPresent,
 								Env:             v.getEnvVars(),
 								SecurityContext: &corev1.SecurityContext{
-									Privileged: pointer.Bool(!v.values.ReversedVPN.Enabled),
+									Privileged: pointer.Bool(true),
 									Capabilities: &corev1.Capabilities{
 										Add: []corev1.Capability{"NET_ADMIN"},
 									},

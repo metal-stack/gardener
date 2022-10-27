@@ -319,9 +319,9 @@ images:
   tag: "v1.23.1"
 - name: apiserver-proxy-sidecar
   sourceRepository: github.com/gardener/apiserver-proxy
-  repository: eu.gcr.io/gardener-project/gardener/apiserver-proxy
-  tag: "v0.6.0"
+  repository: registry.ipv6.docker.com/einfachnuralex/apiserver-proxy
+  tag: "v0.9.0-dev1-32f2e0273215a1184b6ee25e19e9c9a5ecd895cd"
 - name: apiserver-proxy-pod-webhook
   sourceRepository: github.com/gardener/apiserver-proxy
-  repository: eu.gcr.io/gardener-project/gardener/apiserver-proxy-pod-webhook
-  tag: "v0.6.0"
+  repository: registry.ipv6.docker.com/einfachnuralex/apiserver-proxy-pod-webhook
+  tag: "v0.9.0-dev1-32f2e0273215a1184b6ee25e19e9c9a5ecd895cd"

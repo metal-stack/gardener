@@ -16,7 +16,6 @@ spec:
       context: GATEWAY
       listener:
         portNumber: 8443
-        name: "::_8443"
     patch:
       operation: MERGE
       value:

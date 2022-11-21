@@ -524,7 +524,6 @@ spec:
     match:
       context: GATEWAY
       listener:
-        name: "::_8132"
         portNumber: 8132
         filterChain:
           filter:
@@ -556,7 +555,6 @@ spec:
         filterChain:
           filter:
             name: envoy.filters.network.http_connection_manager
-        name: "::_8132"
         portNumber: 8132
     patch:
       operation: MERGE
@@ -581,7 +579,6 @@ spec:
     match:
       context: GATEWAY
       listener:
-        name: "::_8132"
         portNumber: 8132
         filterChain:
           filter:

@@ -99,6 +99,9 @@ func (component) Config(ctx components.Context) ([]extensionsv1alpha1.Unit, []ex
 		return nil, nil, err
 	}
 
+	// TODO(timebertt): compute hash based on config content and suffix filename with it
+	// gardener-node-agent will restart units which have changed, this will force reload even for config file changes.
+	// This should be done for all other components to trigger required restarts
 	fileContentKubeletConfig, err := getFileContentKubeletConfig(ctx.KubernetesVersion, ctx.ClusterDNSAddress, ctx.ClusterDomain, ctx.KubeletConfigParameters)
 	if err != nil {
 		return nil, nil, err

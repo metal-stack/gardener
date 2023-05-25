@@ -105,6 +105,9 @@ func FileCodecForID(id extensionsv1alpha1.FileCodecID) FileCodec {
 // It's a shorthand for parsing the FileCodecID and calling the `Decode` method on the obtained
 // FileCodec.
 func Decode(codecIDString string, data []byte) ([]byte, error) {
+	if codecIDString == "" {
+		return data, nil
+	}
 	id, err := ParseFileCodecID(codecIDString)
 	if err != nil {
 		return nil, err

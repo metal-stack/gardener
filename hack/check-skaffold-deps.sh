@@ -77,6 +77,7 @@ check "skaffold.yaml" "gardener-apiserver"                 "controlplane"
 check "skaffold.yaml" "gardener-controller-manager"        "controlplane"
 check "skaffold.yaml" "gardener-extension-provider-local"  "provider-local"
 check "skaffold.yaml" "gardener-resource-manager"          "gardenlet"
+check "skaffold.yaml" "gardener-node-agent"                "gardenlet"
 check "skaffold.yaml" "gardener-scheduler"                 "controlplane"
 check "skaffold.yaml" "gardenlet"                          "gardenlet"
 

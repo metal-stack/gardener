@@ -17,22 +17,29 @@ package botanist
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
+	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/downloader"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/executor"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
 	nodelocaldnsconstants "github.com/gardener/gardener/pkg/component/nodelocaldns/constants"
+	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	"github.com/gardener/gardener/pkg/utils/images"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
@@ -40,6 +47,8 @@ import (
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
+
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
 // SecretLabelKeyManagedResource is a key for a label on a secret with the value 'managed-resource'.
@@ -88,6 +97,7 @@ func (b *Botanist) DefaultOperatingSystemConfig() (operatingsystemconfig.Interfa
 		operatingsystemconfig.DefaultInterval,
 		operatingsystemconfig.DefaultSevereThreshold,
 		operatingsystemconfig.DefaultTimeout,
+		b.ImageVector,
 	), nil
 }
 
@@ -188,7 +198,7 @@ func (b *Botanist) DeployManagedResourceForCloudConfigExecutor(ctx context.Conte
 			return err
 		}
 
-		secretName, data, err := b.generateCloudConfigExecutorResourcesForWorker(worker, oscData.Original, hyperkubeImage)
+		secretName, data, err := b.generateCloudConfigExecutorResourcesForWorker(ctx, worker, oscData.Original, hyperkubeImage)
 		if err != nil {
 			return err
 		}
@@ -246,6 +256,7 @@ func (b *Botanist) DeployManagedResourceForCloudConfigExecutor(ctx context.Conte
 }
 
 func (b *Botanist) generateCloudConfigExecutorResourcesForWorker(
+	ctx context.Context,
 	worker gardencorev1beta1.Worker,
 	oscDataOriginal operatingsystemconfig.Data,
 	hyperkubeImage *imagevector.Image,
@@ -288,7 +299,96 @@ func (b *Botanist) generateCloudConfigExecutorResourcesForWorker(
 		return "", nil, err
 	}
 
-	resources, err := registry.AddAllAndSerialize(executor.Secret(secretName, metav1.NamespaceSystem, worker.Name, executorScript))
+	// as we deploy the osc into the shoot for the node-agent, we need to
+	// resolve the secret refs used in the osc as otherwise we would need
+	// to deploy all the secret references into the shoot as well...
+
+	oscToResolve := oscDataOriginal.OSC.DeepCopy()
+
+	for i := range oscToResolve.Spec.Files {
+		if oscToResolve.Spec.Files[i].Content.SecretRef == nil {
+			continue
+		}
+
+		var (
+			secretName = oscToResolve.Spec.Files[i].Content.SecretRef.Name
+			dataKey    = oscToResolve.Spec.Files[i].Content.SecretRef.DataKey
+		)
+
+		secret := &corev1.Secret{}
+		err = b.SeedClientSet.Client().Get(ctx, types.NamespacedName{Name: secretName, Namespace: b.Shoot.SeedNamespace}, secret)
+		if err != nil {
+			return "", nil, fmt.Errorf("cannot resolve secret ref from osc: %w", err)
+		}
+
+		oscToResolve.Spec.Files[i].Content.Inline = &v1alpha1.FileContentInline{
+			Data:     utils.EncodeBase64(secret.Data[dataKey]),
+			Encoding: "b64",
+		}
+		oscToResolve.Spec.Files[i].Content.SecretRef = nil // für die Schönheit
+	}
+
+	unitsWithoutCCD := []v1alpha1.Unit{}
+	for _, u := range oscToResolve.Spec.Units {
+		if u.Name == nodeagentv1alpha1.NodeInitUnitName {
+			// this can be removed after migration to ccd
+			continue
+		}
+
+		if u.Name == downloader.UnitName {
+			// we explicitly disable the ccd unit for the gardener-node-agent to prevent
+			// it being started and re-applied, conflicting with the tasks of the gardener-node-agent
+			//
+			// this can be removed after migration to ccd
+			u.Enable = pointer.Bool(false)
+			u.Command = pointer.String("stop")
+		}
+
+		if u.Name == kubelet.UnitName || u.Name == "kubelet-monitor.service" {
+			// the original kubelet unit contains ccd-specific pre start hooks, which are
+			// not necessary anymore with the gardener-node-agent
+			//
+			// this can be removed after migration to ccd
+			content := []string{}
+			for _, line := range strings.Split(*u.Content, "\n") {
+				if strings.Contains(line, kubelet.PathScriptCopyKubernetesBinary) {
+					continue
+				}
+				content = append(content, line)
+			}
+			u.Content = pointer.String(strings.Join(content, "\n"))
+		}
+
+		unitsWithoutCCD = append(unitsWithoutCCD, u)
+	}
+
+	oscToResolve.Spec.Units = unitsWithoutCCD
+
+	encodedOSC, err := yaml.Marshal(oscToResolve)
+	if err != nil {
+		return "", nil, fmt.Errorf("unable to encode original osc for gardener-node-agent: %w", err)
+	}
+
+	// TODO: move this to an adequate place:
+
+	nodeAgentSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatingsystemconfig.GardenerNodeAgentSecretName(worker.Name, kubernetesVersion, worker.CRI),
+			Namespace: metav1.NamespaceSystem,
+			Annotations: map[string]string{
+				downloader.AnnotationKeyChecksum: utils.ComputeSHA256Hex(encodedOSC),
+			},
+			Labels: map[string]string{
+				v1beta1constants.GardenRole:      v1beta1constants.GardenRoleCloudConfig,
+				v1beta1constants.LabelWorkerPool: worker.Name,
+			},
+		},
+		Data: map[string][]byte{
+			nodeagentv1alpha1.NodeAgentOSCSecretKey: encodedOSC,
+		},
+	}
+
+	resources, err := registry.AddAllAndSerialize(executor.Secret(secretName, metav1.NamespaceSystem, worker.Name, executorScript), nodeAgentSecret)
 	if err != nil {
 		return "", nil, err
 	}

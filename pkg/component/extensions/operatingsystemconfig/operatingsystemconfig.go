@@ -47,6 +47,8 @@ import (
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
+
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
 const (
@@ -139,6 +141,7 @@ func New(
 	waitInterval time.Duration,
 	waitSevereThreshold time.Duration,
 	waitTimeout time.Duration,
+	imageVector imagevector.ImageVector,
 ) Interface {
 	osc := &operatingSystemConfig{
 		log:                 log,
@@ -148,6 +151,7 @@ func New(
 		waitInterval:        waitInterval,
 		waitSevereThreshold: waitSevereThreshold,
 		waitTimeout:         waitTimeout,
+		imageVector:         imageVector,
 	}
 
 	osc.workerNameToOSCs = make(map[string]*OperatingSystemConfigs, len(values.Workers))
@@ -168,6 +172,7 @@ type operatingSystemConfig struct {
 	waitInterval        time.Duration
 	waitSevereThreshold time.Duration
 	waitTimeout         time.Duration
+	imageVector         imagevector.ImageVector
 
 	lock             sync.Mutex
 	workerNameToOSCs map[string]*OperatingSystemConfigs
@@ -191,6 +196,8 @@ type Data struct {
 	Command *string
 	// Units is the list of systemd unit names.
 	Units []string
+	// OSC is the reference to the osc holding the data.
+	OSC *extensionsv1alpha1.OperatingSystemConfig
 }
 
 // Deploy uses the client to create or update the OperatingSystemConfig custom resources.
@@ -213,6 +220,14 @@ func (o *operatingSystemConfig) reconcile(ctx context.Context, reconcileFn func(
 	if err := gardenerutils.
 		NewShootAccessSecret(downloader.SecretName, o.values.Namespace).
 		WithTargetSecret(downloader.SecretName, metav1.NamespaceSystem).
+		WithTokenExpirationDuration("720h").
+		Reconcile(ctx, o.client); err != nil {
+		return err
+	}
+
+	if err := gardenerutils.
+		NewShootAccessSecret(nodeagentv1alpha1.NodeAgentTokenSecretName, o.values.Namespace).
+		WithTargetSecret(nodeagentv1alpha1.NodeAgentTokenSecretName, metav1.NamespaceSystem).
 		WithTokenExpirationDuration("720h").
 		Reconcile(ctx, o.client); err != nil {
 		return err
@@ -261,6 +276,7 @@ func (o *operatingSystemConfig) Wait(ctx context.Context) error {
 					Content: string(secret.Data[extensionsv1alpha1.OperatingSystemConfigSecretDataKey]),
 					Command: osc.Status.Command,
 					Units:   osc.Status.Units,
+					OSC:     osc,
 				}
 
 				o.lock.Lock()
@@ -503,10 +519,13 @@ func (o *operatingSystemConfig) newDeployer(osc *extensionsv1alpha1.OperatingSys
 		osc:                     osc,
 		worker:                  worker,
 		purpose:                 purpose,
+		imageVector:             o.imageVector,
 		key:                     Key(worker.Name, kubernetesVersion, worker.CRI),
+		nodeAgentKey:            GardenerNodeAgentSecretName(worker.Name, kubernetesVersion, worker.CRI),
 		apiServerURL:            o.values.APIServerURL,
 		caBundle:                caBundle,
 		clusterCASecretName:     clusterCASecret.Name,
+		clusterCA:               string(clusterCASecret.Data["bundle.crt"]),
 		clusterDNSAddress:       o.values.ClusterDNSAddress,
 		clusterDomain:           o.values.ClusterDomain,
 		criName:                 criName,
@@ -558,15 +577,19 @@ type deployer struct {
 	client client.Client
 	osc    *extensionsv1alpha1.OperatingSystemConfig
 
-	key     string
-	worker  gardencorev1beta1.Worker
-	purpose extensionsv1alpha1.OperatingSystemConfigPurpose
+	key          string
+	nodeAgentKey string
+
+	worker      gardencorev1beta1.Worker
+	purpose     extensionsv1alpha1.OperatingSystemConfigPurpose
+	imageVector imagevector.ImageVector
 
 	// downloader values
 	apiServerURL string
 
 	// original values
 	caBundle                *string
+	clusterCA               string
 	clusterCASecretName     string
 	clusterDNSAddress       string
 	clusterDomain           string
@@ -609,6 +632,14 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 	if err != nil {
 		return nil, err
 	}
+
+	agentUnits, agentFiles, err := downloader.NodeAgentConfig(d.key, d.nodeAgentKey, d.apiServerURL, d.clusterCA, d.imageVector, d.worker, d.kubernetesVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	downloaderUnits = append(downloaderUnits, agentUnits...)
+	downloaderFiles = append(downloaderFiles, agentFiles...)
 
 	switch d.purpose {
 	case extensionsv1alpha1.OperatingSystemConfigPurposeProvision:
@@ -732,4 +763,21 @@ func keySuffix(machineImageName string, purpose extensionsv1alpha1.OperatingSyst
 		return "-" + machineImageName + "-original"
 	}
 	return ""
+}
+
+func GardenerNodeAgentSecretName(workerName string, kubernetesVersion *semver.Version, criConfig *gardencorev1beta1.CRI) string {
+	if kubernetesVersion == nil {
+		return ""
+	}
+
+	var (
+		kubernetesMajorMinorVersion = fmt.Sprintf("%d.%d", kubernetesVersion.Major(), kubernetesVersion.Minor())
+		criName                     gardencorev1beta1.CRIName
+	)
+
+	if criConfig != nil && criConfig.Name != gardencorev1beta1.CRINameDocker {
+		criName = criConfig.Name
+	}
+
+	return fmt.Sprintf("gardener-node-agent-%s-%s", workerName, utils.ComputeSHA256Hex([]byte(kubernetesMajorMinorVersion + string(criName)))[:5])
 }

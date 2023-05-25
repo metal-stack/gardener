@@ -15,15 +15,24 @@
 package operatingsystemconfig
 
 import (
+	"bytes"
+	"time"
+
 	"github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // controllerName is the name of this controller.
@@ -41,7 +50,11 @@ func (r *Reconciler) AddToManager(mgr manager.Manager) error {
 	return builder.
 		ControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&corev1.Secret{}, builder.WithPredicates(r.SecretPredicate())).
+		Watches(
+			&source.Kind{Type: &corev1.Secret{}},
+			r.EventHandler(),
+			builder.WithPredicates(r.SecretPredicate()),
+		).
 		Complete(r)
 }
 
@@ -69,4 +82,52 @@ func (r *Reconciler) SecretPredicate() predicate.Predicate {
 			},
 		},
 	)
+}
+
+// RandomDurationWithMetaDuration is an alias for utils.RandomDurationWithMetaDuration.
+var RandomDurationWithMetaDuration = utils.RandomDurationWithMetaDuration
+
+// EventHandler returns a handler for Shoot events.
+func (r *Reconciler) EventHandler() handler.EventHandler {
+	return &handler.Funcs{
+		CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
+			req := reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      e.Object.GetName(),
+				Namespace: e.Object.GetNamespace(),
+			}}
+
+			q.Add(req)
+		},
+		UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			newSecret, ok := e.ObjectNew.(*corev1.Secret)
+			if !ok {
+				return
+			}
+			oldSecret, ok := e.ObjectOld.(*corev1.Secret)
+			if !ok {
+				return
+			}
+			_, newCheckSum, err := r.extractOSCFromSecret(newSecret)
+			if err != nil {
+				return
+			}
+			_, oldCheckSum, err := r.extractOSCFromSecret(oldSecret)
+			if err != nil {
+				return
+			}
+
+			req := reconcile.Request{NamespacedName: types.NamespacedName{
+				Name:      e.ObjectNew.GetName(),
+				Namespace: e.ObjectNew.GetNamespace(),
+			}}
+
+			if bytes.Equal(newCheckSum, oldCheckSum) {
+				// no reconcile necessary when checksum is equal
+				return
+			}
+
+			// spread to avoid restarting all units get restarted on all nodes
+			q.AddAfter(req, RandomDurationWithMetaDuration(&metav1.Duration{Duration: 1 * time.Minute}))
+		},
+	}
 }

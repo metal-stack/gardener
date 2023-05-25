@@ -30,6 +30,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -79,24 +80,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("error retrieving object from store: %w", err)
 	}
 
-	oscRaw, ok := secret.Data[nodeagentv1alpha1.NodeAgentOSCSecretKey]
-	if !ok {
-		return reconcile.Result{}, fmt.Errorf("no token found in secret")
+	osc, oscRaw, err := r.extractOSCFromSecret(secret)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("unable to extract osc from secret %w", err)
 	}
+
 	oscCheckSum := utils.ComputeSHA256Hex(oscRaw)
 
-	node := &corev1.Node{}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return reconcile.Result{}, fmt.Errorf("unable to fetch node %w", err)
-	}
-
-	if node != nil && node.Annotations[executor.AnnotationKeyChecksum] == oscCheckSum {
-		log.Info("node is up to date, osc did not change, returning")
-		return reconcile.Result{}, nil
-	}
-
-	osc := &v1alpha1.OperatingSystemConfig{}
 	err = yaml.Unmarshal(oscRaw, osc)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to unmarshal osc from secret data %w", err)
@@ -105,6 +95,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	oscChanges, err := common.CalculateChangedUnitsAndRemovedFiles(osc)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to calculate osc changes from previous run %w", err)
+	}
+
+	node := &corev1.Node{}
+	err = r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return reconcile.Result{}, fmt.Errorf("unable to fetch node %w", err)
+	}
+
+	if node != nil && node.Annotations[executor.AnnotationKeyChecksum] == oscCheckSum {
+		log.Info("node is up to date, osc did not change, returning")
+		return reconcile.Result{}, nil
 	}
 
 	tmpDir, err := os.MkdirTemp("/tmp", "gardener-node-agent-*")
@@ -175,7 +176,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 				return reconcile.Result{}, fmt.Errorf("unable to disable unit %q %w", u.Name, err)
 			}
 		}
-		log.Info("processed writing unit", "name", u.Name, "command", *u.Command)
+		log.Info("processed writing unit", "name", u.Name, "command", pointer.StringDeref(u.Command, ""))
 	}
 	for _, u := range oscChanges.DeletedUnits {
 		err = dbus.Stop(ctx, r.Recorder, node, u.Name)
@@ -208,18 +209,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		if u.Content == nil || u.Command == nil {
 			continue
 		}
-
 		u := u
 
 		g.Go(func() error {
 			switch *u.Command {
 			// FIXME make this accessible constants
-			case "start":
-				err = dbus.Start(groupCtx, r.Recorder, node, u.Name)
-				if err != nil {
-					return fmt.Errorf("unable to start %q: %w", u.Name, err)
-				}
-			case "restart":
+			case "start", "restart":
 				err = dbus.Restart(groupCtx, r.Recorder, node, u.Name)
 				if err != nil {
 					return fmt.Errorf("unable to restart %q: %w", u.Name, err)
@@ -257,18 +252,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("unable to write previous osc to file %w", err)
 	}
 
-	r.Recorder.Event(node, corev1.EventTypeNormal, "OSCApplied", "all osc files and units have been applied successfully")
-
 	log.Info("Successfully processed operating system configs", "files", len(osc.Spec.Files), "units", len(osc.Spec.Units))
-
-	// TODO(rfranzke): implement jitter
 
 	// notifying other controllers about possible change in applied files (e.g. configuration.yaml)
 	for _, c := range r.TriggerChannels {
 		c <- event.GenericEvent{}
 	}
 
-	if node.Name == "" || node.Annotations == nil {
+	r.Recorder.Event(node, corev1.EventTypeNormal, "OSCApplied", "all osc files and units have been applied successfully")
+
+	if node == nil || node.Name == "" || node.Annotations == nil {
 		return reconcile.Result{
 			RequeueAfter: 10 * time.Second,
 		}, fmt.Errorf("still waiting for node to get registered")
@@ -284,4 +277,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	log.V(1).Info("Requeuing", "requeueAfter", r.SyncPeriod)
 	return reconcile.Result{RequeueAfter: r.SyncPeriod}, nil
+}
+
+func (r *Reconciler) extractOSCFromSecret(secret *corev1.Secret) (*v1alpha1.OperatingSystemConfig, []byte, error) {
+	oscRaw, ok := secret.Data[nodeagentv1alpha1.NodeAgentOSCSecretKey]
+	if !ok {
+		return nil, nil, fmt.Errorf("no token found in secret")
+	}
+
+	osc := &v1alpha1.OperatingSystemConfig{}
+	err := yaml.Unmarshal(oscRaw, osc)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to unmarshal osc from secret data %w", err)
+	}
+	return osc, oscRaw, nil
 }

@@ -78,7 +78,7 @@ func renderSystemdUnit() error {
 		return err
 	}
 
-	return os.WriteFile(path.Join("/etc/systemd/system/", v1alpha1.NodeAgentUnitName), target.Bytes(), 0600)
+	return os.WriteFile(path.Join("/etc/systemd/system/", v1alpha1.NodeAgentUnitName), target.Bytes(), 0644)
 }
 
 func cleanupCCD(ctx context.Context) error {

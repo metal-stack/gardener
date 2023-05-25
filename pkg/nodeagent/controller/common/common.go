@@ -74,7 +74,9 @@ func CalculateChangedUnitsAndRemovedFiles(currentOSC *v1alpha1.OperatingSystemCo
 	previousOSCFile, err := os.ReadFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &OSCChanges{}, nil
+			return &OSCChanges{
+				ChangedUnits: currentOSC.Spec.Units,
+			}, nil
 		}
 		return nil, fmt.Errorf("error retrieving previous osc from file: %w", err)
 	}
@@ -85,10 +87,10 @@ func CalculateChangedUnitsAndRemovedFiles(currentOSC *v1alpha1.OperatingSystemCo
 		return nil, fmt.Errorf("error unmarshalling previous osc: %w", err)
 	}
 
-	return calculateDiff(currentOSC, previousOSC), nil
+	return CalculateOSCChanges(currentOSC, previousOSC), nil
 }
 
-func calculateDiff(current, previous *v1alpha1.OperatingSystemConfig) *OSCChanges {
+func CalculateOSCChanges(current, previous *v1alpha1.OperatingSystemConfig) *OSCChanges {
 	oscChanges := &OSCChanges{}
 
 	for _, pf := range previous.Spec.Files {

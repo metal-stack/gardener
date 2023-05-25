@@ -46,7 +46,7 @@ func AddToManager(mgr manager.Manager) error {
 	}
 
 	selfUpgradeChannel := make(chan event.GenericEvent, 1)
-	kubeletUpradeChannel := make(chan event.GenericEvent, 1)
+	kubeletUpgradeChannel := make(chan event.GenericEvent, 1)
 
 	if err := (&node.Reconciler{
 		NodeName:   nodeName,
@@ -61,7 +61,7 @@ func AddToManager(mgr manager.Manager) error {
 		SyncPeriod: 10 * time.Minute,
 		TriggerChannels: []chan event.GenericEvent{
 			selfUpgradeChannel,
-			kubeletUpradeChannel,
+			kubeletUpgradeChannel,
 		},
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding operatingsystemconfig controller: %w", err)
@@ -71,7 +71,7 @@ func AddToManager(mgr manager.Manager) error {
 		Config:           config,
 		TargetBinaryPath: "/opt/bin/kubelet",
 		SyncPeriod:       10 * time.Minute,
-		TriggerChannel:   kubeletUpradeChannel,
+		TriggerChannel:   kubeletUpgradeChannel,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding kubelet upgrade controller: %w", err)
 	}

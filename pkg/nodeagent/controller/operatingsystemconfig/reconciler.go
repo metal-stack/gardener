@@ -143,17 +143,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
-	var deletionErrors []error
-	for _, f := range oscChanges.DeletedFiles {
-		err := os.Remove(f.Path)
-		if err != nil && !os.IsNotExist(err) {
-			deletionErrors = append(deletionErrors, err)
-		}
-	}
-	if len(deletionErrors) > 0 {
-		return reconcile.Result{}, fmt.Errorf("unable to delete all files which must not exist anymore: %w", errors.Join(deletionErrors...))
-	}
-
 	for _, u := range oscChanges.ChangedUnits {
 		if u.Content == nil {
 			continue
@@ -210,13 +199,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	// TODO(rfranzke): implement jitter
-
-	// notifying other controllers about possible change in applied files (e.g. configuration.yaml)
-	for _, c := range r.TriggerChannels {
-		c <- event.GenericEvent{}
-	}
-
 	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -258,6 +240,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		log.Error(err, "error ensuring states of systemd units")
 	}
 
+	var deletionErrors []error
+	for _, f := range oscChanges.DeletedFiles {
+		err := os.Remove(f.Path)
+		if err != nil && !os.IsNotExist(err) {
+			deletionErrors = append(deletionErrors, err)
+		}
+	}
+	if len(deletionErrors) > 0 {
+		return reconcile.Result{}, fmt.Errorf("unable to delete all files which must not exist anymore: %w", errors.Join(deletionErrors...))
+	}
+
 	// Persist current OSC for comparison with next one
 	err = os.WriteFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath, oscRaw, 0644)
 	if err != nil {
@@ -267,6 +260,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	r.Recorder.Event(node, corev1.EventTypeNormal, "OSCApplied", "all osc files and units have been applied successfully")
 
 	log.Info("Successfully processed operating system configs", "files", len(osc.Spec.Files), "units", len(osc.Spec.Units))
+
+	// TODO(rfranzke): implement jitter
+
+	// notifying other controllers about possible change in applied files (e.g. configuration.yaml)
+	for _, c := range r.TriggerChannels {
+		c <- event.GenericEvent{}
+	}
 
 	if node.Name == "" || node.Annotations == nil {
 		return reconcile.Result{

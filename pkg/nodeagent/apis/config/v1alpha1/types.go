@@ -37,6 +37,9 @@ const (
 	// NodeAgentOSCSecretKey is the key inside the gardener-node-agent osc secret to access
 	// the encoded osc.
 	NodeAgentOSCSecretKey = "gardener-node-agent"
+	// NodeAgentOSCOldConfigPath is the file path on the worker node that contains the
+	// previous content of the osc
+	NodeAgentOSCOldConfigPath = NodeAgentBaseDir + "/previous-osc.yaml"
 
 	// NodeAgentTokenFilePath is the file path on the worker node that contains the shoot access
 	// token of the gardener-node-agent.

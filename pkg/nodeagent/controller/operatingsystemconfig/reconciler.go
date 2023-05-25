@@ -17,6 +17,7 @@ package operatingsystemconfig
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -41,6 +42,8 @@ import (
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/utils"
+
+	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
@@ -99,6 +102,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("unable to unmarshal osc from secret data %w", err)
 	}
 
+	oscChanges, err := common.CalculateChangedUnitsAndRemovedFiles(osc)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("unable to calculate osc changes from previous run %w", err)
+	}
+
 	tmpDir, err := os.MkdirTemp("/tmp", "gardener-node-agent-*")
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to create temp dir %w", err)
@@ -135,9 +143,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
-	changedUnits := map[string]v1alpha1.Unit{}
+	var deletionErrors []error
+	for _, f := range oscChanges.DeletedFiles {
+		err := os.Remove(f.Path)
+		if err != nil && !os.IsNotExist(err) {
+			deletionErrors = append(deletionErrors, err)
+		}
+	}
+	if len(deletionErrors) > 0 {
+		return reconcile.Result{}, fmt.Errorf("unable to delete all files which must not exist anymore: %w", errors.Join(deletionErrors...))
+	}
 
-	for _, u := range osc.Spec.Units {
+	for _, u := range oscChanges.ChangedUnits {
 		if u.Content == nil {
 			continue
 		}
@@ -152,8 +169,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		if bytes.Equal(newUnitContent, existingUnitContent) {
 			continue
 		}
-
-		changedUnits[u.Name] = u
 
 		err = os.WriteFile(systemdUnitFilePath, newUnitContent, 0600)
 		if err != nil {
@@ -173,6 +188,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 		log.Info("processed writing unit", "name", u.Name, "command", *u.Command)
 	}
+	for _, u := range oscChanges.DeletedUnits {
+		err = dbus.Stop(ctx, r.Recorder, node, u.Name)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to stop deleted unit %q %w", u.Name, err)
+		}
+
+		err = dbus.Disable(ctx, u.Name)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to disable deleted unit %q %w", u.Name, err)
+		}
+
+		err = os.Remove(path.Join("/etc/systemd/system", u.Name))
+		if err != nil && !os.IsNotExist(err) {
+			return reconcile.Result{}, fmt.Errorf("unable to delete systemd unit of deleted %q %w", u.Name, err)
+		}
+	}
 
 	err = dbus.DaemonReload(ctx)
 	if err != nil {
@@ -191,7 +222,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	g, groupCtx := errgroup.WithContext(timeoutCtx)
 
-	for _, u := range changedUnits {
+	for _, u := range oscChanges.ChangedUnits {
 		if u.Content == nil || u.Command == nil {
 			continue
 		}
@@ -225,6 +256,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	err = g.Wait()
 	if err != nil {
 		log.Error(err, "error ensuring states of systemd units")
+	}
+
+	// Persist current OSC for comparison with next one
+	err = os.WriteFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath, oscRaw, 0644)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("unable to write previous osc to file %w", err)
 	}
 
 	r.Recorder.Event(node, corev1.EventTypeNormal, "OSCApplied", "all osc files and units have been applied successfully")

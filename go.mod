@@ -70,7 +70,10 @@ require (
 	sigs.k8s.io/yaml v1.3.0
 )
 
-require gopkg.in/yaml.v2 v2.4.0
+require (
+	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	gopkg.in/yaml.v2 v2.4.0
+)
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect

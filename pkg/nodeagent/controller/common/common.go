@@ -23,7 +23,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 )
 
 // ReadTrimmedFile reads the file from the given path, strips the content

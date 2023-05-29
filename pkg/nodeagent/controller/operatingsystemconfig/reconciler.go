@@ -206,10 +206,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	g, groupCtx := errgroup.WithContext(timeoutCtx)
 
 	for _, u := range oscChanges.ChangedUnits {
-		if u.Content == nil || u.Command == nil {
+		if u.Content == nil {
 			continue
 		}
 		u := u
+
+		// There are some units without a command specified,
+		// the old bash based implementation didn't care about command and always restarted all units
+		// mimic this this behavior at least for these units.
+		if u.Command == nil {
+			u.Command = pointer.String("start")
+		}
 
 		g.Go(func() error {
 			switch *u.Command {

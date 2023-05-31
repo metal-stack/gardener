@@ -25,8 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// controllerName is the name of this controller.
-const controllerName = "node"
+// ControllerName is the name of this controller.
+const ControllerName = "node"
 
 // AddToManager adds Reconciler to the given manager.
 func (r *Reconciler) AddToManager(mgr manager.Manager) error {
@@ -35,12 +35,12 @@ func (r *Reconciler) AddToManager(mgr manager.Manager) error {
 	}
 
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor(controllerName)
+		r.Recorder = mgr.GetEventRecorderFor(ControllerName)
 	}
 
 	return builder.
 		ControllerManagedBy(mgr).
-		Named(controllerName).
+		Named(ControllerName).
 		For(&corev1.Node{}, builder.WithPredicates(r.NodePredicate(r.NodeName))).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,

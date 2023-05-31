@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package common
 
 import (
@@ -18,34 +19,35 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/exp/slices"
 
-	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+
 	"sigs.k8s.io/yaml"
+
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
-// ReadTrimmedFile reads the file from the given path, strips the content
-// and returns an error in case the file is empty.
+// ReadTrimmedFile reads the file from the given path, strips the content and returns an error in case the file is
+// empty.
 func ReadTrimmedFile(name string) (string, error) {
 	content, err := os.ReadFile(name)
 	if err != nil {
 		return "", err
 	}
-	trimmed := strings.TrimSpace(string(content))
-	if trimmed == "" {
-		// sometimes files are empty when being replaced
-		// under no circumstances these contents should be used
-		// for further processing in the controllers.
-		return "", fmt.Errorf("file %q is empty", name)
+
+	if trimmed := strings.TrimSpace(string(content)); trimmed != "" {
+		return trimmed, nil
 	}
 
-	return trimmed, nil
+	// sometimes files are empty when being replaced
+	// under no circumstances these contents should be used
+	// for further processing in the controllers.
+	return "", fmt.Errorf("file %q is empty", name)
 }
 
-// ReadNodeAgentConfiguration returns the node agent configuration
-// as written to the worker node's file system.
+// ReadNodeAgentConfiguration returns the node agent configuration as written to the worker node's file system.
 func ReadNodeAgentConfiguration() (*nodeagentv1alpha1.NodeAgentConfiguration, error) {
 	content, err := ReadTrimmedFile(nodeagentv1alpha1.NodeAgentConfigPath)
 	if err != nil {
@@ -53,15 +55,14 @@ func ReadNodeAgentConfiguration() (*nodeagentv1alpha1.NodeAgentConfiguration, er
 	}
 
 	config := &nodeagentv1alpha1.NodeAgentConfiguration{}
-
-	err = yaml.Unmarshal([]byte(content), config)
-	if err != nil {
+	if err := yaml.Unmarshal([]byte(content), config); err != nil {
 		return nil, err
 	}
 
 	return config, nil
 }
 
+// TODO: doc strings
 type OSCChanges struct {
 	// ChangedUnits contains units which change the content or have been added
 	ChangedUnits []v1alpha1.Unit
@@ -69,27 +70,25 @@ type OSCChanges struct {
 	DeletedFiles []v1alpha1.File
 }
 
+// TODO: doc string
 func CalculateChangedUnitsAndRemovedFiles(currentOSC *v1alpha1.OperatingSystemConfig) (*OSCChanges, error) {
-
 	previousOSCFile, err := os.ReadFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return &OSCChanges{
-				ChangedUnits: currentOSC.Spec.Units,
-			}, nil
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("error retrieving previous osc from file: %w", err)
 		}
-		return nil, fmt.Errorf("error retrieving previous osc from file: %w", err)
+		return &OSCChanges{ChangedUnits: currentOSC.Spec.Units}, nil
 	}
 
 	previousOSC := &v1alpha1.OperatingSystemConfig{}
-	err = yaml.Unmarshal(previousOSCFile, previousOSC)
-	if err != nil {
+	if err := yaml.Unmarshal(previousOSCFile, previousOSC); err != nil {
 		return nil, fmt.Errorf("error unmarshalling previous osc: %w", err)
 	}
 
 	return CalculateOSCChanges(currentOSC, previousOSC), nil
 }
 
+// TODO: doc string
 func CalculateOSCChanges(current, previous *v1alpha1.OperatingSystemConfig) *OSCChanges {
 	oscChanges := &OSCChanges{}
 

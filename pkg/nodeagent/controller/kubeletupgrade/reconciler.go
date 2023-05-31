@@ -23,13 +23,13 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
@@ -38,26 +38,20 @@ import (
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
-var (
-	hyperkubeImageDownloadedPath = path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "hyperkube-downloaded")
-)
+var hyperkubeImageDownloadedPath = path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "hyperkube-downloaded")
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
 type Reconciler struct {
-	Client   client.Client
-	Recorder record.EventRecorder
-
-	Config *nodeagentv1alpha1.NodeAgentConfiguration
-
+	Client           client.Client
+	Config           *nodeagentv1alpha1.NodeAgentConfiguration
+	Recorder         record.EventRecorder
+	SyncPeriod       time.Duration
 	TargetBinaryPath string
-
-	SyncPeriod time.Duration
-
-	TriggerChannel <-chan event.GenericEvent
-
-	NodeName string
+	NodeName         string
+	TriggerChannel   <-chan event.GenericEvent
 }
 
+// TODO: doc string
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -68,23 +62,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to update node agent config: %w", err)
 	}
-
 	r.Config = config
 
 	imageRefDownloaded, err := common.ReadTrimmedFile(hyperkubeImageDownloadedPath)
 	if err != nil && !os.IsNotExist(err) {
 		return reconcile.Result{}, err
-	} else {
-		if r.Config.HyperkubeImage == imageRefDownloaded {
-			log.Info("Desired kubelet binary hasn't changed, checking again later", "requeueAfter", r.SyncPeriod)
-			return reconcile.Result{RequeueAfter: r.SyncPeriod}, nil
-		}
+	}
+
+	if r.Config.HyperkubeImage == imageRefDownloaded {
+		log.Info("Desired kubelet binary hasn't changed, checking again later", "requeueAfter", r.SyncPeriod)
+		return reconcile.Result{RequeueAfter: r.SyncPeriod}, nil
 	}
 
 	log.Info("kubelet binary has changed, starting kubelet update", "imageRef", r.Config.HyperkubeImage)
 
-	err = registry.ExtractFromLayer(r.Config.HyperkubeImage, "kubelet", r.TargetBinaryPath)
-	if err != nil {
+	if err := registry.ExtractFromLayer(r.Config.HyperkubeImage, "kubelet", r.TargetBinaryPath); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to extract binary from image: %w", err)
 	}
 
@@ -100,13 +92,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	node := &corev1.Node{}
-	err = r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return reconcile.Result{}, fmt.Errorf("unable to fetch node %w", err)
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node); client.IgnoreNotFound(err) != nil {
+		return reconcile.Result{}, fmt.Errorf("unable to fetch node: %w", err)
 	}
 
 	log.Info("Restarting kubelet unit")
-	if err = dbus.Restart(ctx, r.Recorder, node, "kubelet.service"); err != nil { // TODO: do not use hardcoded unit name
+	if err := dbus.Restart(ctx, r.Recorder, node, kubelet.UnitName); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable restart service: %w", err)
 	}
 

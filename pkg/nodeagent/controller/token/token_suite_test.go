@@ -23,5 +23,5 @@ import (
 
 func TestToken(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Node Agent Controller Token Suite")
+	RunSpecs(t, "NodeAgent Controller Token Suite")
 }

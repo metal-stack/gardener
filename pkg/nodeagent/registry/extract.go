@@ -1,3 +1,17 @@
+// Copyright 2023 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package registry
 
 import (
@@ -10,12 +24,15 @@ import (
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
+	containerregistryv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
 func ExtractFromLayer(image, pathSuffix, dest string) error {
-	// TODO(rfranzke): figure this out after breakfast
+	// In the local environment, we pull Gardener images built via skaffold from the local registry running in the kind
+	// cluster. However, on local machine pods, `localhost:5001` does obviously not lead to this registry. Hence, we
+	// have to replace it with `garden.local.gardener.cloud:5001` which allows accessing the registry from both local
+	// machine and machine pods.
 	image = strings.ReplaceAll(image, "localhost:5001", "garden.local.gardener.cloud:5001")
 
 	imageRef, err := name.ParseReference(image, name.Insecure)
@@ -23,7 +40,7 @@ func ExtractFromLayer(image, pathSuffix, dest string) error {
 		return fmt.Errorf("unable to parse reference: %w", err)
 	}
 
-	remoteImage, err := remote.Image(imageRef, remote.WithPlatform(v1.Platform{OS: "linux", Architecture: runtime.GOARCH}))
+	remoteImage, err := remote.Image(imageRef, remote.WithPlatform(containerregistryv1.Platform{OS: "linux", Architecture: runtime.GOARCH}))
 	if err != nil {
 		return fmt.Errorf("unable access remote image reference: %w", err)
 	}
@@ -41,8 +58,7 @@ func ExtractFromLayer(image, pathSuffix, dest string) error {
 			return fmt.Errorf("unable to get reader for uncompressed layer: %w", err)
 		}
 
-		err = extractTarGz(buffer, pathSuffix, dest)
-		if err != nil {
+		if err = extractTarGz(buffer, pathSuffix, dest); err != nil {
 			if errors.Is(err, notFound) {
 				continue
 			}
@@ -63,9 +79,12 @@ func ExtractFromLayer(image, pathSuffix, dest string) error {
 var notFound = errors.New("file not contained in tar")
 
 func extractTarGz(uncompressedStream io.Reader, filenameInArchive, destinationOnOS string) error {
-	tarReader := tar.NewReader(uncompressedStream)
-	var header *tar.Header
-	var err error
+	var (
+		tarReader = tar.NewReader(uncompressedStream)
+		header    *tar.Header
+		err       error
+	)
+
 	for header, err = tarReader.Next(); err == nil; header, err = tarReader.Next() {
 		switch header.Typeflag {
 		case tar.TypeReg:

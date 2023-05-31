@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestToken(t *testing.T) {
+func TestSelfUpgrade(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Node Agent Controller Token Suite")
+	RunSpecs(t, "NodeAgent Controller SelfUpgrade Suite")
 }

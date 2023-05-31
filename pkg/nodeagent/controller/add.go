@@ -38,15 +38,17 @@ func AddToManager(mgr manager.Manager) error {
 		return err
 	}
 
-	nodeName := strings.TrimSpace(strings.ToLower(hostname))
-
+	// TODO: Why don't we read this during start-up and pass it down here, just like in all other Gardener binaries?
 	config, err := common.ReadNodeAgentConfiguration()
 	if err != nil {
 		return err
 	}
 
-	selfUpgradeChannel := make(chan event.GenericEvent, 1)
-	kubeletUpgradeChannel := make(chan event.GenericEvent, 1)
+	var (
+		nodeName              = strings.TrimSpace(strings.ToLower(hostname))
+		selfUpgradeChannel    = make(chan event.GenericEvent, 1)
+		kubeletUpgradeChannel = make(chan event.GenericEvent, 1)
+	)
 
 	if err := (&node.Reconciler{
 		NodeName:   nodeName,

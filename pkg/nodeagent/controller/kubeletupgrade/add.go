@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// controllerName is the name of this controller.
-const controllerName = "kubeletupgrade"
+// ControllerName is the name of this controller.
+const ControllerName = "kubeletupgrade"
 
 // AddToManager adds Reconciler to the given manager.
 func (r *Reconciler) AddToManager(mgr manager.Manager) error {
@@ -34,12 +34,12 @@ func (r *Reconciler) AddToManager(mgr manager.Manager) error {
 	}
 
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor(controllerName)
+		r.Recorder = mgr.GetEventRecorderFor(ControllerName)
 	}
 
 	return builder.
 		ControllerManagedBy(mgr).
-		Named(controllerName).
+		Named(ControllerName).
 		Watches(&source.Channel{Source: r.TriggerChannel}, handler.Funcs{
 			GenericFunc: func(_ event.GenericEvent, queue workqueue.RateLimitingInterface) {
 				queue.Add(reconcile.Request{})

@@ -1,3 +1,17 @@
+// Copyright 2023 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package dbus
 
 import (
@@ -11,6 +25,7 @@ import (
 
 const done = "done"
 
+// TODO: doc string
 func Enable(ctx context.Context, unitNames ...string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
@@ -19,10 +34,10 @@ func Enable(ctx context.Context, unitNames ...string) error {
 	defer dbc.Close()
 
 	_, _, err = dbc.EnableUnitFilesContext(ctx, unitNames, false, true)
-
 	return err
 }
 
+// TODO: doc string
 func Disable(ctx context.Context, unitNames ...string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
@@ -34,6 +49,7 @@ func Disable(ctx context.Context, unitNames ...string) error {
 	return err
 }
 
+// TODO: doc string
 func Stop(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
@@ -43,18 +59,20 @@ func Stop(ctx context.Context, recorder record.EventRecorder, node *corev1.Node,
 
 	c := make(chan string)
 
-	_, err = dbc.StopUnitContext(ctx, unitName, "replace", c)
+	if _, err := dbc.StopUnitContext(ctx, unitName, "replace", c); err != nil {
+		return fmt.Errorf("unable to stop unit %s: %w", unitName, err)
+	}
 
 	job := <-c
 	if job != done {
-		err = fmt.Errorf("stop failed %s", job)
+		err = fmt.Errorf("stop failed for %s", job)
 	}
 
 	recordEvent(recorder, node, err, unitName, "SystemDUnitStop", "stop")
-
 	return err
 }
 
+// TODO: doc string
 func Start(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
@@ -64,21 +82,20 @@ func Start(ctx context.Context, recorder record.EventRecorder, node *corev1.Node
 
 	c := make(chan string)
 
-	_, err = dbc.StartUnitContext(ctx, unitName, "replace", c)
-	if err != nil {
-		return err
+	if _, err := dbc.StartUnitContext(ctx, unitName, "replace", c); err != nil {
+		return fmt.Errorf("unable to start unit %s: %w", unitName, err)
 	}
 
 	job := <-c
 	if job != done {
-		err = fmt.Errorf("start failed %s", job)
+		err = fmt.Errorf("start failed for %s", job)
 	}
 
 	recordEvent(recorder, node, err, unitName, "SystemDUnitStart", "start")
-
 	return err
 }
 
+// TODO: doc string
 func Restart(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
@@ -88,9 +105,8 @@ func Restart(ctx context.Context, recorder record.EventRecorder, node *corev1.No
 
 	c := make(chan string)
 
-	_, err = dbc.RestartUnitContext(ctx, unitName, "replace", c)
-	if err != nil {
-		return err
+	if _, err := dbc.RestartUnitContext(ctx, unitName, "replace", c); err != nil {
+		return fmt.Errorf("unable to restart unit %s: %w", unitName, err)
 	}
 
 	job := <-c
@@ -99,10 +115,10 @@ func Restart(ctx context.Context, recorder record.EventRecorder, node *corev1.No
 	}
 
 	recordEvent(recorder, node, err, unitName, "SystemDUnitRestart", "restart")
-
 	return nil
 }
 
+// TODO: doc string
 func DaemonReload(ctx context.Context) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
@@ -110,9 +126,8 @@ func DaemonReload(ctx context.Context) error {
 	}
 	defer dbc.Close()
 
-	err = dbc.ReloadContext(ctx)
-	if err != nil {
-		return fmt.Errorf("systemd daemon-reload failed %w", err)
+	if err := dbc.ReloadContext(ctx); err != nil {
+		return fmt.Errorf("systemd daemon-reload failed: %w", err)
 	}
 
 	return nil

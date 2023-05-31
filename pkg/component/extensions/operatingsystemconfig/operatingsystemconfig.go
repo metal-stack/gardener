@@ -40,6 +40,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/extensions"
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -47,8 +48,6 @@ import (
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
-
-	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
 const (
@@ -633,7 +632,7 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 		return nil, err
 	}
 
-	agentUnits, agentFiles, err := downloader.NodeAgentConfig(d.key, d.nodeAgentKey, d.apiServerURL, d.clusterCA, d.imageVector, d.worker, d.kubernetesVersion)
+	agentUnits, agentFiles, err := downloader.NodeAgentConfig(d.nodeAgentKey, d.apiServerURL, d.clusterCA, d.imageVector, d.worker, d.kubernetesVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -765,6 +764,7 @@ func keySuffix(machineImageName string, purpose extensionsv1alpha1.OperatingSyst
 	return ""
 }
 
+// TODO: doc string
 func GardenerNodeAgentSecretName(workerName string, kubernetesVersion *semver.Version, criConfig *gardencorev1beta1.CRI) string {
 	if kubernetesVersion == nil {
 		return ""

@@ -28,8 +28,8 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 )
 
-// controllerName is the name of this controller.
-const controllerName = "token"
+// ControllerName is the name of this controller.
+const ControllerName = "token"
 
 // AddToManager adds Reconciler to the given manager.
 func (r *Reconciler) AddToManager(mgr manager.Manager) error {
@@ -39,12 +39,12 @@ func (r *Reconciler) AddToManager(mgr manager.Manager) error {
 
 	return builder.
 		ControllerManagedBy(mgr).
-		Named(controllerName).
+		Named(ControllerName).
 		For(&corev1.Secret{}, builder.WithPredicates(r.SecretPredicate())).
 		Complete(r)
 }
 
-// SecretPredicate returns the predicate for Shoot events.
+// SecretPredicate returns the predicate for Secret events.
 func (r *Reconciler) SecretPredicate() predicate.Predicate {
 	return predicate.And(
 		predicate.NewPredicateFuncs(func(obj client.Object) bool {

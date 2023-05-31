@@ -38,14 +38,15 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	controllerconfigv1alpha1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/downloader"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
-	"github.com/gardener/gardener/pkg/controllermanager/apis/config"
 	"github.com/gardener/gardener/pkg/features"
+	gardenerhealthz "github.com/gardener/gardener/pkg/healthz"
 	"github.com/gardener/gardener/pkg/logger"
 	"github.com/gardener/gardener/pkg/nodeagent/bootstrap"
 	"github.com/gardener/gardener/pkg/nodeagent/controller"
@@ -55,28 +56,30 @@ import (
 )
 
 // Name is a const for the name of this component.
-const name = "gardener-node-agent"
+const Name = "gardener-node-agent"
 
 // NewCommand creates a new cobra.Command for running gardener-node-agent.
 func NewCommand() *cobra.Command {
 	opts := &options{}
 
 	cmd := &cobra.Command{
-		Use:   name,
-		Short: "Launch the " + name,
+		Use:   Name,
+		Short: "Launch the " + Name,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
 
-			log, err := initLogging(opts)
+			// TODO: Make log level and format configurable:
+			// log, err := logger.NewZapLogger(opts.config.LogLevel, opts.config.LogFormat)
+			log, err := logger.NewZapLogger(logger.DebugLevel, logger.FormatJSON)
 			if err != nil {
-				return err
+				return fmt.Errorf("error instantiating zap logger: %w", err)
 			}
 
 			logf.SetLogger(log)
 			klog.SetLogger(log)
 
-			log.Info("Starting "+name, "version", version.Get())
+			log.Info("Starting "+Name, "version", version.Get())
 			cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 				log.Info(fmt.Sprintf("FLAG: --%s=%s", flag.Name, flag.Value)) //nolint:logcheck
 			})
@@ -86,16 +89,18 @@ func NewCommand() *cobra.Command {
 			// further errors will be logged properly, don't duplicate
 			cmd.SilenceErrors = true
 
-			return run(cmd.Context(), log, opts.config)
+			return run(cmd.Context(), log)
 		},
 	}
 
 	bootstrapCmd := &cobra.Command{
 		Use:   "bootstrap",
-		Short: "bootstrap the " + name,
+		Short: "bootstrap the " + Name,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log, err := initLogging(opts)
+			// TODO: Make log level and format configurable:
+			// log, err := logger.NewZapLogger(opts.config.LogLevel, opts.config.LogFormat)
+			log, err := logger.NewZapLogger(logger.DebugLevel, logger.FormatJSON)
 			if err != nil {
 				return err
 			}
@@ -112,7 +117,7 @@ func NewCommand() *cobra.Command {
 	return cmd
 }
 
-func run(ctx context.Context, log logr.Logger, cfg *config.ControllerManagerConfiguration) error {
+func run(ctx context.Context, log logr.Logger) error {
 	log.Info("Feature Gates", "featureGates", features.DefaultFeatureGate)
 
 	// This is like importing the automaxprocs package for its init func (it will in turn call maxprocs.Set).
@@ -125,18 +130,17 @@ func run(ctx context.Context, log logr.Logger, cfg *config.ControllerManagerConf
 	}
 
 	// Check if token is present, else use bootstrap token to fetch token
-
 	config, err := common.ReadNodeAgentConfiguration()
 	if err != nil {
 		return err
 	}
 
-	_, err = os.Stat(nodeagentv1alpha1.NodeAgentTokenFilePath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("unable to read token %w", err)
-	}
-	if err != nil && os.IsNotExist(err) {
-		log.Info("token not present, fetching from token from api server")
+	if _, err := os.Stat(nodeagentv1alpha1.NodeAgentTokenFilePath); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("unable to read token %w", err)
+		}
+
+		log.Info("Token not present, fetching from token from API server")
 
 		// Fetch token with bootstrap token and store it on disk
 		restConfig := &rest.Config{
@@ -147,7 +151,7 @@ func run(ctx context.Context, log logr.Logger, cfg *config.ControllerManagerConf
 			},
 		}
 
-		// this can be removed after migration to gardener-node-agent has happened:
+		// TODO(majst01): Remove this after v1.76 has been released.
 		if _, err := os.Stat(downloader.PathCredentialsToken); err == nil {
 			restConfig = &rest.Config{
 				Host:            config.APIServer.URL,
@@ -160,30 +164,31 @@ func run(ctx context.Context, log logr.Logger, cfg *config.ControllerManagerConf
 
 		c, err := client.New(restConfig, client.Options{})
 		if err != nil {
-			return fmt.Errorf("unable to create runtime client %w", err)
+			return fmt.Errorf("unable to create runtime client: %w", err)
 		}
 
 		tokenSecret := &corev1.Secret{}
-		err = c.Get(ctx, client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: nodeagentv1alpha1.NodeAgentTokenSecretName}, tokenSecret)
-		if err != nil {
-			return fmt.Errorf("unable to fetch token %w", err)
+		if err := c.Get(ctx, client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: nodeagentv1alpha1.NodeAgentTokenSecretName}, tokenSecret); err != nil {
+			return fmt.Errorf("unable to fetch token from API server: %w", err)
 		}
 
-		log.Info("token fetched from api server")
-		err = os.WriteFile(nodeagentv1alpha1.NodeAgentTokenFilePath, tokenSecret.Data[nodeagentv1alpha1.NodeAgentTokenSecretKey], 0600)
-		if err != nil {
-			return fmt.Errorf("unable to write token %w", err)
+		if len(tokenSecret.Data[nodeagentv1alpha1.NodeAgentTokenSecretKey]) == 0 {
+			return fmt.Errorf("secret does not contain a %s key", nodeagentv1alpha1.NodeAgentTokenSecretKey)
+		}
+
+		log.Info("Token fetched from API server, writing it to disk")
+		if err := os.WriteFile(nodeagentv1alpha1.NodeAgentTokenFilePath, tokenSecret.Data[nodeagentv1alpha1.NodeAgentTokenSecretKey], 0600); err != nil {
+			return fmt.Errorf("unable to write token to %s: %w", nodeagentv1alpha1.NodeAgentTokenFilePath, err)
 		}
 
 		log.Info("token written to disk")
 	}
 
-	err = writeKubeconfigBootstrap(config)
-	if err != nil {
+	if err := writeBootstrapKubeconfigToDisk(config); err != nil {
 		return err
 	}
 
-	log.Info("token found, creating restconfig")
+	log.Info("Token found, getting rest config")
 	restConfig := &rest.Config{
 		Host:            config.APIServer.URL,
 		BearerTokenFile: nodeagentv1alpha1.NodeAgentTokenFilePath,
@@ -194,17 +199,37 @@ func run(ctx context.Context, log logr.Logger, cfg *config.ControllerManagerConf
 
 	log.Info("Setting up manager")
 	mgr, err := manager.New(restConfig, manager.Options{
-		Logger: log,
-		// TODO: refine cache selector to allow only access to needed secrets instead
-		Namespace:               metav1.NamespaceSystem,
+		Logger:                  log,
 		Scheme:                  kubernetes.ShootScheme,
 		GracefulShutdownTimeout: pointer.Duration(5 * time.Second),
-		LeaderElection:          false,
+
+		// TODO: refine cache selector to allow only access to needed secrets instead
+		Namespace: metav1.NamespaceSystem,
+
+		LeaderElection: false,
 		Controller: controllerconfigv1alpha1.ControllerConfigurationSpec{
 			RecoverPanic: pointer.Bool(true),
 		},
 	})
 	if err != nil {
+		return err
+	}
+
+	// TODO: Make debugging configurable
+	// if cfg.Debugging != nil && cfg.Debugging.EnableProfiling {
+	// 	if err := (routes.Profiling{}).AddToManager(mgr); err != nil {
+	// 		return fmt.Errorf("failed adding profiling handlers to manager: %w", err)
+	// 	}
+	// 	if cfg.Debugging.EnableContentionProfiling {
+	// 		goruntime.SetBlockProfileRate(1)
+	// 	}
+	// }
+
+	log.Info("Setting up health check endpoints")
+	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+		return err
+	}
+	if err := mgr.AddReadyzCheck("informer-sync", gardenerhealthz.NewCacheSyncHealthz(mgr.GetCache())); err != nil {
 		return err
 	}
 
@@ -217,15 +242,7 @@ func run(ctx context.Context, log logr.Logger, cfg *config.ControllerManagerConf
 	return mgr.Start(ctx)
 }
 
-func initLogging(opts *options) (logr.Logger, error) {
-	log, err := logger.NewZapLogger(logger.DebugLevel, logger.FormatJSON)
-	if err != nil {
-		return logr.Logger{}, fmt.Errorf("error instantiating zap logger: %w", err)
-	}
-	return log, nil
-}
-
-func writeKubeconfigBootstrap(config *nodeagentv1alpha1.NodeAgentConfiguration) error {
+func writeBootstrapKubeconfigToDisk(config *nodeagentv1alpha1.NodeAgentConfiguration) error {
 	if _, err := os.Stat(kubelet.PathKubeconfigBootstrap); err == nil {
 		return nil
 	}
@@ -233,34 +250,28 @@ func writeKubeconfigBootstrap(config *nodeagentv1alpha1.NodeAgentConfiguration) 
 	kubeconfig := &clientcmdv1.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
-		Clusters: []clientcmdv1.NamedCluster{
-			{
-				Name: "default",
-				Cluster: clientcmdv1.Cluster{
-					Server:                   config.APIServer.URL,
-					CertificateAuthorityData: []byte(config.APIServer.CA),
-				},
+		Clusters: []clientcmdv1.NamedCluster{{
+			Name: "default",
+			Cluster: clientcmdv1.Cluster{
+				Server:                   config.APIServer.URL,
+				CertificateAuthorityData: []byte(config.APIServer.CA),
 			},
-		},
+		}},
 		CurrentContext: "kubelet-bootstrap@default",
-		Contexts: []clientcmdv1.NamedContext{
-			{
-				Name: "kubelet-bootstrap@default",
-				Context: clientcmdv1.Context{
-					Cluster:  "default",
-					AuthInfo: "kubelet-bootstrap",
-				},
+		Contexts: []clientcmdv1.NamedContext{{
+			Name: "kubelet-bootstrap@default",
+			Context: clientcmdv1.Context{
+				Cluster:  "default",
+				AuthInfo: "kubelet-bootstrap",
 			},
-		},
-		AuthInfos: []clientcmdv1.NamedAuthInfo{
-			{
-				Name: "kubelet-bootstrap",
-				AuthInfo: clientcmdv1.AuthInfo{
-					Token:                config.APIServer.BootstrapToken,
-					ImpersonateUserExtra: make(map[string][]string),
-				},
+		}},
+		AuthInfos: []clientcmdv1.NamedAuthInfo{{
+			Name: "kubelet-bootstrap",
+			AuthInfo: clientcmdv1.AuthInfo{
+				Token:                config.APIServer.BootstrapToken,
+				ImpersonateUserExtra: make(map[string][]string),
 			},
-		},
+		}},
 	}
 
 	raw, err := runtime.Encode(configlatest.Codec, kubeconfig)
@@ -268,11 +279,8 @@ func writeKubeconfigBootstrap(config *nodeagentv1alpha1.NodeAgentConfiguration) 
 		return fmt.Errorf("unable to encode kubeconfig: %w", err)
 	}
 
-	dir := filepath.Dir(kubelet.PathKubeconfigBootstrap)
-
-	err = os.MkdirAll(dir, fs.ModeDir)
-	if err != nil {
-		return fmt.Errorf("unable to create kubelet kubeconfig directory %w", err)
+	if err := os.MkdirAll(filepath.Dir(kubelet.PathKubeconfigBootstrap), fs.ModeDir); err != nil {
+		return fmt.Errorf("unable to create kubelet kubeconfig directory: %w", err)
 	}
 
 	return os.WriteFile(kubelet.PathKubeconfigBootstrap, raw, 0600)

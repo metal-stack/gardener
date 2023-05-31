@@ -23,7 +23,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -31,35 +30,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/gardener/gardener/pkg/controllerutils"
-	"github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
-
-	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
-var (
-	imageDownloadedPath = path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "node-agent-downloaded")
-)
+var imageDownloadedPath = path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "node-agent-downloaded")
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
 type Reconciler struct {
-	Client   client.Client
-	Recorder record.EventRecorder
-
-	Config *nodeagentv1alpha1.NodeAgentConfiguration
-
+	Client         client.Client
+	Config         *nodeagentv1alpha1.NodeAgentConfiguration
+	Recorder       record.EventRecorder
+	SyncPeriod     time.Duration
 	SelfBinaryPath string
-
-	SyncPeriod time.Duration
-
+	NodeName       string
 	TriggerChannel <-chan event.GenericEvent
-
-	NodeName string
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+// TODO: doc string
+func (r *Reconciler) Reconcile(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 
 	ctx, cancel := controllerutils.GetMainReconciliationContext(ctx, controllerutils.DefaultReconciliationTimeout)
@@ -69,7 +60,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to update node agent config: %w", err)
 	}
-
 	r.Config = config
 
 	imageRefDownloaded, err := common.ReadTrimmedFile(imageDownloadedPath)
@@ -84,8 +74,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	log.Info("gardener-node-agent binary has changed, starting self-update", "imageRef", r.Config.Image)
 
-	err = registry.ExtractFromLayer(r.Config.Image, "gardener-node-agent", r.SelfBinaryPath)
-	if err != nil {
+	if err := registry.ExtractFromLayer(r.Config.Image, "gardener-node-agent", r.SelfBinaryPath); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to extract binary from image: %w", err)
 	}
 
@@ -101,13 +90,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	node := &corev1.Node{}
-	err = r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return reconcile.Result{}, fmt.Errorf("unable to fetch node %w", err)
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node); client.IgnoreNotFound(err) != nil {
+		return reconcile.Result{}, fmt.Errorf("unable to fetch node: %w", err)
 	}
 
 	log.Info("Restarting own gardener-node-agent unit")
-	if err = dbus.Restart(ctx, r.Recorder, node, v1alpha1.NodeAgentUnitName); err != nil {
+	if err := dbus.Restart(ctx, r.Recorder, node, nodeagentv1alpha1.NodeAgentUnitName); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable restart service: %w", err)
 	}
 

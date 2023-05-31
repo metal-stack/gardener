@@ -34,13 +34,12 @@ import (
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
 type Reconciler struct {
-	Client client.Client
-
-	Config *nodeagentv1alpha1.NodeAgentConfiguration
-
+	Client     client.Client
+	Config     *nodeagentv1alpha1.NodeAgentConfiguration
 	SyncPeriod time.Duration
 }
 
+// TODO: doc string
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -62,12 +61,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	// only update token file if content changed
-	updateTokenFile := true
-	if tokenFileContent, err := os.ReadFile(nodeagentv1alpha1.NodeAgentTokenFilePath); err == nil {
-		updateTokenFile = !bytes.Equal(token, tokenFileContent)
+	currentToken, err := os.ReadFile(nodeagentv1alpha1.NodeAgentTokenFilePath)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("error reading token file %s: %w", nodeagentv1alpha1.NodeAgentTokenFilePath, err)
 	}
 
-	if updateTokenFile {
+	if !bytes.Equal(token, currentToken) {
 		log.Info("Updating token in file", "file", nodeagentv1alpha1.NodeAgentTokenFilePath)
 		if err := os.WriteFile(nodeagentv1alpha1.NodeAgentTokenFilePath, token, 0600); err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed writing token: %w", err)

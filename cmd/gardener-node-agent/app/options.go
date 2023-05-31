@@ -23,10 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"github.com/gardener/gardener/pkg/controllermanager/apis/config"
-	controllermanagerv1alpha1 "github.com/gardener/gardener/pkg/controllermanager/apis/config/v1alpha1"
-	controllermanagervalidation "github.com/gardener/gardener/pkg/controllermanager/apis/config/validation"
-	"github.com/gardener/gardener/pkg/features"
+	"github.com/gardener/gardener/pkg/nodeagent/apis/config"
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
 var configDecoder runtime.Decoder
@@ -35,7 +33,7 @@ func init() {
 	configScheme := runtime.NewScheme()
 	schemeBuilder := runtime.NewSchemeBuilder(
 		config.AddToScheme,
-		controllermanagerv1alpha1.AddToScheme,
+		nodeagentv1alpha1.AddToScheme,
 	)
 	utilruntime.Must(schemeBuilder.AddToScheme(configScheme))
 	configDecoder = serializer.NewCodecFactory(configScheme).UniversalDecoder()
@@ -43,7 +41,7 @@ func init() {
 
 type options struct {
 	configFile string
-	config     *config.ControllerManagerConfiguration
+	config     *config.NodeAgentConfiguration
 }
 
 func (o *options) addFlags(fs *pflag.FlagSet) {
@@ -60,23 +58,25 @@ func (o *options) complete() error {
 		return fmt.Errorf("error reading config file: %w", err)
 	}
 
-	o.config = &config.ControllerManagerConfiguration{}
+	o.config = &config.NodeAgentConfiguration{}
 	if err = runtime.DecodeInto(configDecoder, data, o.config); err != nil {
 		return fmt.Errorf("error decoding config: %w", err)
 	}
 
 	// Set feature gates immediately after decoding the config.
 	// Feature gates might influence the next steps, e.g., validating the config.
-	if err := features.DefaultFeatureGate.SetFromMap(o.config.FeatureGates); err != nil {
-		return err
-	}
+	// TODO: implement me
+	// if err := features.DefaultFeatureGate.SetFromMap(o.config.FeatureGates); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
 
 func (o *options) validate() error {
-	if errs := controllermanagervalidation.ValidateControllerManagerConfiguration(o.config); len(errs) > 0 {
-		return errs.ToAggregate()
-	}
+	// TODO: Implement me
+	// if errs := nodeagentvalidation.ValidateNodeAgentConfiguration(o.config); len(errs) > 0 {
+	// 	return errs.ToAggregate()
+	// }
 	return nil
 }

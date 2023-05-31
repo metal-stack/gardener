@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -37,36 +36,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
-	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1/helper"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/executor"
 	"github.com/gardener/gardener/pkg/controllerutils"
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/utils"
-
-	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
-
-	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	"github.com/gardener/gardener/pkg/utils/flow"
 )
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
 type Reconciler struct {
-	Client   client.Client
-	Recorder record.EventRecorder
-
-	NodeName string
-
-	Config *nodeagentv1alpha1.NodeAgentConfiguration
-
+	Client          client.Client
+	Config          *nodeagentv1alpha1.NodeAgentConfiguration
+	Recorder        record.EventRecorder
+	SyncPeriod      time.Duration
+	NodeName        string
 	TriggerChannels []chan event.GenericEvent
-
-	SyncPeriod time.Duration
 }
 
+// TODO: doc string
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 
-	log.Info("reconciling osc secret")
+	log.Info("Reconciling")
 
 	ctx, cancel := controllerutils.GetMainReconciliationContext(ctx, controllerutils.DefaultReconciliationTimeout)
 	defer cancel()
@@ -82,24 +77,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	osc, oscRaw, err := r.extractOSCFromSecret(secret)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("unable to extract osc from secret %w", err)
+		return reconcile.Result{}, fmt.Errorf("unable to extract osc from secret: %w", err)
 	}
 
 	oscCheckSum := utils.ComputeSHA256Hex(oscRaw)
 
-	err = yaml.Unmarshal(oscRaw, osc)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("unable to unmarshal osc from secret data %w", err)
+	if err := yaml.Unmarshal(oscRaw, osc); err != nil {
+		return reconcile.Result{}, fmt.Errorf("unable to unmarshal osc from secret data: %w", err)
 	}
 
 	oscChanges, err := common.CalculateChangedUnitsAndRemovedFiles(osc)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("unable to calculate osc changes from previous run %w", err)
+		return reconcile.Result{}, fmt.Errorf("unable to calculate osc changes from previous run: %w", err)
 	}
 
 	node := &corev1.Node{}
-	err = r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node)
-	if err != nil && !apierrors.IsNotFound(err) {
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: r.NodeName}, node); client.IgnoreNotFound(err) != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to fetch node %w", err)
 	}
 
@@ -110,126 +103,116 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	tmpDir, err := os.MkdirTemp("/tmp", "gardener-node-agent-*")
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("unable to create temp dir %w", err)
+		return reconcile.Result{}, fmt.Errorf("unable to create temp dir: %w", err)
 	}
 
-	for _, f := range osc.Spec.Files {
-		if f.Content.Inline == nil {
+	for _, file := range osc.Spec.Files {
+		if file.Content.Inline == nil {
 			continue
 		}
 
-		err = os.MkdirAll(filepath.Dir(f.Path), fs.ModeDir)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("unable to create directory %q %w", f.Path, err)
+		if err := os.MkdirAll(filepath.Dir(file.Path), fs.ModeDir); err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to create directory %q: %w", file.Path, err)
 		}
+
 		perm := fs.FileMode(0600)
-		if f.Permissions != nil {
-			perm = fs.FileMode(*f.Permissions)
+		if file.Permissions != nil {
+			perm = fs.FileMode(*file.Permissions)
 		}
 
-		data, err := helper.Decode(f.Content.Inline.Encoding, []byte(f.Content.Inline.Data))
+		data, err := helper.Decode(file.Content.Inline.Encoding, []byte(file.Content.Inline.Data))
 		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("unable to decode file %q data %w", f.Path, err)
+			return reconcile.Result{}, fmt.Errorf("unable to decode data of file %q: %w", file.Path, err)
 		}
 
-		tmpFilePath := filepath.Join(tmpDir, filepath.Base(f.Path))
-		err = os.WriteFile(tmpFilePath, data, perm)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("unable to create file %q %w", f.Path, err)
+		tmpFilePath := filepath.Join(tmpDir, filepath.Base(file.Path))
+		if err := os.WriteFile(tmpFilePath, data, perm); err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to create file %q: %w", file.Path, err)
 		}
 
-		err = os.Rename(tmpFilePath, f.Path)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("unable to move temporary file to %q %w", f.Path, err)
+		if err := os.Rename(tmpFilePath, file.Path); err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to move temporary file to %q: %w", file.Path, err)
 		}
 	}
 
-	for _, u := range oscChanges.ChangedUnits {
-		if u.Content == nil {
+	for _, changedUnit := range oscChanges.ChangedUnits {
+		if changedUnit.Content == nil {
 			continue
 		}
 
-		systemdUnitFilePath := path.Join("/etc/systemd/system", u.Name)
+		systemdUnitFilePath := path.Join("/etc/systemd/system", changedUnit.Name)
+
 		existingUnitContent, err := os.ReadFile(systemdUnitFilePath)
 		if err != nil && !os.IsNotExist(err) {
-			return reconcile.Result{}, fmt.Errorf("unable to read systemd unit %q %w", u.Name, err)
+			return reconcile.Result{}, fmt.Errorf("unable to read systemd unit %q: %w", changedUnit.Name, err)
 		}
 
-		newUnitContent := []byte(*u.Content)
+		newUnitContent := []byte(*changedUnit.Content)
 		if bytes.Equal(newUnitContent, existingUnitContent) {
 			continue
 		}
 
-		err = os.WriteFile(systemdUnitFilePath, newUnitContent, 0600)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("unable to write unit %q %w", u.Name, err)
+		if err := os.WriteFile(systemdUnitFilePath, newUnitContent, 0600); err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to write unit %q: %w", changedUnit.Name, err)
 		}
-		if u.Enable != nil && *u.Enable {
-			err = dbus.Enable(ctx, u.Name)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("unable to enable unit %q %w", u.Name, err)
+
+		if changedUnit.Enable != nil {
+			if *changedUnit.Enable {
+				if err := dbus.Enable(ctx, changedUnit.Name); err != nil {
+					return reconcile.Result{}, fmt.Errorf("unable to enable unit %q: %w", changedUnit.Name, err)
+				}
+			} else {
+				if err := dbus.Disable(ctx, changedUnit.Name); err != nil {
+					return reconcile.Result{}, fmt.Errorf("unable to disable unit %q: %w", changedUnit.Name, err)
+				}
 			}
 		}
-		if u.Enable != nil && !*u.Enable {
-			err = dbus.Disable(ctx, u.Name)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("unable to disable unit %q %w", u.Name, err)
-			}
-		}
-		log.Info("processed writing unit", "name", u.Name, "command", pointer.StringDeref(u.Command, ""))
+		log.Info("processed writing unit", "name", changedUnit.Name, "command", pointer.StringDeref(changedUnit.Command, ""))
 	}
-	for _, u := range oscChanges.DeletedUnits {
-		err = dbus.Stop(ctx, r.Recorder, node, u.Name)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("unable to stop deleted unit %q %w", u.Name, err)
+
+	for _, deletedUnit := range oscChanges.DeletedUnits {
+		if err := dbus.Stop(ctx, r.Recorder, node, deletedUnit.Name); err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to stop deleted unit %q: %w", deletedUnit.Name, err)
 		}
 
-		err = dbus.Disable(ctx, u.Name)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("unable to disable deleted unit %q %w", u.Name, err)
+		if err := dbus.Disable(ctx, deletedUnit.Name); err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to disable deleted unit %q: %w", deletedUnit.Name, err)
 		}
 
-		err = os.Remove(path.Join("/etc/systemd/system", u.Name))
-		if err != nil && !os.IsNotExist(err) {
-			return reconcile.Result{}, fmt.Errorf("unable to delete systemd unit of deleted %q %w", u.Name, err)
+		if err := os.Remove(path.Join("/etc/systemd/system", deletedUnit.Name)); err != nil && !os.IsNotExist(err) {
+			return reconcile.Result{}, fmt.Errorf("unable to delete systemd unit of deleted %q: %w", deletedUnit.Name, err)
 		}
 	}
 
-	err = dbus.DaemonReload(ctx)
-	if err != nil {
+	if err := dbus.DaemonReload(ctx); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	g, groupCtx := errgroup.WithContext(timeoutCtx)
-
+	var fns []flow.TaskFn
 	for _, u := range oscChanges.ChangedUnits {
-		if u.Content == nil {
+		changedUnit := u
+		if changedUnit.Content == nil {
 			continue
 		}
-		u := u
 
 		// There are some units without a command specified,
 		// the old bash based implementation didn't care about command and always restarted all units
-		// mimic this this behavior at least for these units.
-		if u.Command == nil {
-			u.Command = pointer.String("start")
+		// mimic this behavior at least for these units.
+		if changedUnit.Command == nil {
+			changedUnit.Command = pointer.String("start")
 		}
 
-		g.Go(func() error {
-			switch *u.Command {
-			// FIXME make this accessible constants
+		fns = append(fns, func(ctx context.Context) error {
+			switch *changedUnit.Command {
+			// TODO: make this accessible constants
 			case "start", "restart":
-				err = dbus.Restart(groupCtx, r.Recorder, node, u.Name)
-				if err != nil {
-					return fmt.Errorf("unable to restart %q: %w", u.Name, err)
+				if err := dbus.Restart(ctx, r.Recorder, node, changedUnit.Name); err != nil {
+					return fmt.Errorf("unable to restart %q: %w", changedUnit.Name, err)
 				}
+
 			case "stop":
-				err = dbus.Stop(groupCtx, r.Recorder, node, u.Name)
-				if err != nil {
-					return fmt.Errorf("unable to stop %q: %w", u.Name, err)
+				if err := dbus.Stop(ctx, r.Recorder, node, changedUnit.Name); err != nil {
+					return fmt.Errorf("unable to stop %q: %w", changedUnit.Name, err)
 				}
 			}
 
@@ -237,15 +220,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		})
 	}
 
-	err = g.Wait()
-	if err != nil {
-		log.Error(err, "error ensuring states of systemd units")
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	if err := flow.Sequential(fns...)(timeoutCtx); err != nil {
+		return reconcile.Result{}, fmt.Errorf("error ensuring states of systemd units: %w", err)
 	}
 
 	var deletionErrors []error
 	for _, f := range oscChanges.DeletedFiles {
-		err := os.Remove(f.Path)
-		if err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(f.Path); err != nil && !os.IsNotExist(err) {
 			deletionErrors = append(deletionErrors, err)
 		}
 	}
@@ -254,8 +238,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	// Persist current OSC for comparison with next one
-	err = os.WriteFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath, oscRaw, 0644)
-	if err != nil {
+	if err := os.WriteFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath, oscRaw, 0644); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to write previous osc to file %w", err)
 	}
 
@@ -269,16 +252,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	r.Recorder.Event(node, corev1.EventTypeNormal, "OSCApplied", "all osc files and units have been applied successfully")
 
 	if node == nil || node.Name == "" || node.Annotations == nil {
-		return reconcile.Result{
-			RequeueAfter: 10 * time.Second,
-		}, fmt.Errorf("still waiting for node to get registered")
+		return reconcile.Result{RequeueAfter: 10 * time.Second}, fmt.Errorf("still waiting for node to get registered")
 	}
 
 	node.Annotations[v1beta1constants.LabelWorkerKubernetesVersion] = r.Config.KubernetesVersion
 	node.Annotations[executor.AnnotationKeyChecksum] = oscCheckSum
 
-	err = r.Client.Update(ctx, node, &client.UpdateOptions{})
-	if err != nil {
+	if err := r.Client.Update(ctx, node); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to set node annotation %w", err)
 	}
 
@@ -286,16 +266,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	return reconcile.Result{RequeueAfter: r.SyncPeriod}, nil
 }
 
-func (r *Reconciler) extractOSCFromSecret(secret *corev1.Secret) (*v1alpha1.OperatingSystemConfig, []byte, error) {
+func (r *Reconciler) extractOSCFromSecret(secret *corev1.Secret) (*extensionsv1alpha1.OperatingSystemConfig, []byte, error) {
 	oscRaw, ok := secret.Data[nodeagentv1alpha1.NodeAgentOSCSecretKey]
 	if !ok {
 		return nil, nil, fmt.Errorf("no token found in secret")
 	}
 
-	osc := &v1alpha1.OperatingSystemConfig{}
-	err := yaml.Unmarshal(oscRaw, osc)
-	if err != nil {
+	osc := &extensionsv1alpha1.OperatingSystemConfig{}
+	if err := yaml.Unmarshal(oscRaw, osc); err != nil {
 		return nil, nil, fmt.Errorf("unable to unmarshal osc from secret data %w", err)
 	}
+
 	return osc, oscRaw, nil
 }

@@ -15,9 +15,8 @@
 package downloader
 
 import (
-	_ "embed"
-
 	"bytes"
+	_ "embed"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -25,22 +24,23 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/Masterminds/sprig"
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
-	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/gardener/gardener/pkg/utils"
-	"github.com/gardener/gardener/pkg/utils/images"
-	"github.com/gardener/gardener/pkg/utils/imagevector"
 	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
+	containerregistryv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"sigs.k8s.io/yaml"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	bootstraptokenapi "k8s.io/cluster-bootstrap/token/api"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
+
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/utils"
+	"github.com/gardener/gardener/pkg/utils/images"
+	"github.com/gardener/gardener/pkg/utils/imagevector"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
@@ -53,17 +53,15 @@ var (
 )
 
 func init() {
-	var err error
-	agentTpl, err = template.
+	agentTpl = template.Must(template.
 		New(agentTplName).
 		Funcs(sprig.TxtFuncMap()).
-		Parse(agentTplContent)
-	if err != nil {
-		panic(err)
-	}
+		Parse(agentTplContent),
+	)
 }
 
-func NodeAgentConfig(cloudConfigUserDataSecretName, oscSecretName, apiServerURL, clusterCA string, imageVector imagevector.ImageVector, worker gardencorev1beta1.Worker, kubernetesVersion *semver.Version) ([]extensionsv1alpha1.Unit, []extensionsv1alpha1.File, error) {
+// TODO: add doc string
+func NodeAgentConfig(oscSecretName, apiServerURL, clusterCA string, imageVector imagevector.ImageVector, worker gardencorev1beta1.Worker, kubernetesVersion *semver.Version) ([]extensionsv1alpha1.Unit, []extensionsv1alpha1.File, error) {
 	nodeAgentImage, err := imageVector.FindImage(images.ImageNameGardenerNodeAgent)
 	if err != nil {
 		return nil, nil, err
@@ -75,10 +73,6 @@ func NodeAgentConfig(cloudConfigUserDataSecretName, oscSecretName, apiServerURL,
 	}
 
 	config := &nodeagentv1alpha1.NodeAgentConfiguration{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "NodeAgentConfiguration",
-			APIVersion: "nodeagent.config.gardener.cloud/v1alpha1",
-		},
 		APIServer: nodeagentv1alpha1.APIServer{
 			URL:            apiServerURL,
 			CA:             clusterCA,
@@ -92,23 +86,21 @@ func NodeAgentConfig(cloudConfigUserDataSecretName, oscSecretName, apiServerURL,
 	}
 
 	if len(worker.DataVolumes) > 0 && worker.KubeletDataVolumeName != nil {
-		var (
-			sizeInBytes int64
-			found       bool
-		)
-
 		for _, dv := range worker.DataVolumes {
-			if dv.Name == *worker.KubeletDataVolumeName {
-				size := dv.VolumeSize
-				parsed, err := resource.ParseQuantity(size)
-				if err != nil {
-					continue
-				}
-				sizeInBytes, found = parsed.AsInt64()
+			if dv.Name != *worker.KubeletDataVolumeName {
+				continue
 			}
-		}
-		if found {
-			config.KubeletDataVolumeSize = &sizeInBytes
+
+			parsed, err := resource.ParseQuantity(dv.VolumeSize)
+			if err != nil {
+				// TODO: Shouldn't we return the error here?
+				continue
+			}
+
+			if sizeInBytes, ok := parsed.AsInt64(); ok {
+				config.KubeletDataVolumeSize = &sizeInBytes
+				break
+			}
 		}
 	}
 
@@ -161,6 +153,7 @@ func NodeAgentConfig(cloudConfigUserDataSecretName, oscSecretName, apiServerURL,
 	return units, files, nil
 }
 
+// TODO: doc string
 func GetNodeAgentInitUnit() extensionsv1alpha1.Unit {
 	return extensionsv1alpha1.Unit{
 		Name:    nodeagentv1alpha1.NodeInitUnitName,
@@ -239,8 +232,11 @@ func nodeAgentRBACResources() []client.Object {
 	}
 }
 
-func imageRefToLayerURL(image string, arch string) (*url.URL, string, error) {
-	// TODO(rfranzke): figure this out after breakfast
+func imageRefToLayerURL(image, arch string) (*url.URL, string, error) {
+	// In the local environment, we pull Gardener images built via skaffold from the local registry running in the kind
+	// cluster. However, on local machine pods, `localhost:5001` does obviously not lead to this registry. Hence, we
+	// have to replace it with `garden.local.gardener.cloud:5001` which allows accessing the registry from both local
+	// machine and machine pods.
 	imageRef, err := name.ParseReference(strings.ReplaceAll(image, "localhost:5001", "garden.local.gardener.cloud:5001"), name.Insecure)
 	if err != nil {
 		return nil, "", err
@@ -250,7 +246,7 @@ func imageRefToLayerURL(image string, arch string) (*url.URL, string, error) {
 		arch = v1beta1constants.ArchitectureAMD64
 	}
 
-	remoteImage, err := remote.Image(imageRef, remote.WithPlatform(v1.Platform{OS: "linux", Architecture: arch}))
+	remoteImage, err := remote.Image(imageRef, remote.WithPlatform(containerregistryv1.Platform{OS: "linux", Architecture: arch}))
 	if err != nil {
 		return nil, "", err
 	}
@@ -268,7 +264,6 @@ func imageRefToLayerURL(image string, arch string) (*url.URL, string, error) {
 
 	finalLayer := manifest.Layers[len(manifest.Layers)-1]
 
-	// This is what the library does internally as well. It doesn't expose a func for it though.
 	return &url.URL{
 		Scheme: imageRef.Context().Scheme(),
 		Host:   imageRef.Context().RegistryStr(),

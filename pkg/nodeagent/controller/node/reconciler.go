@@ -34,14 +34,13 @@ const restartSystemdUnitAnnotation = "worker.gardener.cloud/restart-systemd-serv
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
 type Reconciler struct {
-	Client   client.Client
-	Recorder record.EventRecorder
-
-	NodeName string
-
+	Client     client.Client
+	Recorder   record.EventRecorder
 	SyncPeriod time.Duration
+	NodeName   string
 }
 
+// TODO: doc string
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -57,17 +56,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("error retrieving object from store: %w", err)
 	}
 
-	unit, ok := node.Annotations[restartSystemdUnitAnnotation]
-	if ok {
-		err := dbus.Restart(ctx, r.Recorder, node, unit)
-		if err != nil {
+	if unit, ok := node.Annotations[restartSystemdUnitAnnotation]; ok {
+		if err := dbus.Restart(ctx, r.Recorder, node, unit); err != nil {
 			return reconcile.Result{}, err
 		}
 		log.V(1).Info("Successfully restarted service", "service", unit)
 
 		delete(node.Annotations, restartSystemdUnitAnnotation)
-		err = r.Client.Update(ctx, node)
-		if err != nil {
+		if err := r.Client.Update(ctx, node); err != nil {
 			return reconcile.Result{}, err
 		}
 	}

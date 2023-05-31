@@ -13,6 +13,6 @@
 // limitations under the License.
 
 // +k8s:deepcopy-gen=package
-// +groupName=resourcemanager.config.gardener.cloud
+// +groupName=nodeagent.config.gardener.cloud
 
-package config // import "github.com/gardener/gardener/pkg/resourcemanager/apis/config"
+package config // import "github.com/gardener/gardener/pkg/nodeagent/apis/config"

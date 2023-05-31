@@ -581,6 +581,18 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			Fn:           flow.TaskFn(botanist.DeployAPIServerProxy).RetryUntilTimeout(defaultInterval, defaultTimeout).SkipIf(o.Shoot.IsWorkerless),
 			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady, initializeShootClients, ensureShootClusterIdentity, deployKubeScheduler, waitUntilShootNamespacesReady),
 		})
+		deployBlackboxExporter = g.Add(flow.Task{
+			Name:         "Deploying blackbox-exporter",
+			Fn:           flow.TaskFn(botanist.ReconcileBlackboxExporter).RetryUntilTimeout(defaultInterval, defaultTimeout).SkipIf(o.Shoot.IsWorkerless || o.Shoot.HibernationEnabled),
+			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady, initializeShootClients, ensureShootClusterIdentity, deployKubeScheduler, waitUntilShootNamespacesReady),
+		})
+		deployNodeExporter = g.Add(flow.Task{
+			Name: "Deploying node-exporter",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.ReconcileNodeExporter(ctx)
+			}).RetryUntilTimeout(defaultInterval, defaultTimeout).SkipIf(o.Shoot.IsWorkerless || o.Shoot.HibernationEnabled),
+			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady, initializeShootClients, ensureShootClusterIdentity, deployKubeScheduler, waitUntilShootNamespacesReady),
+		})
 		deployManagedResourcesForAddons = g.Add(flow.Task{
 			Name:         "Deploying managed resources for system components and optional addons",
 			Fn:           flow.TaskFn(botanist.DeployManagedResourceForAddons).RetryUntilTimeout(defaultInterval, defaultTimeout).SkipIf(o.Shoot.HibernationEnabled),
@@ -607,11 +619,13 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			deployAPIServerProxy,
 			deployShootSystemResources,
 			deployCoreDNS,
+			deployNodeExporter,
 			deployNodeLocalDNS,
 			deployMetricsServer,
 			deployVPNShoot,
 			deployNodeProblemDetector,
 			deployKubeProxy,
+			deployBlackboxExporter,
 			deployManagedResourcesForAddons,
 			deployKubernetesDashboard,
 			deployNginxIngressAddon,

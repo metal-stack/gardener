@@ -20,7 +20,6 @@ build:
         - pkg/api/extensions
         - pkg/apis/core
         - pkg/apis/core/install
-        - pkg/apis/core/v1alpha1
         - pkg/apis/core/v1beta1
         - pkg/apis/core/v1beta1/constants
         - pkg/apis/core/v1beta1/helper
@@ -72,6 +71,7 @@ build:
         - pkg/component/shared
         - pkg/component/vpa
         - pkg/component/vpa/constants
+        - pkg/component/vpnauthzserver
         - pkg/component/vpnseedserver
         - pkg/controller/networkpolicy
         - pkg/controller/networkpolicy/helper
@@ -107,6 +107,7 @@ build:
         - pkg/resourcemanager/webhook/endpointslicehints
         - pkg/resourcemanager/webhook/extensionvalidation
         - pkg/resourcemanager/webhook/highavailabilityconfig
+        - pkg/resourcemanager/webhook/kubernetesservicehost
         - pkg/resourcemanager/webhook/podschedulername
         - pkg/resourcemanager/webhook/podtopologyspreadconstraints
         - pkg/resourcemanager/webhook/projectedtokenmount
@@ -154,7 +155,6 @@ build:
         - pkg/apis/core
         - pkg/apis/core/helper
         - pkg/apis/core/install
-        - pkg/apis/core/v1alpha1
         - pkg/apis/core/v1beta1
         - pkg/apis/core/v1beta1/constants
         - pkg/apis/core/v1beta1/helper
@@ -204,6 +204,7 @@ build:
         - pkg/resourcemanager/controller/health/progressing
         - pkg/resourcemanager/controller/health/utils
         - pkg/resourcemanager/controller/managedresource
+        - pkg/resourcemanager/controller/networkpolicy
         - pkg/resourcemanager/controller/node
         - pkg/resourcemanager/controller/node/helper
         - pkg/resourcemanager/controller/secret
@@ -215,7 +216,7 @@ build:
         - pkg/resourcemanager/webhook/endpointslicehints
         - pkg/resourcemanager/webhook/extensionvalidation
         - pkg/resourcemanager/webhook/highavailabilityconfig
-        - pkg/resourcemanager/controller/networkpolicy
+        - pkg/resourcemanager/webhook/kubernetesservicehost
         - pkg/resourcemanager/webhook/podschedulername
         - pkg/resourcemanager/webhook/podtopologyspreadconstraints
         - pkg/resourcemanager/webhook/projectedtokenmount

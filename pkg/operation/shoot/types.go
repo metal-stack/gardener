@@ -27,6 +27,7 @@ import (
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/apiserverproxy"
 	"github.com/gardener/gardener/pkg/component/backupentry"
+	"github.com/gardener/gardener/pkg/component/blackboxexporter"
 	"github.com/gardener/gardener/pkg/component/clusterautoscaler"
 	"github.com/gardener/gardener/pkg/component/clusteridentity"
 	"github.com/gardener/gardener/pkg/component/coredns"
@@ -151,6 +152,7 @@ type Extensions struct {
 // SystemComponents contains references to system components.
 type SystemComponents struct {
 	APIServerProxy      apiserverproxy.Interface
+	BlackboxExporter    blackboxexporter.Interface
 	ClusterIdentity     clusteridentity.Interface
 	CoreDNS             coredns.Interface
 	KubeProxy           kubeproxy.Interface
@@ -158,6 +160,7 @@ type SystemComponents struct {
 	Namespaces          component.DeployWaiter
 	NodeLocalDNS        nodelocaldns.Interface
 	NodeProblemDetector component.DeployWaiter
+	NodeExporter        component.DeployWaiter
 	Resources           component.DeployWaiter
 	VPNShoot            vpnshoot.Interface
 }

@@ -49,6 +49,7 @@ type Reconciler struct {
 	TargetBinaryPath string
 	NodeName         string
 	TriggerChannel   <-chan event.GenericEvent
+	Dbus             dbus.Dbus
 }
 
 // TODO: doc string
@@ -97,7 +98,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	log.Info("Restarting kubelet unit")
-	if err := dbus.Restart(ctx, r.Recorder, node, kubelet.UnitName); err != nil {
+	if err := r.Dbus.Restart(ctx, r.Recorder, node, kubelet.UnitName); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable restart service: %w", err)
 	}
 

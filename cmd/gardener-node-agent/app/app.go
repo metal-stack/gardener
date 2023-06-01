@@ -51,6 +51,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/bootstrap"
 	"github.com/gardener/gardener/pkg/nodeagent/controller"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
+	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
@@ -104,8 +105,8 @@ func NewCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			return bootstrap.Bootstrap(cmd.Context(), log)
+			db := dbus.New()
+			return bootstrap.Bootstrap(cmd.Context(), log, db)
 		},
 	}
 

@@ -55,6 +55,7 @@ type Reconciler struct {
 	SyncPeriod      time.Duration
 	NodeName        string
 	TriggerChannels []chan event.GenericEvent
+	Dbus            dbus.Dbus
 }
 
 // TODO: doc string
@@ -158,11 +159,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 		if changedUnit.Enable != nil {
 			if *changedUnit.Enable {
-				if err := dbus.Enable(ctx, changedUnit.Name); err != nil {
+				if err := r.Dbus.Enable(ctx, changedUnit.Name); err != nil {
 					return reconcile.Result{}, fmt.Errorf("unable to enable unit %q: %w", changedUnit.Name, err)
 				}
 			} else {
-				if err := dbus.Disable(ctx, changedUnit.Name); err != nil {
+				if err := r.Dbus.Disable(ctx, changedUnit.Name); err != nil {
 					return reconcile.Result{}, fmt.Errorf("unable to disable unit %q: %w", changedUnit.Name, err)
 				}
 			}
@@ -171,11 +172,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	for _, deletedUnit := range oscChanges.DeletedUnits {
-		if err := dbus.Stop(ctx, r.Recorder, node, deletedUnit.Name); err != nil {
+		if err := r.Dbus.Stop(ctx, r.Recorder, node, deletedUnit.Name); err != nil {
 			return reconcile.Result{}, fmt.Errorf("unable to stop deleted unit %q: %w", deletedUnit.Name, err)
 		}
 
-		if err := dbus.Disable(ctx, deletedUnit.Name); err != nil {
+		if err := r.Dbus.Disable(ctx, deletedUnit.Name); err != nil {
 			return reconcile.Result{}, fmt.Errorf("unable to disable deleted unit %q: %w", deletedUnit.Name, err)
 		}
 
@@ -184,7 +185,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
-	if err := dbus.DaemonReload(ctx); err != nil {
+	if err := r.Dbus.DaemonReload(ctx); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -206,12 +207,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 			switch *changedUnit.Command {
 			// TODO: make this accessible constants
 			case "start", "restart":
-				if err := dbus.Restart(ctx, r.Recorder, node, changedUnit.Name); err != nil {
+				if err := r.Dbus.Restart(ctx, r.Recorder, node, changedUnit.Name); err != nil {
 					return fmt.Errorf("unable to restart %q: %w", changedUnit.Name, err)
 				}
 
 			case "stop":
-				if err := dbus.Stop(ctx, r.Recorder, node, changedUnit.Name); err != nil {
+				if err := r.Dbus.Stop(ctx, r.Recorder, node, changedUnit.Name); err != nil {
 					return fmt.Errorf("unable to stop %q: %w", changedUnit.Name, err)
 				}
 			}

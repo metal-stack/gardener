@@ -47,6 +47,7 @@ type Reconciler struct {
 	SelfBinaryPath string
 	NodeName       string
 	TriggerChannel <-chan event.GenericEvent
+	Dbus           dbus.Dbus
 }
 
 // TODO: doc string
@@ -95,7 +96,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ reconcile.Request) (reconc
 	}
 
 	log.Info("Restarting own gardener-node-agent unit")
-	if err := dbus.Restart(ctx, r.Recorder, node, nodeagentv1alpha1.NodeAgentUnitName); err != nil {
+	if err := r.Dbus.Restart(ctx, r.Recorder, node, nodeagentv1alpha1.NodeAgentUnitName); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable restart service: %w", err)
 	}
 

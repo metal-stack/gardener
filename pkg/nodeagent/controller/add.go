@@ -29,6 +29,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/selfupgrade"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/token"
+	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 )
 
 // AddToManager adds all gardener-node-agent controllers to the given manager.
@@ -48,11 +49,13 @@ func AddToManager(mgr manager.Manager) error {
 		nodeName              = strings.TrimSpace(strings.ToLower(hostname))
 		selfUpgradeChannel    = make(chan event.GenericEvent, 1)
 		kubeletUpgradeChannel = make(chan event.GenericEvent, 1)
+		db                    = dbus.New()
 	)
 
 	if err := (&node.Reconciler{
 		NodeName:   nodeName,
 		SyncPeriod: 10 * time.Minute,
+		Dbus:       db,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding node controller: %w", err)
 	}
@@ -65,6 +68,7 @@ func AddToManager(mgr manager.Manager) error {
 			selfUpgradeChannel,
 			kubeletUpgradeChannel,
 		},
+		Dbus: db,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding operatingsystemconfig controller: %w", err)
 	}
@@ -74,6 +78,7 @@ func AddToManager(mgr manager.Manager) error {
 		TargetBinaryPath: "/opt/bin/kubelet",
 		SyncPeriod:       10 * time.Minute,
 		TriggerChannel:   kubeletUpgradeChannel,
+		Dbus:             db,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding kubelet upgrade controller: %w", err)
 	}
@@ -84,6 +89,7 @@ func AddToManager(mgr manager.Manager) error {
 		SelfBinaryPath: os.Args[0],
 		SyncPeriod:     10 * time.Minute,
 		TriggerChannel: selfUpgradeChannel,
+		Dbus:           db,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding self upgrade controller: %w", err)
 	}

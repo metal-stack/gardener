@@ -39,26 +39,26 @@ import (
 var systemdUnit string
 
 // TODO: doc string
-func Bootstrap(ctx context.Context, log logr.Logger) error {
+func Bootstrap(ctx context.Context, log logr.Logger, db dbus.Dbus) error {
 	log.Info("bootstrap")
 
 	if err := renderSystemdUnit(); err != nil {
 		return fmt.Errorf("unable to render system unit %s: %w", nodeagentv1alpha1.NodeAgentUnitName, err)
 	}
 
-	if err := dbus.Enable(ctx, nodeagentv1alpha1.NodeAgentUnitName); err != nil {
+	if err := db.Enable(ctx, nodeagentv1alpha1.NodeAgentUnitName); err != nil {
 		return fmt.Errorf("unable to enable system unit %s: %w", nodeagentv1alpha1.NodeAgentUnitName, err)
 	}
 
-	if err := dbus.Start(ctx, nil, nil, nodeagentv1alpha1.NodeAgentUnitName); err != nil {
+	if err := db.Start(ctx, nil, nil, nodeagentv1alpha1.NodeAgentUnitName); err != nil {
 		return fmt.Errorf("unable to start system unit %s: %w", nodeagentv1alpha1.NodeAgentUnitName, err)
 	}
 
-	if err := dbus.Disable(ctx, nodeagentv1alpha1.NodeInitUnitName); err != nil {
+	if err := db.Disable(ctx, nodeagentv1alpha1.NodeInitUnitName); err != nil {
 		return fmt.Errorf("unable to disable system unit %s: %w", nodeagentv1alpha1.NodeInitUnitName, err)
 	}
 
-	if err := cleanupLegacyCloudConfigDownloader(ctx); err != nil {
+	if err := cleanupLegacyCloudConfigDownloader(ctx, db); err != nil {
 		return fmt.Errorf("unable to cleanup cloud-config-downloader: %w", err)
 	}
 
@@ -67,8 +67,9 @@ func Bootstrap(ctx context.Context, log logr.Logger) error {
 	}
 
 	// Stop itself, must be the last action because it will not get executed anyway.
-	// TODO: What does this doc string mean? Refine it.
-	return dbus.Stop(ctx, nil, nil, nodeagentv1alpha1.NodeInitUnitName)
+	// With this command the execution of the gardener-node-agent bootstrap command terminates.
+	// It is not possible to do any logic after calling this stop command anymore here.
+	return db.Stop(ctx, nil, nil, nodeagentv1alpha1.NodeInitUnitName)
 }
 
 func renderSystemdUnit() error {
@@ -88,16 +89,16 @@ func renderSystemdUnit() error {
 	return os.WriteFile(path.Join("/etc", "systemd", "system", nodeagentv1alpha1.NodeAgentUnitName), target.Bytes(), 0644)
 }
 
-func cleanupLegacyCloudConfigDownloader(ctx context.Context) error {
+func cleanupLegacyCloudConfigDownloader(ctx context.Context, db dbus.Dbus) error {
 	if _, err := os.Stat(path.Join("/etc", "systemd", "system", downloader.UnitName)); err != nil && os.IsNotExist(err) {
 		return nil
 	}
 
-	if err := dbus.Stop(ctx, nil, nil, downloader.UnitName); err != nil {
+	if err := db.Stop(ctx, nil, nil, downloader.UnitName); err != nil {
 		return fmt.Errorf("unable to stop system unit %s: %w", downloader.UnitName, err)
 	}
 
-	if err := dbus.Disable(ctx, downloader.UnitName); err != nil {
+	if err := db.Disable(ctx, downloader.UnitName); err != nil {
 		return fmt.Errorf("unable to disable system unit %s: %w", downloader.UnitName, err)
 	}
 
@@ -188,8 +189,7 @@ func formatDataDevice(log logr.Logger) error {
 
 	log.Info("kubelet data volume mounted to /var/lib", "device", targetDevice, "size", size)
 
-	// What about this TODO?
-	// TODO: implement kubelet-data-volume feature:
+	// INFO: for reference a copy of the original function from the executor.
 	// function format-data-device() {
 	// 	LABEL=KUBEDEV
 	// 	if ! blkid --label $LABEL >/dev/null; then

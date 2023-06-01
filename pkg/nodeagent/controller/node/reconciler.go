@@ -38,6 +38,7 @@ type Reconciler struct {
 	Recorder   record.EventRecorder
 	SyncPeriod time.Duration
 	NodeName   string
+	Dbus       dbus.Dbus
 }
 
 // TODO: doc string
@@ -57,7 +58,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	if unit, ok := node.Annotations[restartSystemdUnitAnnotation]; ok {
-		if err := dbus.Restart(ctx, r.Recorder, node, unit); err != nil {
+		if err := r.Dbus.Restart(ctx, r.Recorder, node, unit); err != nil {
 			return reconcile.Result{}, err
 		}
 		log.V(1).Info("Successfully restarted service", "service", unit)

@@ -45,7 +45,7 @@ func New() Dbus {
 	return &db{}
 }
 
-func (db) Enable(ctx context.Context, unitNames ...string) error {
+func (*db) Enable(ctx context.Context, unitNames ...string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to connect to dbus: %w", err)
@@ -56,7 +56,7 @@ func (db) Enable(ctx context.Context, unitNames ...string) error {
 	return err
 }
 
-func (db) Disable(ctx context.Context, unitNames ...string) error {
+func (*db) Disable(ctx context.Context, unitNames ...string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to connect to dbus: %w", err)
@@ -67,7 +67,7 @@ func (db) Disable(ctx context.Context, unitNames ...string) error {
 	return err
 }
 
-func (db) Stop(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
+func (*db) Stop(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to connect to dbus: %w", err)
@@ -89,7 +89,7 @@ func (db) Stop(ctx context.Context, recorder record.EventRecorder, node *corev1.
 	return err
 }
 
-func (db) Start(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
+func (*db) Start(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to connect to dbus: %w", err)
@@ -111,7 +111,7 @@ func (db) Start(ctx context.Context, recorder record.EventRecorder, node *corev1
 	return err
 }
 
-func (db) Restart(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
+func (*db) Restart(ctx context.Context, recorder record.EventRecorder, node *corev1.Node, unitName string) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to connect to dbus: %w", err)
@@ -133,7 +133,7 @@ func (db) Restart(ctx context.Context, recorder record.EventRecorder, node *core
 	return nil
 }
 
-func (db) DaemonReload(ctx context.Context) error {
+func (*db) DaemonReload(ctx context.Context) error {
 	dbc, err := dbus.NewWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to connect to dbus: %w", err)

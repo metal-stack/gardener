@@ -32,7 +32,7 @@ import (
 
 const restartSystemdUnitAnnotation = "worker.gardener.cloud/restart-systemd-services"
 
-// Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
+// Reconciler checks for node annotation changes and restart the specified services
 type Reconciler struct {
 	Client     client.Client
 	Recorder   record.EventRecorder
@@ -41,7 +41,7 @@ type Reconciler struct {
 	Dbus       dbus.Dbus
 }
 
-// TODO: doc string
+// Reconcile checks for node annotation changes and restart the specified services
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 

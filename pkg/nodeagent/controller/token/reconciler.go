@@ -33,13 +33,15 @@ import (
 )
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
+// If token changes it will restart itself.
 type Reconciler struct {
 	Client     client.Client
 	Config     *nodeagentv1alpha1.NodeAgentConfiguration
 	SyncPeriod time.Duration
 }
 
-// TODO: doc string
+// Reconcile fetches the shoot access token for gardener-node-agent and writes the token to disk.
+// If token changes it will restart itself.
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 

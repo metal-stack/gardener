@@ -36,9 +36,11 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
 )
 
+// imageDownloadedPath specifies a file which contains the gardener-node-agent image ref, e.g. which version should be installed
+// this is stored on disk to survive gardener-node-agent restarts
 var imageDownloadedPath = path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "node-agent-downloaded")
 
-// Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
+// Reconciler check if the version of the gardener-node-agent changed and updates itself if change was detected
 type Reconciler struct {
 	Client         client.Client
 	Config         *nodeagentv1alpha1.NodeAgentConfiguration
@@ -50,7 +52,7 @@ type Reconciler struct {
 	Dbus           dbus.Dbus
 }
 
-// TODO: doc string
+// Reconcile check if the version of the gardener-node-agent changed and updates itself if change was detected
 func (r *Reconciler) Reconcile(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 

@@ -38,9 +38,11 @@ import (
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
+// hyperkubeImageDownloadedPath specifies a file which contains the hyperkube image ref, e.g. which version should be installed
+// this is stored on disk to survive gardener-node-agent restarts
 var hyperkubeImageDownloadedPath = path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "hyperkube-downloaded")
 
-// Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
+// Reconciler checks which kubelet must be downloaded and restarts the kubelet if a change was detected
 type Reconciler struct {
 	Client           client.Client
 	Config           *nodeagentv1alpha1.NodeAgentConfiguration
@@ -52,7 +54,7 @@ type Reconciler struct {
 	Dbus             dbus.Dbus
 }
 
-// TODO: doc string
+// Reconcile checks which kubelet must be downloaded and restarts the kubelet if a change was detected
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 

@@ -313,7 +313,8 @@ var _ = Describe("OperatingSystemConfig", func() {
 				expected = append(expected, oscDownloader, oscOriginal)
 			}
 
-			defaultDepWaiter = New(log, c, sm, values, time.Millisecond, 250*time.Millisecond, 500*time.Millisecond)
+			// FIXME add proper imagevector
+			defaultDepWaiter = New(log, c, sm, values, time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, nil)
 		})
 
 		AfterEach(func() {
@@ -504,7 +505,8 @@ var _ = Describe("OperatingSystemConfig", func() {
 					test.EXPECTPatch(ctx, mc, expectedWithRestore, expectedWithState, types.MergePatchType)
 				}
 
-				defaultDepWaiter = New(log, mc, sm, values, time.Millisecond, 250*time.Millisecond, 500*time.Millisecond)
+				// FIXME add proper imagevector
+				defaultDepWaiter = New(log, mc, sm, values, time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, nil)
 				Expect(defaultDepWaiter.Restore(ctx, shootState)).To(Succeed())
 			})
 		})
@@ -758,7 +760,8 @@ var _ = Describe("OperatingSystemConfig", func() {
 				mc.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&extensionsv1alpha1.OperatingSystemConfig{}), gomock.Any())
 				mc.EXPECT().Delete(ctx, &expectedOSC).Return(fakeErr)
 
-				defaultDepWaiter = New(log, mc, nil, &Values{Namespace: namespace}, time.Millisecond, 250*time.Millisecond, 500*time.Millisecond)
+				// FIXME add proper imagevector
+				defaultDepWaiter = New(log, mc, nil, &Values{Namespace: namespace}, time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, nil)
 				Expect(defaultDepWaiter.Destroy(ctx)).To(MatchError(multierror.Append(fakeErr)))
 			})
 		})

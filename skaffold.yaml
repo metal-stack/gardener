@@ -1064,7 +1064,6 @@ build:
         - cmd/utils
         - pkg/apis/core
         - pkg/apis/core/install
-        - pkg/apis/core/v1alpha1
         - pkg/apis/core/v1beta1
         - pkg/apis/core/v1beta1/constants
         - pkg/apis/core/v1beta1/helper
@@ -1099,9 +1098,6 @@ build:
         - pkg/component/extensions/operatingsystemconfig/original/components/kubelet
         - pkg/component/extensions/operatingsystemconfig/original/components/varlibmount
         - pkg/component/extensions/operatingsystemconfig/utils
-        - pkg/controllermanager/apis/config
-        - pkg/controllermanager/apis/config/v1alpha1
-        - pkg/controllermanager/apis/config/validation
         - pkg/controllermanager/features
         - pkg/controllerutils
         - pkg/features
@@ -1116,6 +1112,13 @@ build:
         - pkg/nodeagent/controller/selfupgrade
         - pkg/nodeagent/controller/token
         - pkg/nodeagent/dbus
+        - pkg/component/logging/kuberbacproxy
+        - pkg/nodeagent/apis/config
+        - pkg/nodeagent/apis/config/v1alpha1
+        - pkg/nodeagent/controller/common
+        - pkg/nodeagent/controller/kubeletupgrade
+        - pkg/nodeagent/registry
+        - pkg/utils/gardener
         - pkg/resourcemanager/controller/garbagecollector/references
         - pkg/utils
         - pkg/utils/chart

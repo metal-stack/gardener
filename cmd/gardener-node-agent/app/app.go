@@ -76,6 +76,9 @@ func NewCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("error instantiating zap logger: %w", err)
 			}
+			if err := opts.validate(); err != nil {
+				return err
+			}
 
 			logf.SetLogger(log)
 			klog.SetLogger(log)
@@ -103,6 +106,9 @@ func NewCommand() *cobra.Command {
 			// log, err := logger.NewZapLogger(opts.config.LogLevel, opts.config.LogFormat)
 			log, err := logger.NewZapLogger(logger.DebugLevel, logger.FormatJSON)
 			if err != nil {
+				return err
+			}
+			if err := opts.validate(); err != nil {
 				return err
 			}
 			db := dbus.New()

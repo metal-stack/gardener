@@ -25,6 +25,7 @@ import (
 
 	"github.com/gardener/gardener/pkg/nodeagent/apis/config"
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	nodeagentvalidation "github.com/gardener/gardener/pkg/nodeagent/apis/config/validation"
 )
 
 var configDecoder runtime.Decoder
@@ -74,9 +75,8 @@ func (o *options) complete() error {
 }
 
 func (o *options) validate() error {
-	// TODO: Implement me
-	// if errs := nodeagentvalidation.ValidateNodeAgentConfiguration(o.config); len(errs) > 0 {
-	// 	return errs.ToAggregate()
-	// }
+	if errs := nodeagentvalidation.ValidateNodeAgentConfiguration(o.config); len(errs) > 0 {
+		return errs.ToAggregate()
+	}
 	return nil
 }

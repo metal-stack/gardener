@@ -30,6 +30,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/selfupgrade"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/token"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
+	"github.com/spf13/afero"
 )
 
 // AddToManager adds all gardener-node-agent controllers to the given manager.
@@ -97,6 +98,7 @@ func AddToManager(mgr manager.Manager) error {
 	if err := (&token.Reconciler{
 		Config:     config,
 		SyncPeriod: 10 * time.Minute,
+		Fs:         afero.NewOsFs(),
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding token controller: %w", err)
 	}

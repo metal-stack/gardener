@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/gardener/gardener/pkg/controllerutils"
+	"github.com/spf13/afero"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
@@ -38,6 +38,7 @@ type Reconciler struct {
 	Client     client.Client
 	Config     *nodeagentv1alpha1.NodeAgentConfiguration
 	SyncPeriod time.Duration
+	Fs         afero.Fs
 }
 
 // Reconcile fetches the shoot access token for gardener-node-agent and writes the token to disk.
@@ -63,14 +64,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	// only update token file if content changed
-	currentToken, err := os.ReadFile(nodeagentv1alpha1.NodeAgentTokenFilePath)
+	currentToken, err := afero.ReadFile(r.Fs, nodeagentv1alpha1.NodeAgentTokenFilePath)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("error reading token file %s: %w", nodeagentv1alpha1.NodeAgentTokenFilePath, err)
 	}
 
 	if !bytes.Equal(token, currentToken) {
 		log.Info("Updating token in file", "file", nodeagentv1alpha1.NodeAgentTokenFilePath)
-		if err := os.WriteFile(nodeagentv1alpha1.NodeAgentTokenFilePath, token, 0600); err != nil {
+		if err := afero.WriteFile(r.Fs, nodeagentv1alpha1.NodeAgentTokenFilePath, token, 0600); err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed writing token: %w", err)
 		}
 	}

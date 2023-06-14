@@ -14,37 +14,38 @@
 package common
 
 import (
-	"reflect"
-	"testing"
-
 	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"k8s.io/utils/pointer"
 )
 
-func Test_calculateDiff(t *testing.T) {
-	tests := []struct {
+var _ = Describe("Common", func() {
+	type entry struct {
 		name     string
 		current  *v1alpha1.OperatingSystemConfig
 		previous *v1alpha1.OperatingSystemConfig
 		want     *OSCChanges
-	}{
-		{
-			name: "one deleted file and unit",
-			current: &v1alpha1.OperatingSystemConfig{
-				Spec: v1alpha1.OperatingSystemConfigSpec{
-					Units: []v1alpha1.Unit{
-						{
-							Name: "bla",
-						},
+	}
+	DescribeTable("#CalculateOSCChanges", func(current, previous *v1alpha1.OperatingSystemConfig, want *OSCChanges) {
+		got := CalculateOSCChanges(current, previous)
+		Expect(got).To(Equal(want))
+	},
+		Entry("one deleted file and unit", &v1alpha1.OperatingSystemConfig{
+			Spec: v1alpha1.OperatingSystemConfigSpec{
+				Units: []v1alpha1.Unit{
+					{
+						Name: "bla",
 					},
-					Files: []v1alpha1.File{
-						{
-							Path: "/tmp/bla",
-						},
+				},
+				Files: []v1alpha1.File{
+					{
+						Path: "/tmp/bla",
 					},
 				},
 			},
-			previous: &v1alpha1.OperatingSystemConfig{
+		},
+			&v1alpha1.OperatingSystemConfig{
 				Spec: v1alpha1.OperatingSystemConfigSpec{
 					Units: []v1alpha1.Unit{
 						{
@@ -64,7 +65,7 @@ func Test_calculateDiff(t *testing.T) {
 					},
 				},
 			},
-			want: &OSCChanges{
+			&OSCChanges{
 				DeletedUnits: []v1alpha1.Unit{
 					{
 						Name: "blub",
@@ -75,25 +76,68 @@ func Test_calculateDiff(t *testing.T) {
 						Path: "/tmp/blub",
 					},
 				},
+			}),
+		Entry("one deleted file and unit", &v1alpha1.OperatingSystemConfig{
+			Spec: v1alpha1.OperatingSystemConfigSpec{
+				Units: []v1alpha1.Unit{
+					{
+						Name: "bla",
+					},
+				},
+				Files: []v1alpha1.File{
+					{
+						Path: "/tmp/bla",
+					},
+				},
 			},
 		},
-		{
-			name: "one changed unit",
-			current: &v1alpha1.OperatingSystemConfig{
+			&v1alpha1.OperatingSystemConfig{
 				Spec: v1alpha1.OperatingSystemConfigSpec{
 					Units: []v1alpha1.Unit{
 						{
-							Name:    "bla",
-							Content: pointer.String("a unit content"),
+							Name: "bla",
 						},
 						{
-							Name:    "blub",
-							Content: pointer.String("changed unit content"),
+							Name: "blub",
+						},
+					},
+					Files: []v1alpha1.File{
+						{
+							Path: "/tmp/bla",
+						},
+						{
+							Path: "/tmp/blub",
 						},
 					},
 				},
 			},
-			previous: &v1alpha1.OperatingSystemConfig{
+			&OSCChanges{
+				DeletedUnits: []v1alpha1.Unit{
+					{
+						Name: "blub",
+					},
+				},
+				DeletedFiles: []v1alpha1.File{
+					{
+						Path: "/tmp/blub",
+					},
+				},
+			}),
+		Entry("one changed unit", &v1alpha1.OperatingSystemConfig{
+			Spec: v1alpha1.OperatingSystemConfigSpec{
+				Units: []v1alpha1.Unit{
+					{
+						Name:    "bla",
+						Content: pointer.String("a unit content"),
+					},
+					{
+						Name:    "blub",
+						Content: pointer.String("changed unit content"),
+					},
+				},
+			},
+		},
+			&v1alpha1.OperatingSystemConfig{
 				Spec: v1alpha1.OperatingSystemConfigSpec{
 					Units: []v1alpha1.Unit{
 						{
@@ -107,7 +151,7 @@ func Test_calculateDiff(t *testing.T) {
 					},
 				},
 			},
-			want: &OSCChanges{
+			&OSCChanges{
 				ChangedUnits: []v1alpha1.Unit{
 					{
 						Name:    "blub",
@@ -115,10 +159,10 @@ func Test_calculateDiff(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name: "one changed unit, one added unit, one deleted unit",
-			current: &v1alpha1.OperatingSystemConfig{
+		),
+
+		Entry("one changed unit, one added unit, one deleted unit",
+			&v1alpha1.OperatingSystemConfig{
 				Spec: v1alpha1.OperatingSystemConfigSpec{
 					Units: []v1alpha1.Unit{
 						{
@@ -132,7 +176,7 @@ func Test_calculateDiff(t *testing.T) {
 					},
 				},
 			},
-			previous: &v1alpha1.OperatingSystemConfig{
+			&v1alpha1.OperatingSystemConfig{
 				Spec: v1alpha1.OperatingSystemConfigSpec{
 					Units: []v1alpha1.Unit{
 						{
@@ -146,7 +190,7 @@ func Test_calculateDiff(t *testing.T) {
 					},
 				},
 			},
-			want: &OSCChanges{
+			&OSCChanges{
 				ChangedUnits: []v1alpha1.Unit{
 					{
 						Name:    "blub",
@@ -164,13 +208,6 @@ func Test_calculateDiff(t *testing.T) {
 					},
 				},
 			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := CalculateOSCChanges(tt.current, tt.previous); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("calculateDiff() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+		),
+	)
+})

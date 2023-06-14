@@ -48,7 +48,7 @@ func (r *Reconciler) AddToManager(mgr manager.Manager) error {
 func (r *Reconciler) SecretPredicate() predicate.Predicate {
 	return predicate.And(
 		predicate.NewPredicateFuncs(func(obj client.Object) bool {
-			config, err := common.ReadNodeAgentConfiguration()
+			config, err := common.ReadNodeAgentConfiguration(r.Fs)
 			if err != nil {
 				return false
 			}
@@ -59,7 +59,7 @@ func (r *Reconciler) SecretPredicate() predicate.Predicate {
 		}),
 		predicate.Funcs{
 			CreateFunc: func(_ event.CreateEvent) bool {
-				config, err := common.ReadNodeAgentConfiguration()
+				config, err := common.ReadNodeAgentConfiguration(r.Fs)
 				if err != nil {
 					return false
 				}

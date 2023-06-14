@@ -40,8 +40,10 @@ func AddToManager(mgr manager.Manager) error {
 		return err
 	}
 
+	fs := afero.NewOsFs()
+
 	// TODO: Why don't we read this during start-up and pass it down here, just like in all other Gardener binaries?
-	config, err := common.ReadNodeAgentConfiguration()
+	config, err := common.ReadNodeAgentConfiguration(fs)
 	if err != nil {
 		return err
 	}
@@ -98,7 +100,7 @@ func AddToManager(mgr manager.Manager) error {
 	if err := (&token.Reconciler{
 		Config:     config,
 		SyncPeriod: 10 * time.Minute,
-		Fs:         afero.NewOsFs(),
+		Fs:         fs,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding token controller: %w", err)
 	}

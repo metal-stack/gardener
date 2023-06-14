@@ -59,13 +59,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ reconcile.Request) (reconc
 	ctx, cancel := controllerutils.GetMainReconciliationContext(ctx, controllerutils.DefaultReconciliationTimeout)
 	defer cancel()
 
-	config, err := common.ReadNodeAgentConfiguration()
+	config, err := common.ReadNodeAgentConfiguration(nil)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to update node agent config: %w", err)
 	}
 	r.Config = config
 
-	imageRefDownloaded, err := common.ReadTrimmedFile(imageDownloadedPath)
+	imageRefDownloaded, err := common.ReadTrimmedFile(nil, imageDownloadedPath)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

@@ -15,11 +15,12 @@
 package common
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/spf13/afero"
 	"golang.org/x/exp/slices"
 
 	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -31,8 +32,11 @@ import (
 
 // ReadTrimmedFile reads the file from the given path, strips the content and returns an error in case the file is
 // empty.
-func ReadTrimmedFile(name string) (string, error) {
-	content, err := os.ReadFile(name)
+func ReadTrimmedFile(fs afero.Fs, name string) (string, error) {
+	if fs == nil {
+		fs = afero.NewOsFs()
+	}
+	content, err := afero.ReadFile(fs, name)
 	if err != nil {
 		return "", err
 	}
@@ -48,8 +52,8 @@ func ReadTrimmedFile(name string) (string, error) {
 }
 
 // ReadNodeAgentConfiguration returns the node agent configuration as written to the worker node's file system.
-func ReadNodeAgentConfiguration() (*nodeagentv1alpha1.NodeAgentConfiguration, error) {
-	content, err := ReadTrimmedFile(nodeagentv1alpha1.NodeAgentConfigPath)
+func ReadNodeAgentConfiguration(fs afero.Fs) (*nodeagentv1alpha1.NodeAgentConfiguration, error) {
+	content, err := ReadTrimmedFile(fs, nodeagentv1alpha1.NodeAgentConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +75,13 @@ type OSCChanges struct {
 }
 
 // TODO: doc string
-func CalculateChangedUnitsAndRemovedFiles(currentOSC *v1alpha1.OperatingSystemConfig) (*OSCChanges, error) {
-	previousOSCFile, err := os.ReadFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath)
+func CalculateChangedUnitsAndRemovedFiles(fs afero.Fs, currentOSC *v1alpha1.OperatingSystemConfig) (*OSCChanges, error) {
+	if fs == nil {
+		fs = afero.NewOsFs()
+	}
+	previousOSCFile, err := afero.ReadFile(fs, nodeagentv1alpha1.NodeAgentOSCOldConfigPath)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, afero.ErrFileNotFound) {
 			return nil, fmt.Errorf("error retrieving previous osc from file: %w", err)
 		}
 		return &OSCChanges{ChangedUnits: currentOSC.Spec.Units}, nil

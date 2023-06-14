@@ -106,7 +106,7 @@ func cleanupLegacyCloudConfigDownloader(ctx context.Context, db dbus.Dbus) error
 }
 
 func formatDataDevice(log logr.Logger) error {
-	config, err := common.ReadNodeAgentConfiguration()
+	config, err := common.ReadNodeAgentConfiguration(nil)
 	if err != nil {
 		return err
 	}

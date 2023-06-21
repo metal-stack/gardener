@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"time"
@@ -45,6 +44,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
+	"github.com/spf13/afero"
 )
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
@@ -56,6 +56,7 @@ type Reconciler struct {
 	NodeName        string
 	TriggerChannels []chan event.GenericEvent
 	Dbus            dbus.Dbus
+	Fs              afero.Fs
 }
 
 // TODO: doc string
@@ -87,7 +88,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("unable to unmarshal osc from secret data: %w", err)
 	}
 
-	oscChanges, err := common.CalculateChangedUnitsAndRemovedFiles(osc)
+	oscChanges, err := common.CalculateChangedUnitsAndRemovedFiles(r.Fs, osc)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to calculate osc changes from previous run: %w", err)
 	}
@@ -102,7 +103,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, nil
 	}
 
-	tmpDir, err := os.MkdirTemp("/tmp", "gardener-node-agent-*")
+	tmpDir, err := afero.TempDir(r.Fs, "/tmp", "gardener-node-agent-*")
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to create temp dir: %w", err)
 	}
@@ -112,7 +113,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(file.Path), fs.ModeDir); err != nil {
+		if err := r.Fs.MkdirAll(filepath.Dir(file.Path), fs.ModeDir); err != nil {
 			return reconcile.Result{}, fmt.Errorf("unable to create directory %q: %w", file.Path, err)
 		}
 
@@ -127,11 +128,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 
 		tmpFilePath := filepath.Join(tmpDir, filepath.Base(file.Path))
-		if err := os.WriteFile(tmpFilePath, data, perm); err != nil {
+		if err := afero.WriteFile(r.Fs, tmpFilePath, data, perm); err != nil {
 			return reconcile.Result{}, fmt.Errorf("unable to create file %q: %w", file.Path, err)
 		}
 
-		if err := os.Rename(tmpFilePath, file.Path); err != nil {
+		if err := r.Fs.Rename(tmpFilePath, file.Path); err != nil {
 			return reconcile.Result{}, fmt.Errorf("unable to move temporary file to %q: %w", file.Path, err)
 		}
 	}
@@ -143,8 +144,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 		systemdUnitFilePath := path.Join("/etc/systemd/system", changedUnit.Name)
 
-		existingUnitContent, err := os.ReadFile(systemdUnitFilePath)
-		if err != nil && !os.IsNotExist(err) {
+		existingUnitContent, err := afero.ReadFile(r.Fs, systemdUnitFilePath)
+		if err != nil && !errors.Is(err, afero.ErrFileNotFound) {
 			return reconcile.Result{}, fmt.Errorf("unable to read systemd unit %q: %w", changedUnit.Name, err)
 		}
 
@@ -153,7 +154,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 			continue
 		}
 
-		if err := os.WriteFile(systemdUnitFilePath, newUnitContent, 0600); err != nil {
+		if err := afero.WriteFile(r.Fs, systemdUnitFilePath, newUnitContent, 0600); err != nil {
 			return reconcile.Result{}, fmt.Errorf("unable to write unit %q: %w", changedUnit.Name, err)
 		}
 
@@ -180,7 +181,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 			return reconcile.Result{}, fmt.Errorf("unable to disable deleted unit %q: %w", deletedUnit.Name, err)
 		}
 
-		if err := os.Remove(path.Join("/etc/systemd/system", deletedUnit.Name)); err != nil && !os.IsNotExist(err) {
+		if err := r.Fs.Remove(path.Join("/etc/systemd/system", deletedUnit.Name)); err != nil && !errors.Is(err, afero.ErrFileNotFound) {
 			return reconcile.Result{}, fmt.Errorf("unable to delete systemd unit of deleted %q: %w", deletedUnit.Name, err)
 		}
 	}
@@ -230,7 +231,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	var deletionErrors []error
 	for _, f := range oscChanges.DeletedFiles {
-		if err := os.Remove(f.Path); err != nil && !os.IsNotExist(err) {
+		if err := r.Fs.Remove(f.Path); err != nil && !errors.Is(err, afero.ErrFileNotFound) {
 			deletionErrors = append(deletionErrors, err)
 		}
 	}
@@ -239,7 +240,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	// Persist current OSC for comparison with next one
-	if err := os.WriteFile(nodeagentv1alpha1.NodeAgentOSCOldConfigPath, oscRaw, 0644); err != nil {
+	if err := afero.WriteFile(r.Fs, nodeagentv1alpha1.NodeAgentOSCOldConfigPath, oscRaw, 0644); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to write previous osc to file %w", err)
 	}
 

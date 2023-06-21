@@ -1,21 +1,8 @@
-// Copyright 2022 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package token_test
 
 import (
 	"context"
+	"path"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -29,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -36,6 +24,7 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	kubernetesfake "github.com/gardener/gardener/pkg/client/kubernetes/fake"
 	"github.com/gardener/gardener/pkg/component/etcd"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
 	"github.com/gardener/gardener/pkg/component/kubeapiserver"
 	"github.com/gardener/gardener/pkg/component/kubeapiserverexposure"
 	"github.com/gardener/gardener/pkg/component/kubecontrollermanager"
@@ -44,9 +33,12 @@ import (
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
-	"github.com/gardener/gardener/pkg/nodeagent/controller/token"
+	"github.com/gardener/gardener/pkg/nodeagent/controller/kubeletupgrade"
+	"github.com/gardener/gardener/pkg/nodeagent/dbus"
+	"github.com/gardener/gardener/pkg/nodeagent/registry"
 	operatorclient "github.com/gardener/gardener/pkg/operator/client"
 	gardencontroller "github.com/gardener/gardener/pkg/operator/controller/garden"
+	"github.com/gardener/gardener/pkg/utils/images"
 	"github.com/gardener/gardener/pkg/utils/retry"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	"github.com/gardener/gardener/pkg/utils/test"
@@ -63,7 +55,15 @@ var _ = Describe("Nodeagent token controller tests", func() {
 		testRunID                      string
 		testNamespace                  *corev1.Namespace
 		testFs                         afero.Fs
-		originalNodeAgentToken         string
+		nodeAgentToken                 string
+		kubeletPath                    string
+		controllerTriggerChannel       chan event.GenericEvent
+		nodeAgentConfig                *nodeagentv1alpha1.NodeAgentConfiguration
+		fakeExtractor                  *registry.FakeRegistryExtractor
+		fakeDbus                       *dbus.FakeDbus
+	)
+	const (
+		contractHyperkubeKubeletName = "kubelet"
 	)
 
 	BeforeEach(func() {
@@ -123,22 +123,35 @@ var _ = Describe("Nodeagent token controller tests", func() {
 
 		By("Register controller")
 		testFs = afero.NewMemMapFs()
-		nodeAgentConfig := &nodeagentv1alpha1.NodeAgentConfiguration{
+		nodeAgentConfig = &nodeagentv1alpha1.NodeAgentConfiguration{
 			TokenSecretName: v1alpha1.NodeAgentTokenSecretName,
+			HyperkubeImage:  images.ImageNameHyperkube,
 		}
 		configBytes, err := yaml.Marshal(nodeAgentConfig)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(afero.WriteFile(testFs, nodeagentv1alpha1.NodeAgentConfigPath, configBytes, 0644)).To(Succeed())
 
-		originalNodeAgentToken = "original-node-agent-token"
-		Expect(afero.WriteFile(testFs, nodeagentv1alpha1.NodeAgentTokenFilePath, []byte(originalNodeAgentToken), 0644)).To(Succeed())
+		// TODO: remove?
+		nodeAgentToken = "original-node-agent-token"
+		Expect(afero.WriteFile(testFs, nodeagentv1alpha1.NodeAgentTokenFilePath, []byte(nodeAgentToken), 0644)).To(Succeed())
 
-		tokenReconciler := &token.Reconciler{
-			Client: mgr.GetClient(),
-			Fs:     testFs,
-			Config: nodeAgentConfig,
+		kubeletPath = "/opt/bin/kubelet"
+
+		controllerTriggerChannel = make(chan event.GenericEvent)
+		fakeExtractor = &registry.FakeRegistryExtractor{}
+		fakeDbus = &dbus.FakeDbus{}
+
+		kubeletReconciler := &kubeletupgrade.Reconciler{
+			Client:           mgr.GetClient(),
+			Fs:               testFs,
+			Config:           nodeAgentConfig,
+			TriggerChannel:   controllerTriggerChannel,
+			Extractor:        fakeExtractor,
+			Dbus:             fakeDbus,
+			TargetBinaryPath: kubeletPath,
+			// TODO: add fields?
 		}
-		Expect((tokenReconciler.AddToManager(mgr))).To(Succeed())
+		Expect((kubeletReconciler.AddToManager(mgr))).To(Succeed())
 
 		By("Start manager")
 		mgrContext, mgrCancel := context.WithCancel(ctx)
@@ -220,29 +233,33 @@ var _ = Describe("Nodeagent token controller tests", func() {
 		})
 	})
 
-	It("should update the local token file when secret changes", func() {
-		gotToken, err := afero.ReadFile(testFs, nodeagentv1alpha1.NodeAgentTokenFilePath)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(gotToken)).To(Equal(originalNodeAgentToken))
+	It("should update and restart kubelet when channel triggered", func() {
+		controllerTriggerChannel <- event.GenericEvent{}
 
-		updatedTestToken := "updated-test-token"
-		Expect(afero.WriteFile(testFs, nodeagentv1alpha1.NodeAgentTokenFilePath, []byte(updatedTestToken), 0644)).To(Succeed())
+		Eventually(func(g Gomega) error {
+			g.Expect(fakeExtractor.Extractions).To(HaveLen(1))
+			actual := fakeExtractor.Extractions[0]
+			g.Expect(actual.Image).To(Equal(nodeAgentConfig.HyperkubeImage))
+			g.Expect(actual.PathSuffix).To(Equal(contractHyperkubeKubeletName))
+			g.Expect(actual.Dest).To(Equal(kubeletPath))
 
-		tokenSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      v1alpha1.NodeAgentTokenSecretName,
-				Namespace: metav1.NamespaceSystem,
-			},
-			Data: map[string][]byte{
-				nodeagentv1alpha1.NodeAgentTokenSecretKey: []byte(updatedTestToken),
-			},
-		}
-		Expect(testClient.Create(ctx, tokenSecret)).To(Succeed())
+			g.Expect(fakeDbus.Actions).To(HaveLen(1))
+			g.Expect(fakeDbus.Actions[0].Action).To(Equal(dbus.FakeRestart))
+			g.Expect(fakeDbus.Actions[0].UnitNames).To(Equal([]string{kubelet.UnitName}))
+			return nil
+		}).Should(Succeed())
+	})
 
-		Eventually(func(g Gomega) {
-			gotToken, err := afero.ReadFile(testFs, nodeagentv1alpha1.NodeAgentTokenFilePath)
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(string(gotToken)).To(Equal(updatedTestToken))
+	It("should skip update and not restart kubelet when channel not triggered", func() {
+		hyperkubeImageDownloadedPath := path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "hyperkube-downloaded")
+
+		Expect(afero.WriteFile(testFs, hyperkubeImageDownloadedPath, []byte(nodeAgentConfig.HyperkubeImage), 0644)).Should(Succeed())
+
+		controllerTriggerChannel <- event.GenericEvent{}
+
+		Consistently(func(g Gomega) error {
+			g.Expect(fakeDbus.Actions).To(HaveLen(0))
+			return nil
 		}).Should(Succeed())
 	})
 })

@@ -28,7 +28,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
-func ExtractFromLayer(image, pathSuffix, dest string) error {
+type remoteExtractor struct{}
+
+func (remoteExtractor) ExtractFromLayer(image, pathSuffix, dest string) error {
 	// In the local environment, we pull Gardener images built via skaffold from the local registry running in the kind
 	// cluster. However, on local machine pods, `localhost:5001` does obviously not lead to this registry. Hence, we
 	// have to replace it with `garden.local.gardener.cloud:5001` which allows accessing the registry from both local

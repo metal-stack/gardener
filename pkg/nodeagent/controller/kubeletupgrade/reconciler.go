@@ -34,6 +34,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
+	"github.com/spf13/afero"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
@@ -52,6 +53,8 @@ type Reconciler struct {
 	NodeName         string
 	TriggerChannel   <-chan event.GenericEvent
 	Dbus             dbus.Dbus
+	Fs               afero.Fs
+	Extractor        registry.Extractor
 }
 
 // Reconcile checks which kubelet must be downloaded and restarts the kubelet if a change was detected
@@ -61,13 +64,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	ctx, cancel := controllerutils.GetMainReconciliationContext(ctx, controllerutils.DefaultReconciliationTimeout)
 	defer cancel()
 
-	config, err := common.ReadNodeAgentConfiguration(nil)
+	config, err := common.ReadNodeAgentConfiguration(r.Fs)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to update node agent config: %w", err)
 	}
 	r.Config = config
 
-	imageRefDownloaded, err := common.ReadTrimmedFile(nil, hyperkubeImageDownloadedPath)
+	imageRefDownloaded, err := common.ReadTrimmedFile(r.Fs, hyperkubeImageDownloadedPath)
 	if err != nil && !os.IsNotExist(err) {
 		return reconcile.Result{}, err
 	}
@@ -79,18 +82,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 	log.Info("kubelet binary has changed, starting kubelet update", "imageRef", r.Config.HyperkubeImage)
 
-	if err := registry.ExtractFromLayer(r.Config.HyperkubeImage, "kubelet", r.TargetBinaryPath); err != nil {
+	if err := r.Extractor.ExtractFromLayer(r.Config.HyperkubeImage, "kubelet", r.TargetBinaryPath); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to extract binary from image: %w", err)
 	}
 
 	log.Info("Successfully downloaded new kubelet binary", "imageRef", r.Config.HyperkubeImage)
 
-	if err := os.MkdirAll(nodeagentv1alpha1.NodeAgentBaseDir, fs.ModeDir); err != nil {
+	if err := r.Fs.MkdirAll(nodeagentv1alpha1.NodeAgentBaseDir, fs.ModeDir); err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed creating node agent directory: %w", err)
 	}
 
 	// Save most recently downloaded image ref
-	if err := os.WriteFile(hyperkubeImageDownloadedPath, []byte(r.Config.HyperkubeImage), 0600); err != nil {
+	if err := afero.WriteFile(r.Fs, hyperkubeImageDownloadedPath, []byte(r.Config.HyperkubeImage), 0600); err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed writing downloaded image ref: %w", err)
 	}
 

@@ -72,6 +72,7 @@ func AddToManager(mgr manager.Manager) error {
 			kubeletUpgradeChannel,
 		},
 		Dbus: db,
+		Fs:   fs,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding operatingsystemconfig controller: %w", err)
 	}
@@ -82,6 +83,7 @@ func AddToManager(mgr manager.Manager) error {
 		SyncPeriod:       10 * time.Minute,
 		TriggerChannel:   kubeletUpgradeChannel,
 		Dbus:             db,
+		Fs:               fs,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding kubelet upgrade controller: %w", err)
 	}

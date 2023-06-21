@@ -1,9 +1,8 @@
-package kubeletupgrade_test
+package selfupgrade_test
 
 import (
 	"context"
 	"path"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,31 +16,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
-	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
 	"github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
-	"github.com/gardener/gardener/pkg/nodeagent/controller/kubeletupgrade"
+	"github.com/gardener/gardener/pkg/nodeagent/controller/selfupgrade"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
 	operatorclient "github.com/gardener/gardener/pkg/operator/client"
 	"github.com/gardener/gardener/pkg/utils/images"
-	"github.com/gardener/gardener/pkg/utils/retry"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	"github.com/spf13/afero"
 )
 
-var _ = Describe("Nodeagent kubeletupgrade controller tests", func() {
+var _ = Describe("Nodeagent selfupgrade controller tests", func() {
 	var (
 		testRunID                string
 		testFs                   afero.Fs
-		kubeletPath              string
+		nodeAgentPath            string
 		controllerTriggerChannel chan event.GenericEvent
 		nodeAgentConfig          *nodeagentv1alpha1.NodeAgentConfiguration
 		fakeExtractor            *registry.FakeRegistryExtractor
 		fakeDbus                 *dbus.FakeDbus
 	)
 	const (
-		contractHyperkubeKubeletName = "kubelet"
+		contractGardenerNodeAgentName = "gardener-node-agent"
 	)
 
 	BeforeEach(func() {
@@ -68,28 +65,28 @@ var _ = Describe("Nodeagent kubeletupgrade controller tests", func() {
 		testFs = afero.NewMemMapFs()
 		nodeAgentConfig = &nodeagentv1alpha1.NodeAgentConfiguration{
 			TokenSecretName: v1alpha1.NodeAgentTokenSecretName,
-			HyperkubeImage:  images.ImageNameHyperkube,
+			Image:           images.ImageNameGardenerNodeAgent,
 		}
 		configBytes, err := yaml.Marshal(nodeAgentConfig)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(afero.WriteFile(testFs, nodeagentv1alpha1.NodeAgentConfigPath, configBytes, 0644)).To(Succeed())
 
-		kubeletPath = "/opt/bin/kubelet"
+		nodeAgentPath = "/usr/local/bin/gardener-node-agent"
 
 		controllerTriggerChannel = make(chan event.GenericEvent)
 		fakeExtractor = &registry.FakeRegistryExtractor{}
 		fakeDbus = &dbus.FakeDbus{}
 
-		kubeletReconciler := &kubeletupgrade.Reconciler{
-			Client:           mgr.GetClient(),
-			Fs:               testFs,
-			Config:           nodeAgentConfig,
-			TriggerChannel:   controllerTriggerChannel,
-			Extractor:        fakeExtractor,
-			Dbus:             fakeDbus,
-			TargetBinaryPath: kubeletPath,
+		selfupgradeReconciler := &selfupgrade.Reconciler{
+			Client:         mgr.GetClient(),
+			Fs:             testFs,
+			Config:         nodeAgentConfig,
+			TriggerChannel: controllerTriggerChannel,
+			Extractor:      fakeExtractor,
+			Dbus:           fakeDbus,
+			SelfBinaryPath: nodeAgentPath,
 		}
-		Expect((kubeletReconciler.AddToManager(mgr))).To(Succeed())
+		Expect((selfupgradeReconciler.AddToManager(mgr))).To(Succeed())
 
 		By("Start manager")
 		mgrContext, mgrCancel := context.WithCancel(ctx)
@@ -105,27 +102,27 @@ var _ = Describe("Nodeagent kubeletupgrade controller tests", func() {
 		})
 	})
 
-	It("should update and restart kubelet when channel triggered", func() {
+	It("should update and restart gardener-node-agent when channel triggered", func() {
 		controllerTriggerChannel <- event.GenericEvent{}
 
 		Eventually(func(g Gomega) error {
 			g.Expect(fakeExtractor.Extractions).To(HaveLen(1))
 			actual := fakeExtractor.Extractions[0]
-			g.Expect(actual.Image).To(Equal(nodeAgentConfig.HyperkubeImage))
-			g.Expect(actual.PathSuffix).To(Equal(contractHyperkubeKubeletName))
-			g.Expect(actual.Dest).To(Equal(kubeletPath))
+			g.Expect(actual.Image).To(Equal(nodeAgentConfig.Image))
+			g.Expect(actual.PathSuffix).To(Equal(contractGardenerNodeAgentName))
+			g.Expect(actual.Dest).To(Equal(nodeAgentPath))
 
 			g.Expect(fakeDbus.Actions).To(HaveLen(1))
 			g.Expect(fakeDbus.Actions[0].Action).To(Equal(dbus.FakeRestart))
-			g.Expect(fakeDbus.Actions[0].UnitNames).To(Equal([]string{kubelet.UnitName}))
+			g.Expect(fakeDbus.Actions[0].UnitNames).To(Equal([]string{nodeagentv1alpha1.NodeAgentUnitName}))
 			return nil
 		}).Should(Succeed())
 	})
 
-	It("should skip update and not restart kubelet when channel not triggered", func() {
-		hyperkubeImageDownloadedPath := path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "hyperkube-downloaded")
+	It("should skip update and not restart gardener-node-agent when channel not triggered", func() {
+		imageDownloadedPath := path.Join(nodeagentv1alpha1.NodeAgentBaseDir, "node-agent-downloaded")
 
-		Expect(afero.WriteFile(testFs, hyperkubeImageDownloadedPath, []byte(nodeAgentConfig.HyperkubeImage), 0644)).Should(Succeed())
+		Expect(afero.WriteFile(testFs, imageDownloadedPath, []byte(nodeAgentConfig.Image), 0644)).Should(Succeed())
 
 		controllerTriggerChannel <- event.GenericEvent{}
 
@@ -135,7 +132,3 @@ var _ = Describe("Nodeagent kubeletupgrade controller tests", func() {
 		}).Should(Succeed())
 	})
 })
-
-func untilInTest(_ context.Context, _ time.Duration, _ retry.Func) error {
-	return nil
-}

@@ -1,4 +1,4 @@
-package kubeletupgrade_test
+package selfupgrade_test
 
 import (
 	"context"
@@ -18,13 +18,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-func TestNodeagentKubeletUpgrade(t *testing.T) {
+func TestNodeagentSelfUpgrade(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "KubeletUpgrade Suite")
+	RunSpecs(t, "SelftUpgrade Suite")
 }
 
 // testID is used for generating test namespace names and other IDs
-const testID = "nodeagent-kubeletupgrade-test"
+const testID = "nodeagent-selfupgrade-test"
 
 var (
 	ctx = context.Background()

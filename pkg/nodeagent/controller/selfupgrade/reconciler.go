@@ -34,6 +34,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
+	"github.com/spf13/afero"
 )
 
 // imageDownloadedPath specifies a file which contains the gardener-node-agent image ref, e.g. which version should be installed
@@ -50,6 +51,7 @@ type Reconciler struct {
 	NodeName       string
 	TriggerChannel <-chan event.GenericEvent
 	Dbus           dbus.Dbus
+	Fs             afero.Fs
 	Extractor      registry.Extractor
 }
 
@@ -60,14 +62,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ reconcile.Request) (reconc
 	ctx, cancel := controllerutils.GetMainReconciliationContext(ctx, controllerutils.DefaultReconciliationTimeout)
 	defer cancel()
 
-	config, err := common.ReadNodeAgentConfiguration(nil)
+	config, err := common.ReadNodeAgentConfiguration(r.Fs)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to update node agent config: %w", err)
 	}
 	r.Config = config
 
-	imageRefDownloaded, err := common.ReadTrimmedFile(nil, imageDownloadedPath)
-	if err != nil {
+	imageRefDownloaded, err := common.ReadTrimmedFile(r.Fs, imageDownloadedPath)
+	if err != nil && !os.IsNotExist(err) {
 		return reconcile.Result{}, err
 	}
 
@@ -84,12 +86,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ reconcile.Request) (reconc
 
 	log.Info("Successfully downloaded new gardener-node-agent binary", "imageRef", r.Config.Image)
 
-	if err := os.MkdirAll(nodeagentv1alpha1.NodeAgentBaseDir, fs.ModeDir); err != nil {
+	if err := r.Fs.MkdirAll(nodeagentv1alpha1.NodeAgentBaseDir, fs.ModeDir); err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed creating node agent directory: %w", err)
 	}
 
 	// Save most recently downloaded image ref
-	if err := os.WriteFile(imageDownloadedPath, []byte(r.Config.Image), 0600); err != nil {
+	if err := afero.WriteFile(r.Fs, imageDownloadedPath, []byte(r.Config.Image), 0600); err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed writing downloaded image ref: %w", err)
 	}
 

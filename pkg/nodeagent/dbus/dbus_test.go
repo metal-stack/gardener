@@ -12,43 +12,79 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dbus
+package dbus_test
 
 import (
 	"context"
-	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/gardener/gardener/pkg/nodeagent/dbus"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func Test_db_Enable(t *testing.T) {
-	tests := []struct {
-		name          string
-		d             Dbus
-		unitNames     []string
-		wantErr       bool
-		wantedActions []FakeSystemdAction
-	}{
-		{
-			name:      "enable a unit",
-			unitNames: []string{"kubelet"},
-			wantedActions: []FakeSystemdAction{
-				{
-					Action:    FakeEnable,
-					UnitNames: []string{"kubelet"},
-				},
+var _ = Describe("Dbus", func() {
+	It("should enable a unit", func() {
+		d := &dbus.FakeDbus{}
+		Expect(d.Enable(context.Background(), "kubelet")).Should(Succeed())
+		Expect(d.Actions).Should(Equal([]dbus.FakeSystemdAction{
+			{
+				Action:    dbus.FakeEnable,
+				UnitNames: []string{"kubelet"},
 			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			d := &FakeDbus{}
-			if err := d.Enable(context.Background(), tt.unitNames...); (err != nil) != tt.wantErr {
-				t.Errorf("db.Enable() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if diff := cmp.Diff(d.Actions, tt.wantedActions); diff != "" {
-				t.Errorf("d.Enable did not call the enable action, diff was %q", diff)
-			}
-		})
-	}
-}
+		}))
+	})
+
+	It("should disable a unit", func() {
+		d := &dbus.FakeDbus{}
+		Expect(d.Disable(context.Background(), "kubelet")).Should(Succeed())
+		Expect(d.Actions).Should(Equal([]dbus.FakeSystemdAction{
+			{
+				Action:    dbus.FakeDisable,
+				UnitNames: []string{"kubelet"},
+			},
+		}))
+	})
+
+	It("should restart a unit", func() {
+		d := &dbus.FakeDbus{}
+		Expect(d.Restart(context.Background(), nil, nil, "kubelet")).Should(Succeed())
+		Expect(d.Actions).Should(Equal([]dbus.FakeSystemdAction{
+			{
+				Action:    dbus.FakeRestart,
+				UnitNames: []string{"kubelet"},
+			},
+		}))
+	})
+
+	It("should start a unit", func() {
+		d := &dbus.FakeDbus{}
+		Expect(d.Start(context.Background(), nil, nil, "kubelet")).Should(Succeed())
+		Expect(d.Actions).Should(Equal([]dbus.FakeSystemdAction{
+			{
+				Action:    dbus.FakeStart,
+				UnitNames: []string{"kubelet"},
+			},
+		}))
+	})
+
+	It("should stop a unit", func() {
+		d := &dbus.FakeDbus{}
+		Expect(d.Stop(context.Background(), nil, nil, "kubelet")).Should(Succeed())
+		Expect(d.Actions).Should(Equal([]dbus.FakeSystemdAction{
+			{
+				Action:    dbus.FakeStop,
+				UnitNames: []string{"kubelet"},
+			},
+		}))
+	})
+
+	It("should reload deamon", func() {
+		d := &dbus.FakeDbus{}
+		Expect(d.DaemonReload(context.Background())).Should(Succeed())
+		Expect(d.Actions).Should(Equal([]dbus.FakeSystemdAction{
+			{
+				Action: dbus.FakeDeamonReload,
+			},
+		}))
+	})
+})

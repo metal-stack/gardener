@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -137,7 +138,7 @@ func run(ctx context.Context, log logr.Logger) error {
 	}
 
 	// Check if token is present, else use bootstrap token to fetch token
-	config, err := common.ReadNodeAgentConfiguration()
+	config, err := common.ReadNodeAgentConfiguration(afero.NewOsFs())
 	if err != nil {
 		return err
 	}

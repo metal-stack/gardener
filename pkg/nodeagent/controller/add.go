@@ -30,6 +30,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/selfupgrade"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/token"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
+	"github.com/gardener/gardener/pkg/nodeagent/registry"
 	"github.com/spf13/afero"
 )
 
@@ -84,6 +85,7 @@ func AddToManager(mgr manager.Manager) error {
 		TriggerChannel:   kubeletUpgradeChannel,
 		Dbus:             db,
 		Fs:               fs,
+		Extractor:        registry.NewExtractor(),
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding kubelet upgrade controller: %w", err)
 	}
@@ -95,6 +97,7 @@ func AddToManager(mgr manager.Manager) error {
 		SyncPeriod:     10 * time.Minute,
 		TriggerChannel: selfUpgradeChannel,
 		Dbus:           db,
+		Extractor:      registry.NewExtractor(),
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding self upgrade controller: %w", err)
 	}

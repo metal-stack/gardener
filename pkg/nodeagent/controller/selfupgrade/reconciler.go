@@ -50,6 +50,7 @@ type Reconciler struct {
 	NodeName       string
 	TriggerChannel <-chan event.GenericEvent
 	Dbus           dbus.Dbus
+	Extractor      registry.Extractor
 }
 
 // Reconcile check if the version of the gardener-node-agent changed and updates itself if change was detected
@@ -77,7 +78,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ reconcile.Request) (reconc
 
 	log.Info("gardener-node-agent binary has changed, starting self-update", "imageRef", r.Config.Image)
 
-	if err := registry.ExtractFromLayer(r.Config.Image, "gardener-node-agent", r.SelfBinaryPath); err != nil {
+	if err := r.Extractor.ExtractFromLayer(r.Config.Image, "gardener-node-agent", r.SelfBinaryPath); err != nil {
 		return reconcile.Result{}, fmt.Errorf("unable to extract binary from image: %w", err)
 	}
 

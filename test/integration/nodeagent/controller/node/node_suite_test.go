@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package operatingsystemconfig_test
+package node_test
 
 import (
 	"context"
@@ -33,12 +33,12 @@ import (
 	"github.com/gardener/gardener/pkg/operator/features"
 )
 
-func TestOperatingSystemConfig(t *testing.T) {
+func TestNodeagentNode(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Test Integration Operator OperatingSystemConfig Suite")
+	RunSpecs(t, "Test Integration Operator Nodeagent Node Suite")
 }
 
-const testID = "nodeagent--operatingsystemconfig-controller-test"
+const testID = "nodeagent-node-controller-test"
 
 var (
 	ctx = context.Background()

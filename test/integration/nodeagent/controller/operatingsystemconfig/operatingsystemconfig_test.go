@@ -43,8 +43,9 @@ import (
 
 var _ = Describe("Nodeagent Operating System Config controller tests", func() {
 	var (
-		testFs   afero.Fs
-		fakeDbus dbus.FakeDbus
+		testFs          afero.Fs
+		fakeDbus        dbus.FakeDbus
+		triggerChannels []chan event.GenericEvent
 	)
 	const (
 		nodeName               = testID + "-node"
@@ -81,10 +82,10 @@ var _ = Describe("Nodeagent Operating System Config controller tests", func() {
 		Expect(afero.WriteFile(testFs, nodeagentv1alpha1.NodeAgentTokenFilePath, []byte(originalNodeAgentToken), 0644)).To(Succeed())
 
 		fakeDbus = dbus.FakeDbus{}
-		triggerChannels := []chan event.GenericEvent{
+		triggerChannels = []chan event.GenericEvent{
 			make(chan event.GenericEvent, 1),
 		}
-		tokenReconciler := &osc.Reconciler{
+		reconciler := &osc.Reconciler{
 			Client:          mgr.GetClient(),
 			Fs:              testFs,
 			Config:          nodeAgentConfig,
@@ -92,7 +93,7 @@ var _ = Describe("Nodeagent Operating System Config controller tests", func() {
 			Dbus:            &fakeDbus,
 			NodeName:        nodeName,
 		}
-		Expect((tokenReconciler.AddToManager(mgr))).To(Succeed())
+		Expect((reconciler.AddToManager(mgr))).To(Succeed())
 
 		By("Create Node")
 		node := &corev1.Node{
@@ -208,5 +209,10 @@ var _ = Describe("Nodeagent Operating System Config controller tests", func() {
 			Action:    dbus.FakeStop,
 			UnitNames: []string{unitDisabled.Name},
 		}))
+
+		By("Check that all trigger channels have been notified")
+		for _, triggerChannel := range triggerChannels {
+			Eventually(triggerChannel).Should(Receive())
+		}
 	})
 })

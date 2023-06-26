@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	osc "github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	operatorclient "github.com/gardener/gardener/pkg/operator/client"
@@ -71,7 +70,7 @@ var _ = Describe("Nodeagent Operating System Config controller tests", func() {
 		By("Register controller")
 		testFs = afero.NewMemMapFs()
 		nodeAgentConfig := &nodeagentv1alpha1.NodeAgentConfiguration{
-			TokenSecretName: v1alpha1.NodeAgentTokenSecretName,
+			TokenSecretName: nodeagentv1alpha1.NodeAgentTokenSecretName,
 			OSCSecretName:   nodeAgentOSCSecretName,
 		}
 		configBytes, err := yaml.Marshal(nodeAgentConfig)

@@ -22,6 +22,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,7 +35,6 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/common"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
-	"github.com/spf13/afero"
 )
 
 // imageDownloadedPath specifies a file which contains the gardener-node-agent image ref, e.g. which version should be installed

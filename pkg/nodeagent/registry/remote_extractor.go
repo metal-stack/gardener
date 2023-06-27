@@ -101,7 +101,6 @@ func extractTarGz(uncompressedStream io.Reader, filenameInArchive, destinationOn
 				return fmt.Errorf("create file failed: %w", err)
 			}
 
-			// TODO: handle file close error case
 			defer outFile.Close()
 
 			if _, err := io.Copy(outFile, tarReader); err != nil {

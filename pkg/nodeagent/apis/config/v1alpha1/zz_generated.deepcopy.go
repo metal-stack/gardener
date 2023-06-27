@@ -46,6 +46,11 @@ func (in *NodeAgentConfiguration) DeepCopyInto(out *NodeAgentConfiguration) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	out.APIServer = in.APIServer
+	if in.KubeletDataVolumeSize != nil {
+		in, out := &in.KubeletDataVolumeSize, &out.KubeletDataVolumeSize
+		*out = new(int64)
+		**out = **in
+	}
 	return
 }
 

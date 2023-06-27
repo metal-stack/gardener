@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -44,7 +45,6 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
-	"github.com/spf13/afero"
 )
 
 // Reconciler fetches the shoot access token for gardener-node-agent and writes the token to disk.
@@ -59,7 +59,7 @@ type Reconciler struct {
 	Fs              afero.Fs
 }
 
-// TODO: doc string
+// Reconcile the operatingsystemconfig.
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -206,7 +206,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 		fns = append(fns, func(ctx context.Context) error {
 			switch *changedUnit.Command {
-			// TODO: make this accessible constants
+			// TODO(@majst01): make this accessible constants
 			case "start", "restart":
 				if err := r.Dbus.Restart(ctx, r.Recorder, node, changedUnit.Name); err != nil {
 					return fmt.Errorf("unable to restart %q: %w", changedUnit.Name, err)

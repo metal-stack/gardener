@@ -38,7 +38,7 @@ import (
 //go:embed templates/gardener-node-agent.service.tpl
 var systemdUnit string
 
-// TODO: doc string
+// Bootstraps the node agent by downloading binary, creating systemd unit and finally terminating itself.
 func Bootstrap(ctx context.Context, log logr.Logger, db dbus.Dbus) error {
 	log.Info("bootstrap")
 
@@ -73,14 +73,12 @@ func Bootstrap(ctx context.Context, log logr.Logger, db dbus.Dbus) error {
 }
 
 func renderSystemdUnit() error {
-	// TODO: Parse the template in init() func
 	tpl := template.Must(
 		template.New("v4").
 			Funcs(template.FuncMap{"StringsJoin": strings.Join}).
 			Parse(systemdUnit),
 	)
 
-	// TODO do we need data for the template
 	var target bytes.Buffer
 	if err := tpl.Execute(&target, nil); err != nil {
 		return err

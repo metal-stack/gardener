@@ -17,9 +17,10 @@ package dbus_test
 import (
 	"context"
 
-	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 )
 
 var _ = Describe("Dbus", func() {

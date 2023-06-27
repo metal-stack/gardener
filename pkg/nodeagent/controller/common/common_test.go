@@ -14,10 +14,11 @@
 package common
 
 import (
-	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/pointer"
+
+	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 )
 
 var _ = Describe("Common", func() {

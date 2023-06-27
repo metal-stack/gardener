@@ -19,8 +19,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/afero"
 	"gopkg.in/yaml.v2"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -28,12 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	nodecontroller "github.com/gardener/gardener/pkg/nodeagent/controller/node"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	operatorclient "github.com/gardener/gardener/pkg/operator/client"
-
-	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
-	"github.com/spf13/afero"
 )
 
 var _ = Describe("Nodeagent Node controller tests", func() {

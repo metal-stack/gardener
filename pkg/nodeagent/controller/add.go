@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/afero"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/controller/token"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
-	"github.com/spf13/afero"
 )
 
 // AddToManager adds all gardener-node-agent controllers to the given manager.

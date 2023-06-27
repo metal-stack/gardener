@@ -5,9 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gardener/gardener/pkg/logger"
-	operatorclient "github.com/gardener/gardener/pkg/operator/client"
-	"github.com/gardener/gardener/pkg/operator/features"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -16,6 +13,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/gardener/gardener/pkg/logger"
+	operatorclient "github.com/gardener/gardener/pkg/operator/client"
+	"github.com/gardener/gardener/pkg/operator/features"
 )
 
 func TestNodeagentSelfUpgrade(t *testing.T) {

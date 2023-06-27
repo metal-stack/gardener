@@ -15,7 +15,6 @@
 package operatingsystemconfig
 
 import (
-	"github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
 // controllerName is the name of this controller.

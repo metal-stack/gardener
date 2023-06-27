@@ -22,6 +22,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	unsafe "unsafe"
+
 	config "github.com/gardener/gardener/pkg/nodeagent/apis/config"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -90,6 +92,7 @@ func autoConvert_v1alpha1_NodeAgentConfiguration_To_config_NodeAgentConfiguratio
 	out.Image = in.Image
 	out.HyperkubeImage = in.HyperkubeImage
 	out.KubernetesVersion = in.KubernetesVersion
+	out.KubeletDataVolumeSize = (*int64)(unsafe.Pointer(in.KubeletDataVolumeSize))
 	return nil
 }
 
@@ -107,6 +110,7 @@ func autoConvert_config_NodeAgentConfiguration_To_v1alpha1_NodeAgentConfiguratio
 	out.Image = in.Image
 	out.HyperkubeImage = in.HyperkubeImage
 	out.KubernetesVersion = in.KubernetesVersion
+	out.KubeletDataVolumeSize = (*int64)(unsafe.Pointer(in.KubeletDataVolumeSize))
 	return nil
 }
 

@@ -22,11 +22,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/afero"
 	"golang.org/x/exp/slices"
-
-	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-
 	"sigs.k8s.io/yaml"
 
+	"github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 )
 
@@ -66,7 +64,7 @@ func ReadNodeAgentConfiguration(fs afero.Fs) (*nodeagentv1alpha1.NodeAgentConfig
 	return config, nil
 }
 
-// TODO: doc strings
+// OSCChanges contains the changes between two OperatingSystemConfig objects.
 type OSCChanges struct {
 	// ChangedUnits contains units which change the content or have been added
 	ChangedUnits []v1alpha1.Unit
@@ -74,7 +72,7 @@ type OSCChanges struct {
 	DeletedFiles []v1alpha1.File
 }
 
-// TODO: doc string
+// CalculateChangedUnitsAndRemovedFiles calculates the changes between the current and the previous OperatingSystemConfig
 func CalculateChangedUnitsAndRemovedFiles(fs afero.Fs, currentOSC *v1alpha1.OperatingSystemConfig) (*OSCChanges, error) {
 	if fs == nil {
 		fs = afero.NewOsFs()
@@ -95,7 +93,7 @@ func CalculateChangedUnitsAndRemovedFiles(fs afero.Fs, currentOSC *v1alpha1.Oper
 	return CalculateOSCChanges(currentOSC, previousOSC), nil
 }
 
-// TODO: doc string
+// CalculateOSCChanges calculates the changes between the current and the previous OperatingSystemConfig
 func CalculateOSCChanges(current, previous *v1alpha1.OperatingSystemConfig) *OSCChanges {
 	oscChanges := &OSCChanges{}
 

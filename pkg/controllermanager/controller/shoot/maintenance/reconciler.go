@@ -41,6 +41,7 @@ import (
 	"github.com/gardener/gardener/pkg/controllerutils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	versionutils "github.com/gardener/gardener/pkg/utils/version"
 )
 
 // Reconciler reconciles Shoots and maintains them by updating versions or triggering operations.
@@ -132,9 +133,22 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, shoot *gard
 		log.Error(err, "Failed to maintain Shoot kubernetes version")
 	}
 
+	oldShootKubernetesVersion, err := semver.NewVersion(shoot.Spec.Kubernetes.Version)
+	if err != nil {
+		return err
+	}
+
 	shootKubernetesVersion, err := semver.NewVersion(maintainedShoot.Spec.Kubernetes.Version)
 	if err != nil {
 		return err
+	}
+
+	// Reset the `EnableStaticTokenKubeconfig` value to false, when shoot cluster is updated to  k8s version >= 1.27.
+	if versionutils.ConstraintK8sLess127.Check(oldShootKubernetesVersion) && pointer.BoolDeref(maintainedShoot.Spec.Kubernetes.EnableStaticTokenKubeconfig, false) && versionutils.ConstraintK8sGreaterEqual127.Check(shootKubernetesVersion) {
+		maintainedShoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = pointer.Bool(false)
+
+		reason := "EnableStaticTokenKubeconfig is set to false. Reason: The static token kubeconfig can no longer be enabled for Shoot clusters using Kubernetes version 1.27 and higher"
+		operations = append(operations, reason)
 	}
 
 	// Now it's time to update worker pool kubernetes version if specified
@@ -378,7 +392,7 @@ func determineKubernetesVersion(kubernetesVersion string, profile *gardencorev1b
 		if err != nil {
 			return "", fmt.Errorf("failure while determining newer Kubernetes minor version in the CloudProfile: %s", err.Error())
 		}
-		// cannot update as there is no consecutive minor version available (e.g shoot is on 1.20.X, but there is only 1.22.X, available and not 1.21.X)
+		// cannot update as there is no consecutive minor version available (e.g shoot is on 1.24.X, but there is only 1.26.X, available and not 1.25.X)
 		if !newMinorAvailable {
 			return "", fmt.Errorf("cannot perform minor Kubernetes version update for expired Kubernetes version %q. No suitable version found in CloudProfile - this is most likely a misconfiguration of the CloudProfile", kubernetesVersion)
 		}

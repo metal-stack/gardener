@@ -26,12 +26,8 @@ import (
 	fluentbitv1alpha2 "github.com/fluent/fluent-operator/v2/apis/fluentbit/v1alpha2"
 	"github.com/go-logr/logr"
 	istiov1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -57,7 +53,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/dependencywatchdog"
 	"github.com/gardener/gardener/pkg/component/etcd"
 	"github.com/gardener/gardener/pkg/component/extensions"
-	"github.com/gardener/gardener/pkg/component/extensions/crds"
+	extensioncrds "github.com/gardener/gardener/pkg/component/extensions/crds"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/downloader"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/containerd"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/docker"
@@ -74,10 +70,10 @@ import (
 	"github.com/gardener/gardener/pkg/component/logging/eventlogger"
 	"github.com/gardener/gardener/pkg/component/logging/fluentoperator"
 	"github.com/gardener/gardener/pkg/component/logging/vali"
+	"github.com/gardener/gardener/pkg/component/machinecontrollermanager"
 	"github.com/gardener/gardener/pkg/component/metricsserver"
 	"github.com/gardener/gardener/pkg/component/monitoring"
 	"github.com/gardener/gardener/pkg/component/nginxingress"
-	"github.com/gardener/gardener/pkg/component/nginxingressshoot"
 	"github.com/gardener/gardener/pkg/component/nodeexporter"
 	"github.com/gardener/gardener/pkg/component/nodeproblemdetector"
 	"github.com/gardener/gardener/pkg/component/resourcemanager"
@@ -94,13 +90,13 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	"github.com/gardener/gardener/pkg/utils/gardener/tokenrequest"
 	"github.com/gardener/gardener/pkg/utils/images"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/retry"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
-	"github.com/gardener/gardener/pkg/utils/timewindow"
 	versionutils "github.com/gardener/gardener/pkg/utils/version"
 )
 
@@ -215,7 +211,7 @@ func (r *Reconciler) reconcile(
 }
 
 func (r *Reconciler) checkMinimumK8SVersion(version string) (string, error) {
-	const minKubernetesVersion = "1.20"
+	const minKubernetesVersion = "1.22"
 
 	seedVersionOK, err := versionutils.CompareVersions(version, ">=", minKubernetesVersion)
 	if err != nil {
@@ -285,10 +281,9 @@ func (r *Reconciler) runReconcileSeedFlow(
 		issuerGK = schema.GroupKind{Group: "certmanager.k8s.io", Kind: "ClusterIssuer"}
 
 		vpaEnabled     = seed.GetInfo().Spec.Settings == nil || seed.GetInfo().Spec.Settings.VerticalPodAutoscaler == nil || seed.GetInfo().Spec.Settings.VerticalPodAutoscaler.Enabled
-		loggingEnabled = gardenlethelper.IsLoggingEnabled(&r.Config)
 		hvpaEnabled    = features.DefaultFeatureGate.Enabled(features.HVPA)
+		loggingEnabled = gardenlethelper.IsLoggingEnabled(&r.Config)
 
-		loggingConfig   = r.Config.Logging
 		gardenNamespace = &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: r.GardenNamespace,
@@ -376,41 +371,40 @@ func (r *Reconciler) runReconcileSeedFlow(
 
 	// Deploy the CRDs in the seed cluster.
 	log.Info("Deploying custom resource definitions")
-
-	if hvpaEnabled {
-		if err := kubernetesutils.DeleteObjects(ctx, seedClient,
-			&vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "prometheus-vpa", Namespace: r.GardenNamespace}},
-			&vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "aggregate-prometheus-vpa", Namespace: r.GardenNamespace}},
-		); err != nil {
-			return err
-		}
-
-		if err := hvpa.NewCRD(applier).Deploy(ctx); err != nil {
-			return err
-		}
-	}
-
-	istioCRDs := istio.NewCRD(chartApplier)
-	if err := istioCRDs.Deploy(ctx); err != nil {
-		return err
-	}
-
-	if !seedIsGarden && vpaEnabled {
-		if err := vpa.NewCRD(applier, nil).Deploy(ctx); err != nil {
-			return err
-		}
-	}
-
 	if err := fluentoperator.NewCRDs(applier).Deploy(ctx); err != nil {
 		return err
 	}
 
-	if err := crds.NewExtensionsCRD(applier).Deploy(ctx); err != nil {
+	if err := machinecontrollermanager.NewCRD(seedClient, applier).Deploy(ctx); err != nil {
 		return err
 	}
 
-	// When the seed is the garden cluster then gardener-resource-manager is reconciled by the gardener-operator.
+	if err := extensioncrds.NewCRD(applier).Deploy(ctx); err != nil {
+		return err
+	}
+
 	if !seedIsGarden {
+		if err := etcd.NewCRD(seedClient, applier).Deploy(ctx); err != nil {
+			return err
+		}
+
+		if err := istio.NewCRD(chartApplier).Deploy(ctx); err != nil {
+			return err
+		}
+
+		if vpaEnabled {
+			if err := vpa.NewCRD(applier, nil).Deploy(ctx); err != nil {
+				return err
+			}
+		}
+
+		if hvpaEnabled {
+			if err := hvpa.NewCRD(applier).Deploy(ctx); err != nil {
+				return err
+			}
+		}
+
+		// When the seed is the garden cluster then gardener-resource-manager is reconciled by the gardener-operator.
 		var defaultNotReadyTolerationSeconds, defaultUnreachableTolerationSeconds *int64
 		if nodeToleration := r.Config.NodeToleration; nodeToleration != nil {
 			defaultNotReadyTolerationSeconds = nodeToleration.DefaultNotReadyTolerationSeconds
@@ -437,7 +431,6 @@ func (r *Reconciler) runReconcileSeedFlow(
 			defaultUnreachableTolerationSeconds,
 			features.DefaultFeatureGate.Enabled(features.DefaultSeccompProfile),
 			v1beta1helper.SeedSettingTopologyAwareRoutingEnabled(seed.GetInfo().Spec.Settings),
-			features.DefaultFeatureGate.Enabled(features.FullNetworkPoliciesInRuntimeCluster),
 			additionalNetworkPolicyNamespaceSelectors,
 			seed.GetInfo().Spec.Provider.Zones,
 		)
@@ -464,6 +457,15 @@ func (r *Reconciler) runReconcileSeedFlow(
 	// Wait until required extensions are ready because they might be needed by following deployments
 	if err := WaitUntilRequiredExtensionsReady(ctx, r.GardenClient, seed.GetInfo(), 5*time.Second, 1*time.Minute); err != nil {
 		return err
+	}
+
+	if hvpaEnabled {
+		if err := kubernetesutils.DeleteObjects(ctx, seedClient,
+			&vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "prometheus-vpa", Namespace: r.GardenNamespace}},
+			&vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "aggregate-prometheus-vpa", Namespace: r.GardenNamespace}},
+		); err != nil {
+			return err
+		}
 	}
 
 	// Fetch component-specific aggregate and central monitoring configuration
@@ -509,75 +511,12 @@ func (r *Reconciler) runReconcileSeedFlow(
 
 	// Logging feature gate
 	var (
-		valiValues = map[string]interface{}{}
-
 		inputs  []*fluentbitv1alpha2.ClusterInput
 		filters []*fluentbitv1alpha2.ClusterFilter
 		parsers []*fluentbitv1alpha2.ClusterParser
 	)
-	valiValues["enabled"] = loggingEnabled
 
 	if loggingEnabled {
-		// check if vali is disabled in gardenlet config
-		if !gardenlethelper.IsValiEnabled(&r.Config) {
-			valiValues["enabled"] = false
-			if err := common.DeleteVali(ctx, seedClient, gardenNamespace.Name); err != nil {
-				return err
-			}
-		} else {
-			valiValues["authEnabled"] = false
-			valiValues["storage"] = loggingConfig.Vali.Garden.Storage
-			if err := ResizeOrDeleteValiDataVolumeIfStorageNotTheSame(ctx, log, seedClient, *loggingConfig.Vali.Garden.Storage); err != nil {
-				return err
-			}
-
-			if hvpaEnabled {
-				shootInfo := &corev1.ConfigMap{}
-				maintenanceBegin := "220000-0000"
-				maintenanceEnd := "230000-0000"
-				if err := seedClient.Get(ctx, kubernetesutils.Key(metav1.NamespaceSystem, v1beta1constants.ConfigMapNameShootInfo), shootInfo); err != nil {
-					if !apierrors.IsNotFound(err) {
-						return err
-					}
-				} else {
-					shootMaintenanceBegin, err := timewindow.ParseMaintenanceTime(shootInfo.Data["maintenanceBegin"])
-					if err != nil {
-						return err
-					}
-					maintenanceBegin = shootMaintenanceBegin.Add(1, 0, 0).Formatted()
-
-					shootMaintenanceEnd, err := timewindow.ParseMaintenanceTime(shootInfo.Data["maintenanceEnd"])
-					if err != nil {
-						return err
-					}
-					maintenanceEnd = shootMaintenanceEnd.Add(1, 0, 0).Formatted()
-				}
-
-				valiValues["hvpa"] = map[string]interface{}{
-					"enabled": true,
-					"maintenanceTimeWindow": map[string]interface{}{
-						"begin": maintenanceBegin,
-						"end":   maintenanceEnd,
-					},
-				}
-
-				currentResources, err := kubernetesutils.GetContainerResourcesInStatefulSet(ctx, seedClient, kubernetesutils.Key(r.GardenNamespace, v1beta1constants.StatefulSetNameVali))
-				if err != nil {
-					return err
-				}
-				if len(currentResources) != 0 && currentResources[v1beta1constants.StatefulSetNameVali] != nil {
-					valiValues["resources"] = map[string]interface{}{
-						// Copy requests only, effectively removing limits
-						v1beta1constants.StatefulSetNameVali: &corev1.ResourceRequirements{
-							Requests: currentResources[v1beta1constants.StatefulSetNameVali].Requests,
-						},
-					}
-				}
-			}
-
-			valiValues["priorityClassName"] = v1beta1constants.PriorityClassNameSeedSystem600
-		}
-
 		componentsFunctions := []component.CentralLoggingConfiguration{
 			// journald components
 			kubelet.CentralLoggingConfiguration,
@@ -609,11 +548,15 @@ func (r *Reconciler) runReconcileSeedFlow(
 			vpnshoot.CentralLoggingConfiguration,
 			// shoot addon components
 			kubernetesdashboard.CentralLoggingConfiguration,
-			nginxingressshoot.CentralLoggingConfiguration,
+			nginxingress.CentralLoggingConfiguration,
 		}
 
 		if gardenlethelper.IsEventLoggingEnabled(&r.Config) {
 			componentsFunctions = append(componentsFunctions, eventlogger.CentralLoggingConfiguration)
+		}
+
+		if features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment) {
+			componentsFunctions = append(componentsFunctions, machinecontrollermanager.CentralLoggingConfiguration)
 		}
 
 		// Fetch component specific logging configurations
@@ -634,10 +577,6 @@ func (r *Reconciler) runReconcileSeedFlow(
 			if len(loggingConfig.Parsers) > 0 {
 				parsers = append(parsers, loggingConfig.Parsers...)
 			}
-		}
-	} else {
-		if err := common.DeleteVali(ctx, seedClient, v1beta1constants.GardenNamespace); err != nil {
-			return err
 		}
 	}
 
@@ -747,12 +686,6 @@ func (r *Reconciler) runReconcileSeedFlow(
 		imageVectorOverwrites[name] = data
 	}
 
-	anySNIInUse, err := kubeapiserverexposure.AnyDeployedSNI(ctx, seedClient)
-	if err != nil {
-		return err
-	}
-	sniEnabledOrInUse := anySNIInUse || features.DefaultFeatureGate.Enabled(features.APIServerSNI)
-
 	seedIsOriginOfClusterIdentity, err := clusteridentity.IsClusterIdentityEmptyOrFromOrigin(ctx, seedClient, v1beta1constants.ClusterIdentityOriginSeed)
 	if err != nil {
 		return err
@@ -762,21 +695,15 @@ func (r *Reconciler) runReconcileSeedFlow(
 		return err
 	}
 
-	ingressClass, err := gardenerutils.ComputeNginxIngressClassForSeed(seed.GetInfo(), seed.GetInfo().Status.KubernetesVersion)
-	if err != nil {
-		return err
-	}
-
 	values := kubernetes.Values(map[string]interface{}{
 		"global": map[string]interface{}{
-			"ingressClass": ingressClass,
+			"ingressClass": v1beta1constants.SeedNginxIngressClass,
 			"images":       imagevector.ImageMapToValues(seedImages),
 		},
 		"prometheus": map[string]interface{}{
-			"deployAllowAllAccessNetworkPolicy": !features.DefaultFeatureGate.Enabled(features.FullNetworkPoliciesInRuntimeCluster),
-			"resources":                         monitoringResources["prometheus"],
-			"storage":                           seed.GetValidVolumeSize("10Gi"),
-			"additionalScrapeConfigs":           centralScrapeConfigs.String(),
+			"resources":               monitoringResources["prometheus"],
+			"storage":                 seed.GetValidVolumeSize("10Gi"),
+			"additionalScrapeConfigs": centralScrapeConfigs.String(),
 			"additionalCAdvisorScrapeConfigMetricRelabelConfigs": centralCAdvisorScrapeConfigMetricRelabelConfigs.String(),
 		},
 		"aggregatePrometheus": map[string]interface{}{
@@ -791,7 +718,6 @@ func (r *Reconciler) runReconcileSeedFlow(
 			"hostName":   plutonoHost,
 			"secretName": plutonoIngressTLSSecretName,
 		},
-		"vali":         valiValues,
 		"alertmanager": alertManagerConfig,
 		"hvpa": map[string]interface{}{
 			"enabled": hvpaEnabled,
@@ -837,22 +763,10 @@ func (r *Reconciler) runReconcileSeedFlow(
 		return err
 	}
 
-	if !v1beta1helper.SeedUsesNginxIngressController(seed.GetInfo()) {
-		nginxIngress := nginxingress.New(seedClient, r.GardenNamespace, nginxingress.Values{})
-
-		if err := component.OpDestroyAndWait(nginxIngress).Destroy(ctx); err != nil {
-			return err
-		}
-	}
-
-	if err := migrateIngressClassForShootIngresses(ctx, r.GardenClient, seedClient, seed, ingressClass, kubernetesVersion); err != nil {
-		return err
-	}
-
 	// setup for flow graph
 	var dnsRecord component.DeployMigrateWaiter
 
-	istio, err := defaultIstio(seedClient, r.ImageVector, chartRenderer, seed, &r.Config, sniEnabledOrInUse, seedIsGarden)
+	istio, err := defaultIstio(seedClient, r.ImageVector, chartRenderer, seed, &r.Config, seedIsGarden)
 	if err != nil {
 		return err
 	}
@@ -865,12 +779,6 @@ func (r *Reconciler) runReconcileSeedFlow(
 		return err
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.FullNetworkPoliciesInRuntimeCluster) {
-		if err := kubernetesutils.DeleteObject(ctx, seedClient, &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "allow-seed-prometheus", Namespace: r.GardenNamespace}}); err != nil {
-			return err
-		}
-	}
-
 	var (
 		g = flow.NewGraph("Seed cluster creation")
 		_ = g.Add(flow.Task{
@@ -880,23 +788,22 @@ func (r *Reconciler) runReconcileSeedFlow(
 		nginxLBReady = g.Add(flow.Task{
 			Name: "Waiting until nginx ingress LoadBalancer is ready",
 			Fn: func(ctx context.Context) error {
-				dnsRecord, err = waitForNginxIngressServiceAndGetDNSComponent(ctx, log, seed, r.GardenClient, seedClient, r.ImageVector, kubernetesVersion, ingressClass, r.GardenNamespace)
+				dnsRecord, err = waitForNginxIngressServiceAndGetDNSComponent(ctx, log, seed, r.GardenClient, seedClient, r.ImageVector, kubernetesVersion, r.GardenNamespace)
 				return err
 			},
 		})
 		_ = g.Add(flow.Task{
 			Name:         "Deploying managed ingress DNS record",
-			Fn:           flow.TaskFn(func(ctx context.Context) error { return deployDNSResources(ctx, dnsRecord) }).DoIf(v1beta1helper.SeedWantsManagedIngress(seed.GetInfo())),
+			Fn:           func(ctx context.Context) error { return deployDNSResources(ctx, dnsRecord) },
 			Dependencies: flow.NewTaskIDs(nginxLBReady),
 		})
 		_ = g.Add(flow.Task{
-			Name:         "Destroying managed ingress DNS record (if existing)",
-			Fn:           flow.TaskFn(func(ctx context.Context) error { return destroyDNSResources(ctx, dnsRecord) }).DoIf(!v1beta1helper.SeedWantsManagedIngress(seed.GetInfo())),
-			Dependencies: flow.NewTaskIDs(nginxLBReady),
-		})
-		_ = g.Add(flow.Task{
-			Name: "Deploying cluster-autoscaler",
+			Name: "Deploying cluster-autoscaler resources",
 			Fn:   clusterautoscaler.NewBootstrapper(seedClient, r.GardenNamespace).Deploy,
+		})
+		_ = g.Add(flow.Task{
+			Name: "Deploying machine-controller-manager resources",
+			Fn:   flow.TaskFn(machinecontrollermanager.NewBootstrapper(seedClient, r.GardenNamespace).Deploy).DoIf(features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment)),
 		})
 		_ = g.Add(flow.Task{
 			Name: "Deploying dependency-watchdog-weeder",
@@ -909,6 +816,23 @@ func (r *Reconciler) runReconcileSeedFlow(
 		_ = g.Add(flow.Task{
 			Name: "Deploying VPN authorization server",
 			Fn:   vpnAuthzServer.Deploy,
+		})
+		_ = g.Add(flow.Task{
+			Name: "Renewing garden access secrets",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				// renew access secrets in all namespaces with the resources.gardener.cloud/class=garden label
+				if err := tokenrequest.RenewAccessSecrets(ctx, seedClient,
+					client.MatchingLabels{resourcesv1alpha1.ResourceManagerClass: resourcesv1alpha1.ResourceManagerClassGarden},
+				); err != nil {
+					return err
+				}
+
+				// remove operation annotation from seed after successful operation
+				return seed.UpdateInfo(ctx, r.GardenClient, false, func(seedObj *gardencorev1beta1.Seed) error {
+					delete(seedObj.Annotations, v1beta1constants.GardenerOperation)
+					return nil
+				})
+			}).DoIf(seed.GetInfo().Annotations[v1beta1constants.GardenerOperation] == v1beta1constants.SeedOperationRenewGardenAccessSecrets),
 		})
 	)
 
@@ -964,15 +888,9 @@ func (r *Reconciler) runReconcileSeedFlow(
 			return err
 		}
 
-		// TODO(Kristian-ZH): Remove this in the next releases
-		if err := CleanupOldFluentBit(ctx, seedClient); err != nil {
-			return err
-		}
-
 		fluentOperatorCustomResources, err := sharedcomponent.NewFluentOperatorCustomResources(
 			seedClient,
 			r.GardenNamespace,
-			kubernetesVersion,
 			r.ImageVector,
 			loggingEnabled,
 			v1beta1constants.PriorityClassNameSeedSystem600,
@@ -991,6 +909,19 @@ func (r *Reconciler) runReconcileSeedFlow(
 			r.ImageVector,
 			loggingEnabled,
 			v1beta1constants.PriorityClassNameSeedSystem600,
+		)
+		if err != nil {
+			return err
+		}
+
+		vali, err := defaultVali(
+			ctx,
+			seedClient,
+			r.ImageVector,
+			r.Config.Logging,
+			r.GardenNamespace,
+			loggingEnabled && gardenlethelper.IsValiEnabled(&r.Config),
+			hvpaEnabled,
 		)
 		if err != nil {
 			return err
@@ -1033,6 +964,10 @@ func (r *Reconciler) runReconcileSeedFlow(
 				Fn:           component.OpWait(fluentOperator).Deploy,
 				Dependencies: flow.NewTaskIDs(reconcileFluentOperatorResources),
 			})
+			_ = g.Add(flow.Task{
+				Name: "Deploying Vali",
+				Fn:   vali.Deploy,
+			})
 		)
 	}
 
@@ -1040,7 +975,7 @@ func (r *Reconciler) runReconcileSeedFlow(
 	if wildcardCert != nil {
 		kubeAPIServerIngress := kubeapiserverexposure.NewIngress(seedClient, r.GardenNamespace, kubeapiserverexposure.IngressValues{
 			Host:             seed.GetIngressFQDN(kubeAPIServerPrefix),
-			IngressClassName: &ingressClass,
+			IngressClassName: pointer.String(v1beta1constants.SeedNginxIngressClass),
 			ServiceName:      v1beta1constants.DeploymentNameKubeAPIServer,
 			TLSSecretName:    &wildcardCert.Name,
 		})
@@ -1108,49 +1043,6 @@ func deployBackupBucketInGarden(ctx context.Context, k8sGardenClient client.Clie
 		return nil
 	})
 	return err
-}
-
-// ResizeOrDeleteValiDataVolumeIfStorageNotTheSame updates the garden Vali PVC if passed storage value is not the same as the current one.
-// Caution: If the passed storage capacity is less than the current one the existing PVC and its PV will be deleted.
-func ResizeOrDeleteValiDataVolumeIfStorageNotTheSame(ctx context.Context, log logr.Logger, k8sClient client.Client, newStorageQuantity resource.Quantity) error {
-	// Check if we need resizing
-	pvc := &corev1.PersistentVolumeClaim{}
-	if err := k8sClient.Get(ctx, kubernetesutils.Key(v1beta1constants.GardenNamespace, "vali-vali-0"), pvc); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-
-	log = log.WithValues("persistentVolumeClaim", client.ObjectKeyFromObject(pvc))
-
-	storageCmpResult := newStorageQuantity.Cmp(*pvc.Spec.Resources.Requests.Storage())
-	if storageCmpResult == 0 {
-		return nil
-	}
-
-	statefulSetKey := client.ObjectKey{Namespace: v1beta1constants.GardenNamespace, Name: v1beta1constants.StatefulSetNameVali}
-	log.Info("Scaling StatefulSet to zero in order to detach PVC", "statefulSet", statefulSetKey)
-	if err := kubernetes.ScaleStatefulSetAndWaitUntilScaled(ctx, k8sClient, statefulSetKey, 0); client.IgnoreNotFound(err) != nil {
-		return err
-	}
-
-	switch {
-	case storageCmpResult > 0:
-		patch := client.MergeFrom(pvc.DeepCopy())
-		pvc.Spec.Resources.Requests = corev1.ResourceList{
-			corev1.ResourceStorage: newStorageQuantity,
-		}
-		log.Info("Patching storage of PVC", "storage", newStorageQuantity.String())
-		if err := k8sClient.Patch(ctx, pvc, patch); client.IgnoreNotFound(err) != nil {
-			return err
-		}
-	case storageCmpResult < 0:
-		log.Info("Deleting PVC because size needs to be reduced")
-		if err := client.IgnoreNotFound(k8sClient.Delete(ctx, pvc)); err != nil {
-			return err
-		}
-	}
-
-	valiSts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: v1beta1constants.StatefulSetNameVali, Namespace: v1beta1constants.GardenNamespace}}
-	return client.IgnoreNotFound(k8sClient.Delete(ctx, valiSts))
 }
 
 func cleanupOrphanExposureClassHandlerResources(
@@ -1293,7 +1185,6 @@ func waitForNginxIngressServiceAndGetDNSComponent(
 	gardenClient, seedClient client.Client,
 	imageVector imagevector.ImageVector,
 	kubernetesVersion *semver.Version,
-	ingressClass string,
 	gardenNamespaceName string,
 ) (
 	component.DeployMigrateWaiter,
@@ -1305,88 +1196,33 @@ func waitForNginxIngressServiceAndGetDNSComponent(
 	}
 
 	var ingressLoadBalancerAddress string
-	if v1beta1helper.SeedUsesNginxIngressController(seed.GetInfo()) {
-		providerConfig, err := getConfig(seed.GetInfo())
-		if err != nil {
-			return nil, err
-		}
+	providerConfig, err := getConfig(seed.GetInfo())
+	if err != nil {
+		return nil, err
+	}
 
-		nginxIngress, err := defaultNginxIngress(seedClient, imageVector, kubernetesVersion, ingressClass, providerConfig, seed.GetLoadBalancerServiceAnnotations(), gardenNamespaceName)
-		if err != nil {
-			return nil, err
-		}
+	nginxIngress, err := defaultNginxIngress(seedClient, imageVector, kubernetesVersion, providerConfig, seed.GetLoadBalancerServiceAnnotations(), gardenNamespaceName)
+	if err != nil {
+		return nil, err
+	}
 
-		if err = component.OpWait(nginxIngress).Deploy(ctx); err != nil {
-			return nil, err
-		}
+	if err = component.OpWait(nginxIngress).Deploy(ctx); err != nil {
+		return nil, err
+	}
 
-		ingressLoadBalancerAddress, err = WaitUntilLoadBalancerIsReady(
-			ctx,
-			log,
-			seedClient,
-			gardenNamespaceName,
-			"nginx-ingress-controller",
-			time.Minute,
-		)
-		if err != nil {
-			return nil, err
-		}
+	ingressLoadBalancerAddress, err = WaitUntilLoadBalancerIsReady(
+		ctx,
+		log,
+		seedClient,
+		gardenNamespaceName,
+		"nginx-ingress-controller",
+		time.Minute,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	return getManagedIngressDNSRecord(log, seedClient, gardenNamespaceName, seed.GetInfo().Spec.DNS, secretData, seed.GetIngressFQDN("*"), ingressLoadBalancerAddress), nil
-}
-
-// CleanupOldFluentBit deletes all old fluent-bit resources which are not installed by the fluent-operator.
-func CleanupOldFluentBit(ctx context.Context, seedClient client.Client) error {
-	// Resources which does not duplicate these from the operators
-	uniqueResource := []client.Object{
-		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "fluent-bit-read"}},
-		&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "fluent-bit-read"}},
-	}
-
-	// Resources whose names duplicate these from the operators
-	fluentBitDaemonSet := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "fluent-bit", Namespace: v1beta1constants.GardenNamespace}}
-	fluentBitService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "fluent-bit", Namespace: v1beta1constants.GardenNamespace}}
-	fluentBitServiceAccount := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "fluent-bit", Namespace: v1beta1constants.GardenNamespace}}
-
-	if err := seedClient.Get(ctx, client.ObjectKeyFromObject(fluentBitDaemonSet), fluentBitDaemonSet); client.IgnoreNotFound(err) != nil {
-		return err
-	}
-	if err := seedClient.Get(ctx, client.ObjectKeyFromObject(fluentBitService), fluentBitService); client.IgnoreNotFound(err) != nil {
-		return err
-	}
-	if err := seedClient.Get(ctx, client.ObjectKeyFromObject(fluentBitServiceAccount), fluentBitServiceAccount); client.IgnoreNotFound(err) != nil {
-		return err
-	}
-
-	if !isOwnedByFluentOperator(fluentBitDaemonSet) {
-		if err := client.IgnoreNotFound(seedClient.Delete(ctx, fluentBitDaemonSet)); err != nil {
-			return err
-		}
-	}
-
-	if !isOwnedByFluentOperator(fluentBitService) {
-		if err := client.IgnoreNotFound(seedClient.Delete(ctx, fluentBitService)); err != nil {
-			return err
-		}
-	}
-
-	if !isOwnedByFluentOperator(fluentBitServiceAccount) {
-		if err := client.IgnoreNotFound(seedClient.Delete(ctx, fluentBitServiceAccount)); err != nil {
-			return err
-		}
-	}
-
-	return kubernetesutils.DeleteObjects(ctx, seedClient, uniqueResource...)
-}
-
-func isOwnedByFluentOperator(obj client.Object) bool {
-	for _, ownerReference := range obj.GetOwnerReferences() {
-		if ownerReference.Kind == "FluentBit" && ownerReference.APIVersion == "fluentbit.fluent.io/v1alpha2" {
-			return true
-		}
-	}
-	return false
 }
 
 // WaitUntilRequiredExtensionsReady checks and waits until all required extensions for a seed exist and are ready.

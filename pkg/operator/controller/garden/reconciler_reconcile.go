@@ -23,7 +23,6 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,7 +47,6 @@ import (
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/gardener/gardener/pkg/utils/gardener/secretsrotation"
 	"github.com/gardener/gardener/pkg/utils/gardener/tokenrequest"
-	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 	"github.com/gardener/gardener/pkg/utils/timewindow"
 )
@@ -113,6 +111,10 @@ func (r *Reconciler) reconcile(
 				return r.generateGenericTokenKubeconfig(ctx, secretsManager)
 			},
 		})
+		deployEtcdCRD = g.Add(flow.Task{
+			Name: "Deploying ETCD-related custom resource definitions",
+			Fn:   c.etcdCRD.Deploy,
+		})
 		deployVPACRD = g.Add(flow.Task{
 			Name: "Deploying custom resource definition for VPA",
 			Fn:   flow.TaskFn(c.vpaCRD.Deploy).DoIf(vpaEnabled(garden.Spec.RuntimeCluster.Settings)),
@@ -128,7 +130,7 @@ func (r *Reconciler) reconcile(
 		deployGardenerResourceManager = g.Add(flow.Task{
 			Name:         "Deploying and waiting for gardener-resource-manager to be healthy",
 			Fn:           component.OpWait(c.gardenerResourceManager).Deploy,
-			Dependencies: flow.NewTaskIDs(deployVPACRD, reconcileHVPACRD, deployIstioCRD),
+			Dependencies: flow.NewTaskIDs(deployEtcdCRD, deployVPACRD, reconcileHVPACRD, deployIstioCRD),
 		})
 		deploySystemResources = g.Add(flow.Task{
 			Name:         "Deploying system resources",
@@ -222,7 +224,12 @@ func (r *Reconciler) reconcile(
 		renewVirtualClusterAccess = g.Add(flow.Task{
 			Name: "Renewing virtual garden access secrets after creation of new ServiceAccount signing key",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
-				return tokenrequest.RenewAccessSecrets(ctx, r.RuntimeClientSet.Client(), r.GardenNamespace)
+				return tokenrequest.RenewAccessSecrets(ctx, r.RuntimeClientSet.Client(),
+					client.InNamespace(r.GardenNamespace),
+					// TODO(rfranzke): Uncomment the next line after v1.85 has been released
+					//  (together with restricting the garden's/shoot's tokenrequestor to the shoot class).
+					// client.MatchingLabels{resourcesv1alpha1.ResourceManagerClass: resourcesv1alpha1.ResourceManagerClassShoot},
+				)
 			}).
 				RetryUntilTimeout(5*time.Second, 30*time.Second).
 				DoIf(helper.GetServiceAccountKeyRotationPhase(garden.Status.Credentials) == gardencorev1beta1.RotationPreparing),
@@ -241,7 +248,7 @@ func (r *Reconciler) reconcile(
 		rewriteSecretsAddLabel = g.Add(flow.Task{
 			Name: "Labeling secrets to encrypt them with new ETCD encryption key",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
-				return secretsrotation.RewriteSecretsAddLabel(ctx, log, virtualClusterClient, secretsManager)
+				return secretsrotation.RewriteEncryptedDataAddLabel(ctx, log, virtualClusterClient, secretsManager, corev1.SchemeGroupVersion.WithKind("SecretList"))
 			}).
 				RetryUntilTimeout(30*time.Second, 10*time.Minute).
 				DoIf(helper.GetETCDEncryptionKeyRotationPhase(garden.Status.Credentials) == gardencorev1beta1.RotationPreparing),
@@ -250,7 +257,7 @@ func (r *Reconciler) reconcile(
 		_ = g.Add(flow.Task{
 			Name: "Snapshotting ETCD after secrets were re-encrypted with new ETCD encryption key",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
-				return secretsrotation.SnapshotETCDAfterRewritingSecrets(ctx, r.RuntimeClientSet.Client(), r.snapshotETCDFunc(secretsManager, c.etcdMain), r.GardenNamespace, namePrefix)
+				return secretsrotation.SnapshotETCDAfterRewritingEncryptedData(ctx, r.RuntimeClientSet.Client(), r.snapshotETCDFunc(secretsManager, c.etcdMain), r.GardenNamespace, namePrefix)
 			}).
 				DoIf(allowBackup && helper.GetETCDEncryptionKeyRotationPhase(garden.Status.Credentials) == gardencorev1beta1.RotationPreparing),
 			Dependencies: flow.NewTaskIDs(rewriteSecretsAddLabel),
@@ -258,7 +265,7 @@ func (r *Reconciler) reconcile(
 		_ = g.Add(flow.Task{
 			Name: "Removing label from secrets after rotation of ETCD encryption key",
 			Fn: flow.TaskFn(func(ctx context.Context) error {
-				return secretsrotation.RewriteSecretsRemoveLabel(ctx, log, r.RuntimeClientSet.Client(), virtualClusterClient, r.GardenNamespace, namePrefix)
+				return secretsrotation.RewriteEncryptedDataRemoveLabel(ctx, log, r.RuntimeClientSet.Client(), virtualClusterClient, r.GardenNamespace, namePrefix, corev1.SchemeGroupVersion.WithKind("SecretList"))
 			}).
 				RetryUntilTimeout(30*time.Second, 10*time.Minute).
 				DoIf(helper.GetETCDEncryptionKeyRotationPhase(garden.Status.Credentials) == gardencorev1beta1.RotationCompleting),
@@ -272,27 +279,14 @@ func (r *Reconciler) reconcile(
 		})
 	)
 
+	gardenCopy := garden.DeepCopy()
 	if err := g.Compile().Run(ctx, flow.Opts{
 		Log:              log,
-		ProgressReporter: r.reportProgress(log, garden),
+		ProgressReporter: r.reportProgress(log, gardenCopy),
 	}); err != nil {
 		return reconcile.Result{}, flow.Errors(err)
 	}
-
-	// TODO(rfranzke): Remove this block in a future version (after v1.72 is released).
-	{
-		objects := []client.Object{
-			&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "etcd-to-world", Namespace: r.GardenNamespace}},
-			&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver-allow-all", Namespace: r.GardenNamespace}},
-			&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "istio-allow-all", Namespace: c.istio.GetValues().Istiod.Namespace}},
-		}
-		for _, istioIngress := range c.istio.GetValues().IngressGateway {
-			objects = append(objects, &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "istio-allow-all", Namespace: istioIngress.Namespace}})
-		}
-		if err := kubernetesutils.DeleteObjects(ctx, r.RuntimeClientSet.Client(), objects...); err != nil {
-			return reconcile.Result{}, err
-		}
-	}
+	*garden = *gardenCopy
 
 	return reconcile.Result{}, secretsManager.Cleanup(ctx)
 }
@@ -352,13 +346,6 @@ func (r *Reconciler) deployEtcdsFunc(garden *operatorv1alpha1.Garden, etcdMain, 
 func (r *Reconciler) deployKubeAPIServerFunc(ctx context.Context, garden *operatorv1alpha1.Garden, kubeAPIServer kubeapiserver.Interface) flow.TaskFn {
 	return func(context.Context) error {
 		var (
-			address                 = gardenerutils.GetAPIServerDomain(garden.Spec.VirtualCluster.DNS.Domain)
-			serverCertificateConfig = kubeapiserver.ServerCertificateConfig{
-				ExtraDNSNames: []string{
-					address,
-					"gardener." + garden.Spec.VirtualCluster.DNS.Domain,
-				},
-			}
 			apiServerConfig *gardencorev1beta1.KubeAPIServerConfig
 			sniConfig       = kubeapiserver.SNIConfig{Enabled: false}
 		)
@@ -374,16 +361,24 @@ func (r *Reconciler) deployKubeAPIServerFunc(ctx context.Context, garden *operat
 			}
 		}
 
+		var domainNames []string
+		if domain := garden.Spec.VirtualCluster.DNS.Domain; domain != nil {
+			domainNames = append(domainNames, *domain)
+		}
+		domainNames = append(domainNames, garden.Spec.VirtualCluster.DNS.Domains...)
+
 		return shared.DeployKubeAPIServer(
 			ctx,
 			r.RuntimeClientSet.Client(),
 			r.GardenNamespace,
 			kubeAPIServer,
 			apiServerConfig,
-			serverCertificateConfig,
+			kubeapiserver.ServerCertificateConfig{
+				ExtraDNSNames: getAPIServerDomains(domainNames),
+			},
 			sniConfig,
-			address,
-			address,
+			gardenerutils.GetAPIServerDomain(domainNames[0]),
+			gardenerutils.GetAPIServerDomain(domainNames[0]),
 			helper.GetETCDEncryptionKeyRotationPhase(garden.Status.Credentials),
 			helper.GetServiceAccountKeyRotationPhase(garden.Status.Credentials),
 			false,

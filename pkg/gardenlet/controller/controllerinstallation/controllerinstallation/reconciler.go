@@ -23,10 +23,10 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/component-base/featuregate"
 	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -167,9 +167,8 @@ func (r *Reconciler) reconcile(
 		return reconcile.Result{}, err
 	}
 
-	// TODO(timuthy, rfranzke): Drop this code when the FullNetworkPoliciesInRuntimeCluster feature gate gets promoted to GA.
-	if err := r.reconcileNetworkPoliciesInSeed(seedCtx, namespace.Name); err != nil {
-		return reconcile.Result{}, err
+	if seed.Status.ClusterIdentity == nil {
+		return reconcile.Result{}, fmt.Errorf("cluster-identity of seed '%s' not set", seed.Name)
 	}
 
 	var (
@@ -184,10 +183,10 @@ func (r *Reconciler) reconcile(
 		}
 	}
 
-	if seed.Status.ClusterIdentity == nil {
-		return reconcile.Result{}, fmt.Errorf("cluster-identity of seed '%s' not set", seed.Name)
+	featureToEnabled := make(map[featuregate.Feature]bool)
+	for feature := range features.DefaultFeatureGate.GetAll() {
+		featureToEnabled[feature] = features.DefaultFeatureGate.Enabled(feature)
 	}
-	seedClusterIdentity := *seed.Status.ClusterIdentity
 
 	// Mix-in some standard values for garden and seed.
 	gardenerValues := map[string]interface{}{
@@ -198,7 +197,7 @@ func (r *Reconciler) reconcile(
 			},
 			"seed": map[string]interface{}{
 				"name":            seed.Name,
-				"clusterIdentity": seedClusterIdentity,
+				"clusterIdentity": *seed.Status.ClusterIdentity,
 				"annotations":     seed.Annotations,
 				"labels":          seed.Labels,
 				"provider":        seed.Spec.Provider.Type,
@@ -212,6 +211,9 @@ func (r *Reconciler) reconcile(
 				"networks":        seed.Spec.Networks,
 				"blockCIDRs":      seed.Spec.Networks.BlockCIDRs,
 				"spec":            seed.Spec,
+			},
+			"gardenlet": map[string]interface{}{
+				"featureGates": featureToEnabled,
 			},
 		},
 	}
@@ -343,31 +345,4 @@ func getNamespaceForControllerInstallation(controllerInstallation *gardencorev1b
 			Name: gardenerutils.NamespaceNameForControllerInstallation(controllerInstallation),
 		},
 	}
-}
-
-func (r *Reconciler) reconcileNetworkPoliciesInSeed(ctx context.Context, namespace string) error {
-	var (
-		peers = []networkingv1.NetworkPolicyPeer{
-			{PodSelector: &metav1.LabelSelector{}, NamespaceSelector: &metav1.LabelSelector{}},
-			{IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"}},
-			{IPBlock: &networkingv1.IPBlock{CIDR: "::/0"}},
-		}
-
-		allowAllTrafficNetworkPolicy = &networkingv1.NetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "gardenlet-allow-all-traffic",
-				Namespace: namespace,
-			},
-			Spec: networkingv1.NetworkPolicySpec{
-				Ingress:     []networkingv1.NetworkPolicyIngressRule{{From: peers}},
-				Egress:      []networkingv1.NetworkPolicyEgressRule{{To: peers}},
-				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
-			},
-		}
-	)
-
-	if !features.DefaultFeatureGate.Enabled(features.FullNetworkPoliciesInRuntimeCluster) {
-		return client.IgnoreAlreadyExists(r.SeedClientSet.Client().Create(ctx, allowAllTrafficNetworkPolicy))
-	}
-	return client.IgnoreNotFound(r.SeedClientSet.Client().Delete(ctx, allowAllTrafficNetworkPolicy))
 }

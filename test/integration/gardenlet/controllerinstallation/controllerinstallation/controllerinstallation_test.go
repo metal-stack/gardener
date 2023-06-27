@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -30,7 +29,6 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
-	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/gardenlet/controller/controllerinstallation/controllerinstallation"
 	"github.com/gardener/gardener/pkg/utils/test"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
@@ -155,46 +153,75 @@ var _ = Describe("ControllerInstallation controller tests", func() {
 			}).Should(ConsistOf("core.gardener.cloud/controllerinstallation"))
 		})
 
-		Context("FullNetworkPoliciesinRuntimeCluster is disabled", func() {
-			BeforeEach(func() {
-				DeferCleanup(test.WithFeatureGate(features.DefaultFeatureGate, features.FullNetworkPoliciesInRuntimeCluster, false))
-			})
+		It("should create a namespace and deploy the chart", func() {
+			By("Ensure namespace was created")
+			namespace := &corev1.Namespace{}
+			Eventually(func(g Gomega) {
+				g.Expect(testClient.Get(ctx, client.ObjectKey{Name: "extension-" + controllerInstallation.Name}, namespace)).To(Succeed())
+				g.Expect(namespace.Labels).To(And(
+					HaveKeyWithValue("gardener.cloud/role", "extension"),
+					HaveKeyWithValue("controllerregistration.core.gardener.cloud/name", controllerRegistration.Name),
+					HaveKeyWithValue("high-availability-config.resources.gardener.cloud/consider", "true"),
+				))
+				g.Expect(namespace.Annotations).To(And(
+					HaveKeyWithValue("high-availability-config.resources.gardener.cloud/zones", "a,b,c"),
+				))
+			}).Should(Succeed())
 
-			It("should create a namespace and deploy the chart", func() {
-				By("Ensure namespace was created")
-				namespace := &corev1.Namespace{}
-				Eventually(func(g Gomega) {
-					g.Expect(testClient.Get(ctx, client.ObjectKey{Name: "extension-" + controllerInstallation.Name}, namespace)).To(Succeed())
-					g.Expect(namespace.Labels).To(And(
-						HaveKeyWithValue("gardener.cloud/role", "extension"),
-						HaveKeyWithValue("controllerregistration.core.gardener.cloud/name", controllerRegistration.Name),
-						HaveKeyWithValue("high-availability-config.resources.gardener.cloud/consider", "true"),
-					))
-					g.Expect(namespace.Annotations).To(And(
-						HaveKeyWithValue("high-availability-config.resources.gardener.cloud/zones", "a,b,c"),
-					))
-				}).Should(Succeed())
+			By("Ensure chart was deployed correctly")
+			// Note that the list of feature gates is unexpectedly longer than in reality since the envtest starts
+			// gardener-apiserver which adds its own as well as the default Kubernetes features gates to the same
+			// map that is reused in gardenlet:
+			// `features.DefaultFeatureGate` is the same as `utilfeature.DefaultMutableFeatureGate`
+			Eventually(func(g Gomega) string {
+				managedResource := &resourcesv1alpha1.ManagedResource{}
+				g.Expect(testClient.Get(ctx, client.ObjectKey{Namespace: "garden", Name: controllerInstallation.Name}, managedResource)).To(Succeed())
 
-				By("Ensure 'gardenlet-allow-all-traffic' policy was created because FullNetworkPoliciesInRuntimeCluster feature gate is disabled")
-				Eventually(func() error {
-					return testClient.Get(ctx, client.ObjectKey{Namespace: namespace.Name, Name: "gardenlet-allow-all-traffic"}, &networkingv1.NetworkPolicy{})
-				}).Should(Succeed())
+				secret := &corev1.Secret{}
+				g.Expect(testClient.Get(ctx, client.ObjectKey{Namespace: managedResource.Namespace, Name: managedResource.Spec.SecretRefs[0].Name}, secret)).To(Succeed())
 
-				By("Ensure chart was deployed correctly")
-				Eventually(func(g Gomega) string {
-					managedResource := &resourcesv1alpha1.ManagedResource{}
-					g.Expect(testClient.Get(ctx, client.ObjectKey{Namespace: "garden", Name: controllerInstallation.Name}, managedResource)).To(Succeed())
+				configMap := &corev1.ConfigMap{}
+				Expect(runtime.DecodeInto(newCodec(), secret.Data["test_templates_config.yaml"], configMap)).To(Succeed())
 
-					secret := &corev1.Secret{}
-					g.Expect(testClient.Get(ctx, client.ObjectKey{Namespace: managedResource.Namespace, Name: managedResource.Spec.SecretRefs[0].Name}, secret)).To(Succeed())
-
-					configMap := &corev1.ConfigMap{}
-					Expect(runtime.DecodeInto(newCodec(), secret.Data["test_templates_config.yaml"], configMap)).To(Succeed())
-
-					return configMap.Data["values"]
-				}).Should(Equal(`gardener:
+				return configMap.Data["values"]
+			}).Should(Equal(`gardener:
   garden:
     clusterIdentity: ` + gardenClusterIdentity + `
+  gardenlet:
+    featureGates:
+      APIListChunking: true
+      APIPriorityAndFairness: true
+      APIResponseCompression: true
+      APIServerIdentity: true
+      APIServerTracing: false
+      AdvancedAuditing: true
+      AggregatedDiscoveryEndpoint: false
+      AllAlpha: false
+      AllBeta: false
+      ComponentSLIs: false
+      CoreDNSQueryRewriting: false
+      CustomResourceValidationExpressions: true
+      DefaultSeccompProfile: false
+      DisableScalingClassesForShoots: false
+      DryRun: true
+      EfficientWatchResumption: true
+      HVPA: false
+      HVPAForShootedSeed: false
+      IPv6SingleStack: false
+      KMSv2: false
+      MachineControllerManagerDeployment: false
+      MutableShootSpecNetworkingNodes: false
+      OpenAPIEnums: true
+      OpenAPIV3: true
+      RemainingItemCount: true
+      RemoveSelfLink: true
+      ServerSideApply: true
+      ServerSideFieldValidation: true
+      StorageVersionAPI: false
+      StorageVersionHash: true
+      ValidatingAdmissionPolicy: false
+      WatchBookmark: true
+      WorkerlessShoots: false
   seed:
     annotations: null
     blockCIDRs: null
@@ -250,8 +277,6 @@ var _ = Describe("ControllerInstallation controller tests", func() {
             enabled: true
         excessCapacityReservation:
           enabled: true
-        ownerChecks:
-          enabled: false
         scheduling:
           visible: true
         topologyAwareRouting:
@@ -265,15 +290,14 @@ var _ = Describe("ControllerInstallation controller tests", func() {
   version: 1.2.3
 `))
 
-				By("Ensure conditions are maintained correctly")
-				Eventually(func(g Gomega) []gardencorev1beta1.Condition {
-					g.Expect(testClient.Get(ctx, client.ObjectKeyFromObject(controllerInstallation), controllerInstallation)).To(Succeed())
-					return controllerInstallation.Status.Conditions
-				}).Should(And(
-					ContainCondition(OfType(gardencorev1beta1.ControllerInstallationValid), WithStatus(gardencorev1beta1.ConditionTrue), WithReason("RegistrationValid")),
-					ContainCondition(OfType(gardencorev1beta1.ControllerInstallationInstalled), WithStatus(gardencorev1beta1.ConditionFalse), WithReason("InstallationPending")),
-				))
-			})
+			By("Ensure conditions are maintained correctly")
+			Eventually(func(g Gomega) []gardencorev1beta1.Condition {
+				g.Expect(testClient.Get(ctx, client.ObjectKeyFromObject(controllerInstallation), controllerInstallation)).To(Succeed())
+				return controllerInstallation.Status.Conditions
+			}).Should(And(
+				ContainCondition(OfType(gardencorev1beta1.ControllerInstallationValid), WithStatus(gardencorev1beta1.ConditionTrue), WithReason("RegistrationValid")),
+				ContainCondition(OfType(gardencorev1beta1.ControllerInstallationInstalled), WithStatus(gardencorev1beta1.ConditionFalse), WithReason("InstallationPending")),
+			))
 		})
 
 		It("should properly clean up on ControllerInstallation deletion", func() {
@@ -320,31 +344,6 @@ var _ = Describe("ControllerInstallation controller tests", func() {
 				g.Expect(testClient.Get(ctx, client.ObjectKeyFromObject(controllerInstallation), controllerInstallation)).To(Succeed())
 				return controllerInstallation.Status.Conditions
 			}).Should(ContainCondition(OfType(gardencorev1beta1.ControllerInstallationInstalled), WithStatus(gardencorev1beta1.ConditionTrue)))
-		})
-
-		It("should delete the 'gardenlet-allow-all-traffic' network policy", func() {
-			By("Ensure namespace was created")
-			namespace := &corev1.Namespace{}
-			Eventually(func() error {
-				return testClient.Get(ctx, client.ObjectKey{Name: "extension-" + controllerInstallation.Name}, namespace)
-			}).Should(Succeed())
-
-			By("Create 'gardenlet-allow-all-traffic' policy")
-			networkPolicy := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{
-				Name:      "gardenlet-allow-all-traffic",
-				Namespace: namespace.Name,
-			}}
-			Expect(testClient.Create(ctx, networkPolicy)).To(Or(Succeed(), BeAlreadyExistsError()))
-
-			By("Trigger reconciliation")
-			patch := client.MergeFrom(controllerInstallation.DeepCopy())
-			controllerInstallation.Spec.SeedRef.ResourceVersion = "foo"
-			Expect(testClient.Patch(ctx, controllerInstallation, patch)).To(Succeed())
-
-			By("Ensure 'gardenlet-allow-all-traffic' policy was deleted because FullNetworkPoliciesInRuntimeCluster feature gate is enabled")
-			Eventually(func() error {
-				return testClient.Get(ctx, client.ObjectKeyFromObject(networkPolicy), &networkingv1.NetworkPolicy{})
-			}).Should(BeNotFoundError())
 		})
 	})
 })

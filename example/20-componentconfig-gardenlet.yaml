@@ -68,10 +68,9 @@ controllers:
     - type: EveryNodeReady
       duration: 5m
     webhookRemediatorEnabled: false
-  shootSecret:
+  shootState:
     concurrentSyncs: 5
-  shootStateSync:
-    concurrentSyncs: 1
+    syncPeriod: 6h
   seed:
     syncPeriod: 1h
   # leaseResyncSeconds: 2
@@ -86,6 +85,8 @@ controllers:
     syncPeriod: 1h
     waitSyncPeriod: 15s
     syncJitterPeriod: 5m
+  tokenRequestor:
+    concurrentSyncs: 5
 resources:
   capacity:
     shoots: 200
@@ -110,7 +111,6 @@ debugging:
 featureGates:
   HVPA: true
   HVPAForShootedSeed: true
-  APIServerSNI: true
   DefaultSeccompProfile: true
   CoreDNSQueryRewriting: true
   # Enable IPv6SingleStack to allow creating IPv6 seed clusters without changing the config.
@@ -143,7 +143,7 @@ logging:
 #     - "development"
 #   shootEventLogging:
 #     enabled: true
-# sni: # SNI configuration used for APIServerSNI feature gate with default values.
+# sni:
 #   ingress:
 #     serviceName: istio-ingress
 #     namespace: istio-ingress

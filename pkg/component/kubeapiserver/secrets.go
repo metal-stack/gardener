@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	apiserverconfigv1 "k8s.io/apiserver/pkg/apis/config/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
 	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
@@ -103,16 +104,10 @@ func (k *kubeAPIServer) reconcileSecretServiceAccountKey(ctx context.Context) (*
 		options = append(options, secretsmanager.IgnoreOldSecrets())
 	}
 
-	secret, err := k.secretsManager.Generate(ctx, &secretsutils.RSASecretConfig{
+	return k.secretsManager.Generate(ctx, &secretsutils.RSASecretConfig{
 		Name: v1beta1constants.SecretNameServiceAccountKey,
 		Bits: 4096,
 	}, options...)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO(rfranzke): Remove this in a future release.
-	return secret, kubernetesutils.DeleteObject(ctx, k.client.Client(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "service-account-key", Namespace: k.namespace}})
 }
 
 func (k *kubeAPIServer) reconcileSecretStaticToken(ctx context.Context) (*corev1.Secret, error) {
@@ -193,9 +188,7 @@ func (k *kubeAPIServer) reconcileSecretETCDEncryptionConfiguration(ctx context.C
 
 	encryptionConfiguration := &apiserverconfigv1.EncryptionConfiguration{
 		Resources: []apiserverconfigv1.ResourceConfiguration{{
-			Resources: []string{
-				"secrets",
-			},
+			Resources: sets.List(sets.New(k.values.ETCDEncryption.Resources...).Insert("secrets")),
 			Providers: []apiserverconfigv1.ProviderConfiguration{
 				{
 					AESCBC: &apiserverconfigv1.AESConfiguration{

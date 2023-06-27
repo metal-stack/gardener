@@ -22,13 +22,18 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/clock"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/gardener/gardener/charts"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
+	"github.com/gardener/gardener/pkg/controller/tokenrequestor"
 	"github.com/gardener/gardener/pkg/gardenlet/apis/config"
 	"github.com/gardener/gardener/pkg/gardenlet/controller/backupbucket"
 	"github.com/gardener/gardener/pkg/gardenlet/controller/backupentry"
@@ -38,7 +43,6 @@ import (
 	"github.com/gardener/gardener/pkg/gardenlet/controller/networkpolicy"
 	"github.com/gardener/gardener/pkg/gardenlet/controller/seed"
 	"github.com/gardener/gardener/pkg/gardenlet/controller/shoot"
-	"github.com/gardener/gardener/pkg/gardenlet/controller/shootstate"
 	"github.com/gardener/gardener/pkg/healthz"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
@@ -133,12 +137,18 @@ func AddToManager(
 		return fmt.Errorf("failed adding Seed controller: %w", err)
 	}
 
-	if err := shoot.AddToManager(mgr, gardenCluster, seedClientSet, shootClientMap, *cfg, identity, gardenClusterIdentity, imageVector); err != nil {
+	if err := shoot.AddToManager(ctx, mgr, gardenCluster, seedCluster, seedClientSet, shootClientMap, *cfg, identity, gardenClusterIdentity, imageVector); err != nil {
 		return fmt.Errorf("failed adding Shoot controller: %w", err)
 	}
 
-	if err := shootstate.AddToManager(mgr, gardenCluster, seedCluster, *cfg); err != nil {
-		return fmt.Errorf("failed adding ShootState controller: %w", err)
+	if err := (&tokenrequestor.Reconciler{
+		ConcurrentSyncs: pointer.IntDeref(cfg.Controllers.TokenRequestor.ConcurrentSyncs, 0),
+		Clock:           clock.RealClock{},
+		JitterFunc:      wait.Jitter,
+		Class:           pointer.String(resourcesv1alpha1.ResourceManagerClassGarden),
+		TargetNamespace: gardenerutils.ComputeGardenNamespace(cfg.SeedConfig.Name),
+	}).AddToManager(mgr, seedCluster, gardenCluster); err != nil {
+		return fmt.Errorf("failed adding token requestor controller: %w", err)
 	}
 
 	return nil

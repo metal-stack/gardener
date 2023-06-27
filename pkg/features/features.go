@@ -37,37 +37,6 @@ const (
 	// alpha: v0.32.0
 	HVPAForShootedSeed featuregate.Feature = "HVPAForShootedSeed"
 
-	// APIServerSNI allows to use only one LoadBalancer in the Seed cluster
-	// for all Shoot clusters.
-	// See https://github.com/gardener/gardener/blob/master/docs/proposals/08-shoot-apiserver-via-sni.md
-	// owner @ScheererJ @DockToFuture
-	// alpha: v1.7.0
-	// beta: v1.19.0
-	// deprecated: v1.48.0
-	APIServerSNI featuregate.Feature = "APIServerSNI"
-
-	// SeedChange enables updating the `spec.seedName` field during shoot validation from a non-empty value
-	// in order to trigger shoot control plane migration.
-	// owner: @plkokanov
-	// alpha: v1.12.0
-	// beta: v1.53.0
-	// GA: v1.69.0
-	SeedChange featuregate.Feature = "SeedChange"
-
-	// CopyEtcdBackupsDuringControlPlaneMigration enables the copy of etcd backups from the object store of the source seed
-	// to the object store of the destination seed during control plane migration.
-	// owner: @plkokanov
-	// alpha: v1.37.0
-	// beta: v1.53.0
-	// GA: v1.69.0
-	CopyEtcdBackupsDuringControlPlaneMigration featuregate.Feature = "CopyEtcdBackupsDuringControlPlaneMigration"
-
-	// HAControlPlanes allows shoot control planes to be run in high availability mode.
-	// owner: @shreyas-s-rao @timuthy
-	// alpha: v1.49.0
-	// beta: v1.71.0
-	HAControlPlanes featuregate.Feature = "HAControlPlanes"
-
 	// DefaultSeccompProfile defaults the seccomp profile for Gardener managed workload in the seed to RuntimeDefault.
 	// owner: @dimityrmirchev
 	// alpha: v1.54.0
@@ -89,24 +58,31 @@ const (
 	// alpha: v1.64.0
 	MutableShootSpecNetworkingNodes featuregate.Feature = "MutableShootSpecNetworkingNodes"
 
-	// FullNetworkPoliciesInRuntimeCluster enables gardenlet's NetworkPolicy controller to place 'deny-all' network policies in
-	// all relevant namespaces in the seed cluster.
-	// owner: @rfranzke
-	// alpha: v1.66.0
-	// beta: v1.71.0
-	FullNetworkPoliciesInRuntimeCluster featuregate.Feature = "FullNetworkPoliciesInRuntimeCluster"
-
 	// WorkerlessShoots allows creation of Shoot clusters with no worker pools.
 	// owner: @acumino @ary1992 @shafeeqes
 	// alpha: v1.70.0
 	WorkerlessShoots featuregate.Feature = "WorkerlessShoots"
+
+	// MachineControllerManagerDeployment enables Gardener to take over the deployment of the
+	// machine-controller-manager. If enabled, all registered provider extensions must support injecting the
+	// provider-specific MCM provider sidecar container into the deployment via the `controlplane` webhook.
+	// owner: @rfranzke @JensAc @mreiger
+	// alpha: v1.73.0
+	MachineControllerManagerDeployment featuregate.Feature = "MachineControllerManagerDeployment"
+
+	// DisableScalingClassesForShoots disables assigning a ScalingClass to Shoots based on their maximum Node count
+	// All Shoot kube-apiservers will get the same initial resource requests for CPU and memory instead of making this
+	// depend on the ScalingClass
+	// owner: @voelzmo, @andrerun
+	// alpha: v1.73.0
+	DisableScalingClassesForShoots featuregate.Feature = "DisableScalingClassesForShoots"
 )
 
 // DefaultFeatureGate is the central feature gate map used by all gardener components.
 // On startup, the component needs to register all feature gates that are available for this component via `Add`, e.g.:
 //
 //	 utilruntime.Must(features.DefaultFeatureGate.Add(features.GetFeatures(
-//			features.HAControlPlanes,
+//			features.MyFeatureGateName,
 //		)))
 //
 // With this, every component has its individual set of available feature gates (different to Kubernetes, where all
@@ -126,18 +102,15 @@ const (
 var DefaultFeatureGate = utilfeature.DefaultMutableFeatureGate
 
 var allFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	HVPA:               {Default: false, PreRelease: featuregate.Alpha},
-	HVPAForShootedSeed: {Default: false, PreRelease: featuregate.Alpha},
-	APIServerSNI:       {Default: true, PreRelease: featuregate.Deprecated, LockToDefault: true},
-	SeedChange:         {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
-	CopyEtcdBackupsDuringControlPlaneMigration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
-	HAControlPlanes:                     {Default: true, PreRelease: featuregate.Beta},
-	DefaultSeccompProfile:               {Default: false, PreRelease: featuregate.Alpha},
-	CoreDNSQueryRewriting:               {Default: false, PreRelease: featuregate.Alpha},
-	IPv6SingleStack:                     {Default: false, PreRelease: featuregate.Alpha},
-	MutableShootSpecNetworkingNodes:     {Default: false, PreRelease: featuregate.Alpha},
-	FullNetworkPoliciesInRuntimeCluster: {Default: true, PreRelease: featuregate.Beta},
-	WorkerlessShoots:                    {Default: false, PreRelease: featuregate.Alpha},
+	HVPA:                               {Default: false, PreRelease: featuregate.Alpha},
+	HVPAForShootedSeed:                 {Default: false, PreRelease: featuregate.Alpha},
+	DefaultSeccompProfile:              {Default: false, PreRelease: featuregate.Alpha},
+	CoreDNSQueryRewriting:              {Default: false, PreRelease: featuregate.Alpha},
+	IPv6SingleStack:                    {Default: false, PreRelease: featuregate.Alpha},
+	MutableShootSpecNetworkingNodes:    {Default: false, PreRelease: featuregate.Alpha},
+	WorkerlessShoots:                   {Default: false, PreRelease: featuregate.Alpha},
+	MachineControllerManagerDeployment: {Default: false, PreRelease: featuregate.Alpha},
+	DisableScalingClassesForShoots:     {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // GetFeatures returns a feature gate map with the respective specifications. Non-existing feature gates are ignored.

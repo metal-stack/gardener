@@ -84,10 +84,9 @@ func (b *Botanist) DefaultVPNSeedServer() (vpnseedserver.Interface, error) {
 		HighAvailabilityEnabled:              b.Shoot.VPNHighAvailabilityEnabled,
 		HighAvailabilityNumberOfSeedServers:  b.Shoot.VPNHighAvailabilityNumberOfSeedServers,
 		HighAvailabilityNumberOfShootClients: b.Shoot.VPNHighAvailabilityNumberOfShootClients,
-		SeedVersion:                          b.Seed.KubernetesVersion,
 	}
 
-	if b.APIServerSNIEnabled() {
+	if b.ShootUsesDNS() {
 		values.KubeAPIServerHost = pointer.String(b.outOfClusterAPIServerFQDN())
 	}
 

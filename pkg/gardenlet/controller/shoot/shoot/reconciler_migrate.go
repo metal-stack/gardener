@@ -27,10 +27,12 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/operation"
 	botanistpkg "github.com/gardener/gardener/pkg/operation/botanist"
 	errorsutils "github.com/gardener/gardener/pkg/utils/errors"
 	"github.com/gardener/gardener/pkg/utils/flow"
+	"github.com/gardener/gardener/pkg/utils/gardener/shootstate"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	retryutils "github.com/gardener/gardener/pkg/utils/retry"
 )
@@ -130,14 +132,9 @@ func (r *Reconciler) runMigrateShootFlow(ctx context.Context, o *operation.Opera
 
 		g = flow.NewGraph("Shoot cluster preparation for migration")
 
-		ensureShootStateExists = g.Add(flow.Task{
-			Name: "Ensuring that ShootState exists",
-			Fn:   flow.TaskFn(botanist.EnsureShootStateExists).RetryUntilTimeout(defaultInterval, defaultTimeout),
-		})
 		initializeSecretsManagement = g.Add(flow.Task{
-			Name:         "Initializing secrets management",
-			Fn:           flow.TaskFn(botanist.InitializeSecretsManagement).DoIf(nonTerminatingNamespace).RetryUntilTimeout(defaultInterval, defaultTimeout),
-			Dependencies: flow.NewTaskIDs(ensureShootStateExists),
+			Name: "Initializing secrets management",
+			Fn:   flow.TaskFn(botanist.InitializeSecretsManagement).DoIf(nonTerminatingNamespace).RetryUntilTimeout(defaultInterval, defaultTimeout),
 		})
 		deployETCD = g.Add(flow.Task{
 			Name:         "Deploying main and events etcd",
@@ -201,10 +198,33 @@ func (r *Reconciler) runMigrateShootFlow(ctx context.Context, o *operation.Opera
 			Fn:           flow.TaskFn(botanist.WaitUntilManagedResourcesDeleted).Timeout(10 * time.Minute),
 			Dependencies: flow.NewTaskIDs(deleteManagedResources),
 		})
+		deleteMachineControllerManager = g.Add(flow.Task{
+			Name: "Deleting machine-controller-manager",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.Shoot.Components.ControlPlane.MachineControllerManager.Destroy(ctx)
+			}).SkipIf(o.Shoot.IsWorkerless).DoIf(features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment)),
+			Dependencies: flow.NewTaskIDs(waitForManagedResourcesDeletion),
+		})
+		waitUntilMachineControllerManagerDeleted = g.Add(flow.Task{
+			Name: "Waiting until machine-controller-manager has been deleted",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				return botanist.Shoot.Components.ControlPlane.MachineControllerManager.WaitCleanup(ctx)
+			}).SkipIf(o.Shoot.IsWorkerless).DoIf(features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment)),
+			Dependencies: flow.NewTaskIDs(deleteMachineControllerManager),
+		})
+		// TODO(rfranzke): Make the 'persistShootState' task dependent on 'waitUntilExtensionResourcesMigrated' after
+		//  v1.79 has been released.
+		persistShootState = g.Add(flow.Task{
+			Name: "Persisting ShootState in garden cluster",
+			Fn: func(ctx context.Context) error {
+				return shootstate.Deploy(ctx, r.Clock, botanist.GardenClient, botanist.SeedClientSet.Client(), botanist.Shoot.GetInfo(), false)
+			},
+			Dependencies: flow.NewTaskIDs(waitUntilMachineControllerManagerDeleted),
+		})
 		migrateExtensionResources = g.Add(flow.Task{
 			Name:         "Migrating extension resources",
 			Fn:           botanist.MigrateExtensionResourcesInParallel,
-			Dependencies: flow.NewTaskIDs(waitForManagedResourcesDeletion),
+			Dependencies: flow.NewTaskIDs(persistShootState),
 		})
 		waitUntilExtensionResourcesMigrated = g.Add(flow.Task{
 			Name:         "Waiting until extension resources have been migrated",
@@ -243,7 +263,7 @@ func (r *Reconciler) runMigrateShootFlow(ctx context.Context, o *operation.Opera
 		})
 		deleteStaleExtensionResources = g.Add(flow.Task{
 			Name:         "Deleting stale extensions",
-			Fn:           flow.TaskFn(botanist.Shoot.Components.Extensions.Extension.DeleteStaleResources),
+			Fn:           botanist.Shoot.Components.Extensions.Extension.DeleteStaleResources,
 			Dependencies: flow.NewTaskIDs(waitUntilExtensionResourcesMigrated),
 		})
 		waitUntilStaleExtensionResourcesDeleted = g.Add(flow.Task{
@@ -356,11 +376,6 @@ func (r *Reconciler) runMigrateShootFlow(ctx context.Context, o *operation.Opera
 			Fn:           botanist.MigrateInternalDNSRecord,
 			Dependencies: flow.NewTaskIDs(waitUntilKubeAPIServerDeleted),
 		})
-		migrateOrDestroyOwnerDNSRecord = g.Add(flow.Task{
-			Name:         "Migrating owner domain DNS record",
-			Fn:           flow.TaskFn(botanist.MigrateOrDestroyOwnerDNSResources).DoIf(nonTerminatingNamespace),
-			Dependencies: flow.NewTaskIDs(waitUntilKubeAPIServerDeleted),
-		})
 		syncPoint = flow.NewTaskIDs(
 			waitUntilExtensionsAfterKubeAPIServerDeleted,
 			waitUntilExtensionsDeleted,
@@ -369,7 +384,7 @@ func (r *Reconciler) runMigrateShootFlow(ctx context.Context, o *operation.Opera
 		destroyDNSRecords = g.Add(flow.Task{
 			Name:         "Deleting DNSRecords from the Shoot namespace",
 			Fn:           flow.TaskFn(botanist.DestroyDNSRecords).DoIf(nonTerminatingNamespace),
-			Dependencies: flow.NewTaskIDs(syncPoint, migrateIngressDNSRecord, migrateExternalDNSRecord, migrateInternalDNSRecord, migrateOrDestroyOwnerDNSRecord),
+			Dependencies: flow.NewTaskIDs(syncPoint, migrateIngressDNSRecord, migrateExternalDNSRecord, migrateInternalDNSRecord),
 		})
 		createETCDSnapshot = g.Add(flow.Task{
 			Name:         "Creating ETCD Snapshot",

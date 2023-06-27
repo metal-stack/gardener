@@ -37,8 +37,10 @@ import (
 	kubernetesclient "github.com/gardener/gardener/pkg/client/kubernetes"
 	api "github.com/gardener/gardener/pkg/provider-local/apis/local"
 	"github.com/gardener/gardener/pkg/provider-local/apis/local/helper"
-	"github.com/gardener/gardener/pkg/provider-local/imagevector"
+	localimagevector "github.com/gardener/gardener/pkg/provider-local/imagevector"
 	"github.com/gardener/gardener/pkg/provider-local/local"
+	"github.com/gardener/gardener/pkg/utils/chart"
+	"github.com/gardener/gardener/pkg/utils/imagevector"
 )
 
 type delegateFactory struct {
@@ -51,17 +53,32 @@ type actuator struct {
 }
 
 // NewActuator creates a new Actuator that updates the status of the handled WorkerPoolConfigs.
-func NewActuator() worker.Actuator {
-	workerDelegate := &delegateFactory{}
+func NewActuator(gardenletManagesMCM bool) worker.Actuator {
+	var (
+		mcmName              string
+		mcmChartSeed         *chart.Chart
+		mcmChartShoot        *chart.Chart
+		imageVector          imagevector.ImageVector
+		chartRendererFactory extensionscontroller.ChartRendererFactory
+		workerDelegate       = &delegateFactory{}
+	)
+
+	if !gardenletManagesMCM {
+		mcmName = local.MachineControllerManagerName
+		mcmChartSeed = mcmChart
+		mcmChartShoot = mcmShootChart
+		imageVector = localimagevector.ImageVector()
+		chartRendererFactory = extensionscontroller.ChartRendererFactoryFunc(util.NewChartRendererForShoot)
+	}
 
 	return &actuator{
 		Actuator: genericactuator.NewActuator(
 			workerDelegate,
-			local.MachineControllerManagerName,
-			mcmChart,
-			mcmShootChart,
-			imagevector.ImageVector(),
-			extensionscontroller.ChartRendererFactoryFunc(util.NewChartRendererForShoot),
+			mcmName,
+			mcmChartSeed,
+			mcmChartShoot,
+			imageVector,
+			chartRendererFactory,
 		),
 		workerDelegate: workerDelegate,
 	}
@@ -161,14 +178,15 @@ func (d *delegateFactory) WorkerDelegate(_ context.Context, worker *extensionsv1
 
 type workerDelegate struct {
 	common.ClientContext
-	seedChartApplier   kubernetesclient.ChartApplier
-	serverVersion      string
-	cloudProfileConfig *api.CloudProfileConfig
-	cluster            *extensionscontroller.Cluster
-	worker             *extensionsv1alpha1.Worker
-	machineClasses     []map[string]interface{}
-	machineDeployments worker.MachineDeployments
-	machineImages      []api.MachineImage
+	seedChartApplier    kubernetesclient.ChartApplier
+	serverVersion       string
+	cloudProfileConfig  *api.CloudProfileConfig
+	cluster             *extensionscontroller.Cluster
+	worker              *extensionsv1alpha1.Worker
+	machineClassSecrets []*corev1.Secret
+	machineClasses      []*machinev1alpha1.MachineClass
+	machineImages       []api.MachineImage
+	machineDeployments  worker.MachineDeployments
 }
 
 // NewWorkerDelegate creates a new context for a worker reconciliation.

@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
 	"github.com/gardener/gardener/pkg/apis/core"
@@ -45,10 +46,56 @@ var _ = Describe("Strategy", func() {
 			Expect(newSeed.Status).To(Equal(oldSeed.Status))
 		})
 
-		It("should bump the generation if the spec changes", func() {
-			newSeed.Spec.Provider.Type = "foo"
-			strategy.PrepareForUpdate(ctx, newSeed, oldSeed)
-			Expect(newSeed.Generation).To(Equal(oldSeed.Generation + 1))
+		Context("generation increment", func() {
+			It("should not bump the generation if nothing changed", func() {
+				strategy.PrepareForUpdate(ctx, newSeed, oldSeed)
+
+				Expect(newSeed.Generation).To(Equal(oldSeed.Generation))
+			})
+
+			It("should bump the generation if the spec changed", func() {
+				newSeed.Spec.Provider.Type = "foo"
+
+				strategy.PrepareForUpdate(ctx, newSeed, oldSeed)
+
+				Expect(newSeed.Generation).To(Equal(oldSeed.Generation + 1))
+			})
+
+			It("should bump the generation if the deletionTimestamp was set", func() {
+				now := metav1.Now()
+				newSeed.DeletionTimestamp = &now
+
+				strategy.PrepareForUpdate(ctx, newSeed, oldSeed)
+
+				Expect(newSeed.Generation).To(Equal(oldSeed.Generation + 1))
+			})
+
+			It("should not bump the generation if the deletionTimestamp was already set", func() {
+				now := metav1.Now()
+				oldSeed.DeletionTimestamp = &now
+				newSeed.DeletionTimestamp = &now
+
+				strategy.PrepareForUpdate(ctx, newSeed, oldSeed)
+
+				Expect(newSeed.Generation).To(Equal(oldSeed.Generation))
+			})
+
+			It("should bump the generation if the operation annotation was set to renew-garden-access-secrets", func() {
+				metav1.SetMetaDataAnnotation(&newSeed.ObjectMeta, "gardener.cloud/operation", "renew-garden-access-secrets")
+
+				strategy.PrepareForUpdate(ctx, newSeed, oldSeed)
+
+				Expect(newSeed.Generation).To(Equal(oldSeed.Generation + 1))
+			})
+
+			It("should not bump the generation if the operation annotation didn't change", func() {
+				metav1.SetMetaDataAnnotation(&oldSeed.ObjectMeta, "gardener.cloud/operation", "renew-garden-access-secrets")
+				metav1.SetMetaDataAnnotation(&newSeed.ObjectMeta, "gardener.cloud/operation", "renew-garden-access-secrets")
+
+				strategy.PrepareForUpdate(ctx, newSeed, oldSeed)
+
+				Expect(newSeed.Generation).To(Equal(oldSeed.Generation))
+			})
 		})
 
 		Context("syncDependencyWatchdogSettings", func() {
@@ -121,6 +168,48 @@ var _ = Describe("Strategy", func() {
 				Expect(newSeed.Spec.Settings.DependencyWatchdog.Endpoint.Enabled).To(BeTrue())
 				Expect(newSeed.Spec.Settings.DependencyWatchdog.Prober.Enabled).To(BeTrue())
 				Expect(newSeed.Spec.Settings.DependencyWatchdog.Probe.Enabled).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("#Canonicalize", func() {
+		var seed *core.Seed
+
+		BeforeEach(func() {
+			seed = &core.Seed{}
+		})
+
+		Context("ownerChecks field", func() {
+			It("should drop the ownerChecks field when the settings is not nil", func() {
+				seed.Spec.Settings = &core.SeedSettings{
+					OwnerChecks: &core.SeedSettingOwnerChecks{
+						Enabled: false,
+					},
+				}
+
+				strategy.Canonicalize(seed)
+
+				Expect(seed.Spec.Settings.OwnerChecks).To(BeNil())
+
+			})
+
+			It("should do nothing when settings is nil", func() {
+				oldSeed := seed.DeepCopy()
+
+				strategy.Canonicalize(seed)
+
+				Expect(oldSeed).To(Equal(seed))
+			})
+
+			It("should do nothing when ownerChecks is nil", func() {
+				seed.Spec.Settings = &core.SeedSettings{
+					OwnerChecks: nil,
+				}
+				oldSeed := seed.DeepCopy()
+
+				strategy.Canonicalize(seed)
+
+				Expect(oldSeed).To(Equal(seed))
 			})
 		})
 	})

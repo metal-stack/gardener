@@ -43,7 +43,6 @@ import (
 	kubernetesmock "github.com/gardener/gardener/pkg/client/kubernetes/mock"
 	"github.com/gardener/gardener/pkg/component/extensions/dnsrecord"
 	mockdnsrecord "github.com/gardener/gardener/pkg/component/extensions/dnsrecord/mock"
-	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/gardenlet/apis/config"
 	"github.com/gardener/gardener/pkg/operation"
 	. "github.com/gardener/gardener/pkg/operation/botanist"
@@ -98,7 +97,6 @@ var _ = Describe("NginxIngress", func() {
 		})
 
 		It("should successfully create a nginxingress interface", func() {
-			defer test.WithFeatureGate(features.DefaultFeatureGate, features.APIServerSNI, true)()
 			kubernetesClient.EXPECT().Client()
 			botanist.ImageVector = imagevector.ImageVector{{Name: "nginx-ingress-controller"}, {Name: "ingress-default-backend"}}
 
@@ -384,7 +382,7 @@ var _ = Describe("NginxIngress", func() {
 			var shootState = &gardencorev1beta1.ShootState{}
 
 			BeforeEach(func() {
-				b.SetShootState(shootState)
+				b.Shoot.SetShootState(shootState)
 				b.Shoot.GetInfo().Status = gardencorev1beta1.ShootStatus{
 					LastOperation: &gardencorev1beta1.LastOperation{
 						Type: gardencorev1beta1.LastOperationTypeRestore,

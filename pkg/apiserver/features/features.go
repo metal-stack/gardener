@@ -23,8 +23,6 @@ import (
 // RegisterFeatureGates registers the feature gates of gardener-apiserver.
 func RegisterFeatureGates() {
 	utilruntime.Must(features.DefaultFeatureGate.Add(features.GetFeatures(
-		features.HAControlPlanes,
-		features.SeedChange,
 		features.IPv6SingleStack,
 		features.MutableShootSpecNetworkingNodes,
 		features.WorkerlessShoots,

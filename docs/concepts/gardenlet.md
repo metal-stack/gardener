@@ -86,7 +86,7 @@ The certificate used to authenticate the gardenlet against the API server
 has a certain validity based on the configuration of the garden cluster
 (`--cluster-signing-duration` flag of the `kube-controller-manager` (default `1y`)).
 
-> If your garden cluster is of at least Kubernetes v1.22, then you can also configure the validity for the client certificate by specifying `.gardenClientConnection.kubeconfigValidity.validity` in the gardenlet's component configuration.
+> You can also configure the validity for the client certificate by specifying `.gardenClientConnection.kubeconfigValidity.validity` in the gardenlet's component configuration.
 > Note that changing this value will only take effect when the kubeconfig is rotated again (it is not picked up immediately).
 > The minimum validity is `10m` (that's what is enforced by the `CertificateSigningRequest` API in Kubernetes which is used by the gardenlet).
 
@@ -429,22 +429,22 @@ A pod is considered stale when:
 - it was terminated with reason starting with `OutOf` (e.g., `OutOfCpu`).
 - it is stuck in termination (i.e., if its `deletionTimestamp` is more than `5m` ago).
 
-### [`ShootState` Controller](../../pkg/gardenlet/controller/shootstate)
+#### "State" Reconciler
 
-The `ShootState` controller in the `gardenlet` reconciles resources containing information that has to be synced to the `ShootState`.
-This information is used when a [control plane migration](../usage/control_plane_migration.md) is performed.
+This reconciler periodically (default: every `6h`) performs backups of the state of `Shoot` clusters and persists them into `ShootState` resources into the same namespace as the `Shoot`s in the garden cluster.
+It is only started in case the `gardenlet` is responsible for an unmanaged `Seed`, i.e. a `Seed` which is not backed by a `seedmanagement.gardener.cloud/v1alpha1.ManagedSeed` object.
+Alternatively, it can be disabled by setting the `concurrentSyncs=0` for the controller in the `gardenlet`'s component configuration.
 
-#### "Extensions" Reconciler
+Please refer to [GEP-22: Improved Usage of the `ShootState` API](../proposals/22-improved-usage-of-shootstate-api.md) for all information.
 
-This reconciler watches resources in the `extensions.gardener.cloud` API group in the seed cluster which contain a `Shoot`-specific state or data.
-Those are `BackupEntry`s, `ContainerRuntime`s, `ControlPlane`s, `DNSRecord`s, `Extension`s, `Infrastructure`s, `Network`s, `OperatingSystemConfig`s, and `Worker`s.
+### [`TokenRequestor` Controller](../../pkg/controller/tokenrequestor)
 
-When there is a change in the `.status.state` or `.status.resources[]` fields of these resources, then this information is synced into the `ShootState` resource in the garden cluster.
+The `gardenlet` uses an instance of the `TokenRequestor` controller which initially was developed in the context of the `gardener-resource-manager`, please read [this document](resource-manager.md#tokenrequestor-controller) for further information.
 
-#### "Secret" Reconciler
-
-This reconciler reconciles `Secret`s having labels `managed-by=secrets-manager` and `persist=true` in the shoot namespaces in the seed cluster.
-It syncs them to the `ShootState` so that the secrets can be restored from there in case a shoot control plane has to be restored to another seed cluster (in case of migration).
+`gardenlet` uses it for requesting tokens for components running in the seed cluster that need to communicate with the garden cluster.
+The mechanism works the same way as for shoot control plane components running in the seed which need to communicate with the shoot cluster.
+However, `gardenlet`'s instance of the `TokenRequestor` controller is restricted to `Secret`s labeled with `resources.gardener.cloud/class=garden`.
+Furthermore, it doesn't respect the `serviceaccount.resources.gardener.cloud/namespace` annotation. Instead, it always uses the seed's namespace in the garden cluster for managing `ServiceAccounts` and their tokens.
 
 ## Managed Seeds
 

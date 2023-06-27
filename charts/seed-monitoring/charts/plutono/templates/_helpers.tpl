@@ -57,7 +57,7 @@ plutono-datasources-{{ include "plutono.datasources.data" . | sha256sum | trunc 
 
 {{- define "plutono.dashboards.data" -}}
 {{-   if eq $.Values.workerless false }}
-{{-     if .Values.sni.enabled }}
+{{-     if .Values.includeIstioDashboards }}
 {{        range $name, $bytes := .Files.Glob "dashboards/owners/istio/**.json" }}
 {{          base $name }}: |-
 {{          toString $bytes | include "plutono.toCompactedJson" | indent 2 }}
@@ -65,6 +65,12 @@ plutono-datasources-{{ include "plutono.datasources.data" . | sha256sum | trunc 
 {{-     end }}
 {{-     if .Values.nodeLocalDNS.enabled }}
 {{        range $name, $bytes := .Files.Glob "dashboards/dns/**.json" }}
+{{          base $name }}: |-
+{{          toString $bytes | include "plutono.toCompactedJson" | indent 2 }}
+{{-       end }}
+{{-     end }}
+{{-     if .Values.gardenletManagesMCM }}
+{{        range $name, $bytes := .Files.Glob "dashboards/machine-controller-manager/**.json" }}
 {{          base $name }}: |-
 {{          toString $bytes | include "plutono.toCompactedJson" | indent 2 }}
 {{-       end }}

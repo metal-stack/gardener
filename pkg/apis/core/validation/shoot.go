@@ -417,9 +417,8 @@ func validateAddons(addons *core.Addons, kubernetes core.Kubernetes, purpose *co
 		return allErrs
 	}
 
-	versionGreaterOrEqual122, _ := versionutils.CheckVersionMeetsConstraint(kubernetes.Version, ">= 1.22")
-	if (helper.NginxIngressEnabled(addons) || helper.KubernetesDashboardEnabled(addons)) && versionGreaterOrEqual122 && (purpose != nil && *purpose != core.ShootPurposeEvaluation) {
-		allErrs = append(allErrs, field.Forbidden(fldPath, "for Kubernetes versions >= 1.22 addons can only be enabled on shoots with .spec.purpose=evaluation"))
+	if (helper.NginxIngressEnabled(addons) || helper.KubernetesDashboardEnabled(addons)) && (purpose != nil && *purpose != core.ShootPurposeEvaluation) {
+		allErrs = append(allErrs, field.Forbidden(fldPath, "addons can only be enabled on shoots with .spec.purpose=evaluation"))
 	}
 
 	if helper.NginxIngressEnabled(addons) {
@@ -750,14 +749,14 @@ func validateExtensions(extensions []core.Extension, fldPath *field.Path) field.
 
 func validateResources(resources []core.NamedResourceReference, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	names := make(map[string]bool)
+	names := sets.Set[string]{}
 	for i, resource := range resources {
 		if resource.Name == "" {
 			allErrs = append(allErrs, field.Required(fldPath.Index(i).Child("name"), "field must not be empty"))
-		} else if names[resource.Name] {
+		} else if names.Has(resource.Name) {
 			allErrs = append(allErrs, field.Duplicate(fldPath.Index(i).Child("name"), resource.Name))
 		} else {
-			names[resource.Name] = true
+			names.Insert(resource.Name)
 		}
 		allErrs = append(allErrs, validateCrossVersionObjectReference(resource.ResourceRef, fldPath.Index(i).Child("resourceRef"))...)
 	}
@@ -1141,11 +1140,6 @@ func ValidateKubeAPIServer(kubeAPIServer *core.KubeAPIServerConfig, version stri
 			if duration := kubeAPIServer.ServiceAccountConfig.MaxTokenExpiration.Duration; duration > 2160*time.Hour {
 				allErrs = append(allErrs, field.Forbidden(fldPath.Child("serviceAccountConfig", "maxTokenExpiration"), "must be at most 2160h (90d)"))
 			}
-		}
-
-		geqKubernetes122, _ := versionutils.CheckVersionMeetsConstraint(version, ">= 1.22")
-		if kubeAPIServer.ServiceAccountConfig.AcceptedIssuers != nil && !geqKubernetes122 {
-			allErrs = append(allErrs, field.Forbidden(fldPath.Child("serviceAccountConfig", "acceptedIssuers"), "this field is only available in Kubernetes v1.22+"))
 		}
 	}
 
@@ -1579,10 +1573,6 @@ func ValidateKubeletConfig(kubeletConfig core.KubeletConfig, version string, doc
 	}
 
 	if v := kubeletConfig.MemorySwap; v != nil {
-		if k8sVersionIsLessThan122, _ := versionutils.CompareVersions(version, "<", "1.22"); k8sVersionIsLessThan122 {
-			allErrs = append(allErrs, field.Forbidden(fldPath.Child("memorySwap"), "configuring swap behaviour is not available for kubernetes versions < 1.22"))
-		}
-
 		if pointer.BoolDeref(kubeletConfig.FailSwapOn, false) {
 			allErrs = append(allErrs, field.Forbidden(fldPath.Child("memorySwap"), "configuring swap behaviour is not available when the kubelet is configured with 'FailSwapOn=true'"))
 		}

@@ -21,7 +21,6 @@ import (
 	"os"
 	goruntime "runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -31,12 +30,9 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/version"
@@ -54,16 +50,15 @@ import (
 
 	"github.com/gardener/gardener/cmd/gardenlet/app/bootstrappers"
 	"github.com/gardener/gardener/pkg/api/indexer"
-	"github.com/gardener/gardener/pkg/apis/core"
+	gardencore "github.com/gardener/gardener/pkg/apis/core"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/apis/operations"
 	operationsv1alpha1 "github.com/gardener/gardener/pkg/apis/operations/v1alpha1"
-	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
+	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	clientmapbuilder "github.com/gardener/gardener/pkg/client/kubernetes/clientmap/builder"
-	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubeapiserver/constants"
-	"github.com/gardener/gardener/pkg/component/vpnseedserver"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/controllerutils/routes"
 	"github.com/gardener/gardener/pkg/features"
@@ -77,7 +72,9 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	"github.com/gardener/gardener/pkg/utils/gardener/shootstate"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
 
 // Name is a const for the name of this component.
@@ -267,7 +264,7 @@ func (g *garden) Start(ctx context.Context) error {
 			// gardenlet should watch only objects which are related to the seed it is responsible for.
 			opts.SelectorsByObject = map[client.Object]cache.ObjectSelector{
 				&gardencorev1beta1.ControllerInstallation{}: {
-					Field: fields.SelectorFromSet(fields.Set{core.SeedRefName: g.config.SeedConfig.SeedTemplate.Name}),
+					Field: fields.SelectorFromSet(fields.Set{gardencore.SeedRefName: g.config.SeedConfig.SeedTemplate.Name}),
 				},
 				&operationsv1alpha1.Bastion{}: {
 					Field: fields.SelectorFromSet(fields.Set{operations.BastionSeedName: g.config.SeedConfig.SeedTemplate.Name}),
@@ -277,12 +274,14 @@ func (g *garden) Start(ctx context.Context) error {
 			return kubernetes.AggregatorCacheFunc(
 				kubernetes.NewRuntimeCache,
 				map[client.Object]cache.NewCacheFunc{
-					// Gardenlet should watch secrets only in the seed namespace of the seed it is responsible for. We don't use
-					// any selector mechanism here since we want to still fall back to reading secrets with the API reader
-					// (i.e., not from cache) in case the respective secret is not found in the cache.
-					&corev1.Secret{}: cache.MultiNamespacedCacheBuilder([]string{gardenerutils.ComputeGardenNamespace(g.kubeconfigBootstrapResult.SeedName)}),
-					// Gardenlet does not have the required RBAC permissions for listing/watching the following resources on cluster level.
-					// Hence, we need to watch them individually with the help of a SingleObject cache.
+					// Gardenlet should watch secrets only in the seed namespace of the seed it is responsible for. We
+					// don't use any selector mechanism here since we want to still fall back to reading secrets with
+					// the API reader (i.e., not from cache) in case the respective secret is not found in the cache.
+					&corev1.Secret{}:         cache.MultiNamespacedCacheBuilder([]string{gardenerutils.ComputeGardenNamespace(g.kubeconfigBootstrapResult.SeedName)}),
+					&corev1.ServiceAccount{}: cache.MultiNamespacedCacheBuilder([]string{gardenerutils.ComputeGardenNamespace(g.kubeconfigBootstrapResult.SeedName)}),
+					// Gardenlet does not have the required RBAC permissions for listing/watching the following
+					// resources on cluster level. Hence, we need to watch them individually with the help of a
+					// SingleObject cache.
 					&corev1.ConfigMap{}:                         kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &corev1.ConfigMap{}),
 					&corev1.Namespace{}:                         kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &corev1.Namespace{}),
 					&coordinationv1.Lease{}:                     kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &coordinationv1.Lease{}),
@@ -290,6 +289,7 @@ func (g *garden) Start(ctx context.Context) error {
 					&gardencorev1beta1.CloudProfile{}:           kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &gardencorev1beta1.CloudProfile{}),
 					&gardencorev1beta1.ControllerDeployment{}:   kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &gardencorev1beta1.ControllerDeployment{}),
 					&gardencorev1beta1.ExposureClass{}:          kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &gardencorev1beta1.ExposureClass{}),
+					&gardencorev1beta1.InternalSecret{}:         kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &gardencorev1beta1.InternalSecret{}),
 					&gardencorev1beta1.Project{}:                kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &gardencorev1beta1.Project{}),
 					&gardencorev1beta1.SecretBinding{}:          kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &gardencorev1beta1.SecretBinding{}),
 					&gardencorev1beta1.ShootState{}:             kubernetes.SingleObjectCacheFunc(log, kubernetes.GardenScheme, &gardencorev1beta1.ShootState{}),
@@ -354,12 +354,15 @@ func (g *garden) Start(ctx context.Context) error {
 		return err
 	}
 
-	// Migrate all relevant services in shoot control planes once, so that we don't have to wait for their reconciliation
-	// and can ensure the required policies are created.
-	// TODO(timuthy, rfranzke): To be removed in a future release.
-	log.Info("Migrating all relevant shoot control plane services to create required network policies")
-	if err := g.migrateAllShootServicesForNetworkPolicies(ctx, log); err != nil {
-		return err
+	// TODO(rfranzke): Remove this code after v1.74 has been released.
+	{
+		log.Info("Removing legacy ShootState controller finalizer from persistable secrets in seed cluster")
+		if err := removeLegacyShootStateControllerFinalizerFromSecrets(ctx, g.mgr.GetClient()); err != nil {
+			return err
+		}
+		if err := g.cleanupStaleShootStates(ctx, gardenCluster.GetClient()); err != nil {
+			return err
+		}
 	}
 
 	log.Info("Setting up shoot client map")
@@ -453,173 +456,6 @@ func (g *garden) registerSeed(ctx context.Context, gardenClient client.Client) e
 	})
 }
 
-func (g *garden) migrateAllShootServicesForNetworkPolicies(ctx context.Context, log logr.Logger) error {
-	var taskFns []flow.TaskFn
-
-	// kube-apiserver services
-	kubeAPIServerServiceList := &corev1.ServiceList{}
-	if err := g.mgr.GetClient().List(ctx, kubeAPIServerServiceList, client.MatchingLabels{v1beta1constants.LabelApp: v1beta1constants.LabelKubernetes, v1beta1constants.LabelRole: v1beta1constants.LabelAPIServer}); err != nil {
-		return err
-	}
-
-	taskFns = append(taskFns, migrationTasksForServices(g.mgr.GetClient(), kubeAPIServerServiceList.Items, kubeapiserverconstants.Port, true)...)
-
-	// vpn-seed-server services
-	for _, serviceName := range []string{vpnseedserver.ServiceName, vpnseedserver.ServiceName + "-0", vpnseedserver.ServiceName + "-1"} {
-		serviceList := &corev1.ServiceList{}
-		// Use APIReader here because an index on `metadata.name` is not available in the runtime client.
-		if err := g.mgr.GetAPIReader().List(ctx, serviceList, client.MatchingFieldsSelector{
-			Selector: fields.OneTermEqualSelector(metav1.ObjectNameField, serviceName),
-		}); err != nil {
-			return err
-		}
-
-		taskFns = append(taskFns, migrationTasksForServices(g.mgr.GetClient(), serviceList.Items, vpnseedserver.MetricsPort, false)...)
-	}
-
-	// vali services
-	serviceList := &corev1.ServiceList{}
-	if err := g.mgr.GetClient().List(ctx, serviceList, client.MatchingLabels{"app": "vali", "role": "logging"}); err != nil {
-		return err
-	}
-
-	// drop vali services of non-shoot namespaces since they should not be mutated
-	for i := len(serviceList.Items) - 1; i >= 0; i-- {
-		if !strings.HasPrefix(serviceList.Items[i].Namespace, v1beta1constants.TechnicalIDPrefix) {
-			serviceList.Items = append(serviceList.Items[:i], serviceList.Items[i+1:]...)
-		}
-	}
-
-	taskFns = append(taskFns, migrationTasksForValiServices(g.mgr.GetClient(), serviceList.Items)...)
-
-	// prometheus namespaces
-	serviceList = &corev1.ServiceList{}
-	if err := g.mgr.GetClient().List(ctx, serviceList, client.MatchingLabels{"app": "prometheus", "role": "monitoring"}); err != nil {
-		return err
-	}
-
-	// drop prometheus services of non-shoot namespaces since they one should not be mutated
-	for i := len(serviceList.Items) - 1; i >= 0; i-- {
-		if !strings.HasPrefix(serviceList.Items[i].Namespace, v1beta1constants.TechnicalIDPrefix) {
-			serviceList.Items = append(serviceList.Items[:i], serviceList.Items[i+1:]...)
-		}
-	}
-
-	taskFns = append(taskFns, migrationTasksForPrometheusServices(g.mgr.GetClient(), serviceList.Items)...)
-
-	// vpa-recommender services for shoot namespaces
-	namespaceList := &corev1.NamespaceList{}
-	if err := g.mgr.GetClient().List(ctx, namespaceList, client.MatchingLabels{v1beta1constants.GardenRole: v1beta1constants.GardenRoleShoot}); err != nil {
-		return err
-	}
-
-	taskFns = append(taskFns, migrationTasksForShootVPARecommenders(g.mgr.GetClient(), namespaceList.Items)...)
-
-	return flow.Parallel(taskFns...)(ctx)
-}
-
-func migrationTasksForServices(cl client.Client, services []corev1.Service, port int, withGardenNamespaceSelector bool) []flow.TaskFn {
-	var taskFns []flow.TaskFn
-
-	for _, svc := range services {
-		service := svc
-
-		taskFns = append(taskFns, func(ctx context.Context) error {
-			selectors := []metav1.LabelSelector{}
-			if withGardenNamespaceSelector {
-				selectors = append(selectors, metav1.LabelSelector{MatchLabels: map[string]string{corev1.LabelMetadataName: v1beta1constants.GardenNamespace}})
-			}
-
-			selectors = append(selectors,
-				metav1.LabelSelector{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleIstioIngress}},
-				metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: v1beta1constants.LabelExposureClassHandlerName, Operator: metav1.LabelSelectorOpExists}}},
-			)
-
-			if withGardenNamespaceSelector && features.DefaultFeatureGate.Enabled(features.FullNetworkPoliciesInRuntimeCluster) {
-				selectors = append(selectors, metav1.LabelSelector{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleExtension}})
-			}
-
-			patch := client.MergeFrom(service.DeepCopy())
-			metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingPodLabelSelectorNamespaceAlias, v1beta1constants.LabelNetworkPolicyShootNamespaceAlias)
-			utilruntime.Must(gardenerutils.InjectNetworkPolicyNamespaceSelectors(&service, selectors...))
-			utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForScrapeTargets(&service, networkingv1.NetworkPolicyPort{Port: utils.IntStrPtrFromInt(port), Protocol: utils.ProtocolPtr(corev1.ProtocolTCP)}))
-			return cl.Patch(ctx, &service, patch)
-		})
-	}
-
-	return taskFns
-}
-
-func migrationTasksForValiServices(cl client.Client, services []corev1.Service) []flow.TaskFn {
-	var taskFns []flow.TaskFn
-
-	for _, svc := range services {
-		service := svc
-
-		taskFns = append(taskFns, func(ctx context.Context) error {
-			patch := client.MergeFrom(service.DeepCopy())
-			metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingPodLabelSelectorNamespaceAlias, v1beta1constants.LabelNetworkPolicyShootNamespaceAlias)
-			utilruntime.Must(gardenerutils.InjectNetworkPolicyNamespaceSelectors(&service, metav1.LabelSelector{MatchLabels: map[string]string{corev1.LabelMetadataName: v1beta1constants.GardenNamespace}}))
-			return cl.Patch(ctx, &service, patch)
-		})
-	}
-
-	return taskFns
-}
-
-func migrationTasksForPrometheusServices(cl client.Client, services []corev1.Service) []flow.TaskFn {
-	var taskFns []flow.TaskFn
-
-	for _, svc := range services {
-		service := svc
-
-		taskFns = append(taskFns, func(ctx context.Context) error {
-			patch := client.MergeFrom(service.DeepCopy())
-			metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingPodLabelSelectorNamespaceAlias, v1beta1constants.LabelNetworkPolicyShootNamespaceAlias)
-			utilruntime.Must(gardenerutils.InjectNetworkPolicyNamespaceSelectors(&service, metav1.LabelSelector{MatchLabels: map[string]string{corev1.LabelMetadataName: v1beta1constants.GardenNamespace}}))
-			return cl.Patch(ctx, &service, patch)
-		})
-	}
-
-	return taskFns
-}
-
-func migrationTasksForShootVPARecommenders(cl client.Client, shootNamespaces []corev1.Namespace) []flow.TaskFn {
-	var taskFns []flow.TaskFn
-
-	for _, ns := range shootNamespaces {
-		namespace := ns
-
-		// It is forbidden to create a new resource in already terminating Namespace.
-		if namespace.DeletionTimestamp != nil {
-			continue
-		}
-
-		taskFns = append(taskFns, func(ctx context.Context) error {
-			service := &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "vpa-recommender",
-					Namespace: namespace.Name,
-				},
-				Spec: corev1.ServiceSpec{
-					Selector: map[string]string{v1beta1constants.LabelApp: "vpa-recommender"},
-					Ports: []corev1.ServicePort{{
-						Port:       8942,
-						TargetPort: intstr.FromInt(8942),
-					}},
-				},
-			}
-
-			metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingPodLabelSelectorNamespaceAlias, v1beta1constants.LabelNetworkPolicyShootNamespaceAlias)
-			utilruntime.Must(gardenerutils.InjectNetworkPolicyNamespaceSelectors(service, metav1.LabelSelector{MatchLabels: map[string]string{corev1.LabelMetadataName: v1beta1constants.GardenNamespace}}))
-
-			return client.IgnoreAlreadyExists(cl.Create(ctx, service))
-		})
-	}
-
-	return taskFns
-}
-
 func (g *garden) updateProcessingShootStatusToAborted(ctx context.Context, gardenClient client.Client) error {
 	shootList := &gardencorev1beta1.ShootList{}
 	if err := gardenClient.List(ctx, shootList); err != nil {
@@ -648,6 +484,73 @@ func (g *garden) updateProcessingShootStatusToAborted(ctx context.Context, garde
 			}
 
 			return nil
+		})
+	}
+
+	return flow.Parallel(taskFns...)(ctx)
+}
+
+func removeLegacyShootStateControllerFinalizerFromSecrets(ctx context.Context, seedClient client.Client) error {
+	secretList := &metav1.PartialObjectMetadataList{}
+	secretList.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("SecretList"))
+	if err := seedClient.List(ctx, secretList, client.MatchingLabels{
+		secretsmanager.LabelKeyManagedBy: secretsmanager.LabelValueSecretsManager,
+		secretsmanager.LabelKeyPersist:   secretsmanager.LabelValueTrue,
+	}); err != nil {
+		return fmt.Errorf("failed listing all secrets that must be persisted: %w", err)
+	}
+
+	var taskFns []flow.TaskFn
+
+	for _, s := range secretList.Items {
+		secret := s
+
+		taskFns = append(taskFns, func(ctx context.Context) error {
+			if err := controllerutils.RemoveFinalizers(ctx, seedClient, &secret, "gardenlet.gardener.cloud/secret-controller"); err != nil {
+				return fmt.Errorf("failed to remove legacy ShootState controller finalizer from secret %q: %w", client.ObjectKeyFromObject(&secret), err)
+			}
+			return nil
+		})
+	}
+
+	return flow.Parallel(taskFns...)(ctx)
+}
+
+func (g *garden) cleanupStaleShootStates(ctx context.Context, gardenClient client.Client) error {
+	if err := gardenClient.Get(ctx, client.ObjectKey{Name: g.config.SeedConfig.Name, Namespace: v1beta1constants.GardenNamespace}, &seedmanagementv1alpha1.ManagedSeed{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed checking whether gardenlet is responsible for a managed seed: %w", err)
+		}
+		return nil
+	}
+
+	g.mgr.GetLogger().Info("Removing stale ShootState resources from garden cluster since I'm responsible for a managed seed (GEP-22)")
+
+	shootList := &gardencorev1beta1.ShootList{}
+	if err := gardenClient.List(ctx, shootList, client.MatchingFields{gardencore.ShootSeedName: g.config.SeedConfig.Name}); err != nil {
+		return err
+	}
+
+	var taskFns []flow.TaskFn
+
+	for _, s := range shootList.Items {
+		shoot := s
+
+		// If status.seedName is different than seed name gardenlet is responsible for, then a migration takes place.
+		// In this case, we don't want to delete the shoot state. It will be deleted eventually after successful
+		// restoration by the shoot controller itself.
+		if shoot.Status.SeedName != nil && *shoot.Status.SeedName != g.config.SeedConfig.Name {
+			continue
+		}
+
+		// We don't want to delete the shoot state when the last operation type is 'Restore' (it might not be completed
+		// yet). It will be deleted eventually after successful restoration by the shoot controller itself.
+		if v1beta1helper.ShootHasOperationType(shoot.Status.LastOperation, gardencorev1beta1.LastOperationTypeRestore) {
+			continue
+		}
+
+		taskFns = append(taskFns, func(ctx context.Context) error {
+			return shootstate.Delete(ctx, gardenClient, &shoot)
 		})
 	}
 

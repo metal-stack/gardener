@@ -24,20 +24,30 @@ import (
 	"github.com/Masterminds/sprig"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
 	"k8s.io/utils/pointer"
 
+	"github.com/gardener/gardener/extensions/pkg/webhook"
 	extensionscontextwebhook "github.com/gardener/gardener/extensions/pkg/webhook/context"
 	"github.com/gardener/gardener/extensions/pkg/webhook/controlplane/genericmutator"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/machinecontrollermanager"
+	"github.com/gardener/gardener/pkg/provider-local/imagevector"
+	"github.com/gardener/gardener/pkg/provider-local/local"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 )
 
-const pathContainerdConfigScript = v1beta1constants.OperatingSystemConfigFilePathBinaries + "/init-containerd-with-registry-mirrors"
+const (
+	pathContainerdConfigScript = v1beta1constants.OperatingSystemConfigFilePathBinaries + "/init-containerd-with-registry-mirrors"
+	unitNameInitializer        = "containerd-configuration-local-setup.service"
+)
 
 var (
 	tplNameInitializer = "init"
@@ -56,15 +66,58 @@ func init() {
 }
 
 // NewEnsurer creates a new controlplane ensurer.
-func NewEnsurer(logger logr.Logger) genericmutator.Ensurer {
+func NewEnsurer(logger logr.Logger, gardenletManagesMCM bool) genericmutator.Ensurer {
 	return &ensurer{
-		logger: logger.WithName("local-controlplane-ensurer"),
+		logger:              logger.WithName("local-controlplane-ensurer"),
+		gardenletManagesMCM: gardenletManagesMCM,
 	}
 }
 
 type ensurer struct {
 	genericmutator.NoopEnsurer
-	logger logr.Logger
+	logger              logr.Logger
+	gardenletManagesMCM bool
+}
+
+// EnsureMachineControllerManagerDeployment ensures that the machine-controller-manager deployment conforms to the provider requirements.
+func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, newObj, _ *appsv1.Deployment) error {
+	if !e.gardenletManagesMCM {
+		return nil
+	}
+
+	image, err := imagevector.ImageVector().FindImage(imagevector.ImageNameMachineControllerManagerProviderLocal)
+	if err != nil {
+		return err
+	}
+
+	newObj.Spec.Template.Spec.Containers = webhook.EnsureContainerWithName(
+		newObj.Spec.Template.Spec.Containers,
+		machinecontrollermanager.ProviderSidecarContainer(newObj.Namespace, local.Name, image.String()),
+	)
+	return nil
+}
+
+// EnsureMachineControllerManagerVPA ensures that the machine-controller-manager VPA conforms to the provider requirements.
+func (e *ensurer) EnsureMachineControllerManagerVPA(_ context.Context, _ extensionscontextwebhook.GardenContext, newObj, _ *vpaautoscalingv1.VerticalPodAutoscaler) error {
+	if !e.gardenletManagesMCM {
+		return nil
+	}
+
+	var (
+		minAllowed = corev1.ResourceList{
+			corev1.ResourceMemory: resource.MustParse("64Mi"),
+		}
+		maxAllowed = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: resource.MustParse("5G"),
+		}
+	)
+
+	newObj.Spec.ResourcePolicy.ContainerPolicies = webhook.EnsureVPAContainerResourcePolicyWithName(
+		newObj.Spec.ResourcePolicy.ContainerPolicies,
+		machinecontrollermanager.ProviderSidecarVPAContainerPolicy(local.Name, minAllowed, maxAllowed),
+	)
+	return nil
 }
 
 func (e *ensurer) EnsureKubeAPIServerDeployment(_ context.Context, _ extensionscontextwebhook.GardenContext, new, _ *appsv1.Deployment) error {
@@ -94,11 +147,26 @@ func (e *ensurer) EnsureAdditionalFiles(ctx context.Context, gc extensionscontex
 			},
 		},
 	})
+
+	// With this file, we make the containerd unit dependent on the mirror configuration unit.
+	// Otherwise, containerd might start before we modified the configuration file, i.e., it wouldn't respect the
+	// configured mirrors.
+	appendUniqueFile(new, extensionsv1alpha1.File{
+		Path:        "/etc/systemd/system/containerd.service.d/10-require-containerd-configuration-local-setup.conf",
+		Permissions: pointer.Int32(0644),
+		Content: extensionsv1alpha1.FileContent{
+			Inline: &extensionsv1alpha1.FileContentInline{
+				Data: `[Unit]
+After=` + unitNameInitializer + `
+Requires=` + unitNameInitializer,
+			},
+		},
+	})
+
 	return nil
 }
 
 func (e *ensurer) EnsureAdditionalUnits(_ context.Context, _ extensionscontextwebhook.GardenContext, new, _ *[]extensionsv1alpha1.Unit) error {
-	const unitNameInitializer = "containerd-configuration-local-setup.service"
 	unit := extensionsv1alpha1.Unit{
 		Name:    unitNameInitializer,
 		Command: pointer.String("start"),

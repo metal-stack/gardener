@@ -25,11 +25,10 @@ func RegisterFeatureGates() {
 	utilruntime.Must(features.DefaultFeatureGate.Add(features.GetFeatures(
 		features.HVPA,
 		features.HVPAForShootedSeed,
-		features.APIServerSNI,
-		features.CopyEtcdBackupsDuringControlPlaneMigration,
 		features.DefaultSeccompProfile,
 		features.CoreDNSQueryRewriting,
 		features.IPv6SingleStack,
-		features.FullNetworkPoliciesInRuntimeCluster,
+		features.MachineControllerManagerDeployment,
+		features.DisableScalingClassesForShoots,
 	)))
 }

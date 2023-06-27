@@ -13,10 +13,10 @@ spec:
   args:
   - >-
     go test -timeout=0 -mod=vendor ./test/testmachinery/system/shoot_update
-    --v -ginkgo.v -ginkgo.progress -ginkgo.no-color -verbose=debug
+    --v -ginkgo.v -ginkgo.show-node-events -ginkgo.no-color -verbose=debug
     -kubecfg=$TM_KUBECONFIG_PATH/gardener.config
     -shoot-name=$SHOOT_NAME
     -project-namespace=$PROJECT_NAMESPACE
     -version=$K8S_VERSION
     -version-worker-pools=$K8S_VERSION_WORKER_POOLS
-  image: golang:1.20.4
+  image: golang:1.20.5

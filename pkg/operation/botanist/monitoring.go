@@ -33,6 +33,7 @@ import (
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/etcd"
 	"github.com/gardener/gardener/pkg/controllerutils"
+	"github.com/gardener/gardener/pkg/features"
 	gardenlethelper "github.com/gardener/gardener/pkg/gardenlet/apis/config/helper"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
@@ -98,6 +99,10 @@ func (b *Botanist) DeploySeedMonitoring(ctx context.Context) error {
 
 		if b.Shoot.WantsClusterAutoscaler {
 			monitoringComponents = append(monitoringComponents, b.Shoot.Components.ControlPlane.ClusterAutoscaler)
+		}
+
+		if features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment) {
+			monitoringComponents = append(monitoringComponents, b.Shoot.Components.ControlPlane.MachineControllerManager)
 		}
 	}
 
@@ -165,11 +170,6 @@ func (b *Botanist) DeploySeedMonitoring(ctx context.Context) error {
 		prometheusIngressTLSSecretName = ingressTLSSecret.Name
 	}
 
-	ingressClass, err := gardenerutils.ComputeNginxIngressClassForSeed(b.Seed.GetInfo(), b.Seed.GetInfo().Status.KubernetesVersion)
-	if err != nil {
-		return err
-	}
-
 	clusterCASecret, found := b.SecretsManager.Get(v1beta1constants.SecretNameCACluster)
 	if !found {
 		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameCACluster)
@@ -195,8 +195,9 @@ func (b *Botanist) DeploySeedMonitoring(ctx context.Context) error {
 			"nodeLocalDNS": map[string]interface{}{
 				"enabled": b.Shoot.NodeLocalDNSEnabled,
 			},
+			"gardenletManagesMCM": features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment),
 			"ingress": map[string]interface{}{
-				"class":          ingressClass,
+				"class":          v1beta1constants.SeedNginxIngressClass,
 				"authSecretName": credentialsSecret.Name,
 				"hosts": []map[string]interface{}{
 					{
@@ -228,13 +229,13 @@ func (b *Botanist) DeploySeedMonitoring(ctx context.Context) error {
 				},
 			},
 			"shoot": map[string]interface{}{
-				"apiserver":           fmt.Sprintf("https://%s", gardenerutils.GetAPIServerDomain(b.Shoot.InternalClusterDomain)),
-				"apiserverServerName": gardenerutils.GetAPIServerDomain(b.Shoot.InternalClusterDomain),
-				"sniEnabled":          b.APIServerSNIEnabled(),
-				"provider":            b.Shoot.GetInfo().Spec.Provider.Type,
-				"name":                b.Shoot.GetInfo().Name,
-				"project":             b.Garden.Project.Name,
-				"workerless":          b.Shoot.IsWorkerless,
+				"apiserver":             fmt.Sprintf("https://%s", gardenerutils.GetAPIServerDomain(b.Shoot.InternalClusterDomain)),
+				"apiserverServerName":   gardenerutils.GetAPIServerDomain(b.Shoot.InternalClusterDomain),
+				"apiServerProxyEnabled": b.ShootUsesDNS(),
+				"provider":              b.Shoot.GetInfo().Spec.Provider.Type,
+				"name":                  b.Shoot.GetInfo().Name,
+				"project":               b.Garden.Project.Name,
+				"workerless":            b.Shoot.IsWorkerless,
 			},
 			"ignoreAlerts":            b.Shoot.IgnoreAlerts,
 			"alerting":                alerting,
@@ -367,7 +368,7 @@ func (b *Botanist) DeploySeedMonitoring(ctx context.Context) error {
 
 		alertManagerValues, err := b.InjectSeedShootImages(map[string]interface{}{
 			"ingress": map[string]interface{}{
-				"class":          ingressClass,
+				"class":          v1beta1constants.SeedNginxIngressClass,
 				"authSecretName": credentialsSecret.Name,
 				"hosts": []map[string]interface{}{
 					{
@@ -402,7 +403,7 @@ func (b *Botanist) DeploySeedPlutono(ctx context.Context) error {
 		return kubernetesutils.DeleteObject(ctx, b.GardenClient, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: b.Shoot.GetInfo().Namespace}})
 	}
 
-	//TODO(rickardsjp, istvanballok): Remove in release v1.77 once the Grafana to Plutono migration is complete.
+	// TODO(rickardsjp, istvanballok): Remove in release v1.77 once the Grafana to Plutono migration is complete.
 	if err := b.DeleteGrafana(ctx); err != nil {
 		return err
 	}
@@ -461,16 +462,6 @@ func (b *Botanist) DeploySeedPlutono(ctx context.Context) error {
 
 	if err := b.deployPlutonoCharts(ctx, credentialsSecret, dashboards.String(), common.PlutonoUsersPrefix, ingressTLSSecretName); err != nil {
 		return err
-	}
-
-	// TODO(rfranzke): Delete this in a future version.
-	{
-		if err := kubernetesutils.DeleteObjects(ctx, b.SeedClientSet.Client(),
-			&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "allow-prometheus", Namespace: b.Shoot.SeedNamespace}},
-			&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "allow-from-prometheus", Namespace: b.Shoot.SeedNamespace}},
-		); err != nil {
-			return err
-		}
 	}
 
 	return b.syncShootCredentialToGarden(
@@ -560,14 +551,9 @@ func (b *Botanist) getCustomAlertingConfigs(ctx context.Context, alertingSecretK
 }
 
 func (b *Botanist) deployPlutonoCharts(ctx context.Context, credentialsSecret *corev1.Secret, dashboards, subDomain, ingressTLSSecretName string) error {
-	ingressClass, err := gardenerutils.ComputeNginxIngressClassForSeed(b.Seed.GetInfo(), b.Seed.GetInfo().Status.KubernetesVersion)
-	if err != nil {
-		return err
-	}
-
 	values, err := b.InjectSeedShootImages(map[string]interface{}{
 		"ingress": map[string]interface{}{
-			"class":          ingressClass,
+			"class":          v1beta1constants.SeedNginxIngressClass,
 			"authSecretName": credentialsSecret.Name,
 			"hosts": []map[string]interface{}{
 				{
@@ -580,10 +566,8 @@ func (b *Botanist) deployPlutonoCharts(ctx context.Context, credentialsSecret *c
 		"extensions": map[string]interface{}{
 			"dashboards": dashboards,
 		},
-		"vpaEnabled": b.Shoot.WantsVerticalPodAutoscaler,
-		"sni": map[string]interface{}{
-			"enabled": b.APIServerSNIEnabled(),
-		},
+		"vpaEnabled":             b.Shoot.WantsVerticalPodAutoscaler,
+		"includeIstioDashboards": b.ShootUsesDNS(),
 		"nodeLocalDNS": map[string]interface{}{
 			"enabled": b.Shoot.NodeLocalDNSEnabled,
 		},

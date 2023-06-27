@@ -204,7 +204,7 @@ var _ = Describe("Garden controller tests", func() {
 				},
 				VirtualCluster: operatorv1alpha1.VirtualCluster{
 					DNS: operatorv1alpha1.DNS{
-						Domain: "virtual-garden.local.gardener.cloud",
+						Domains: []string{"virtual-garden.local.gardener.cloud"},
 					},
 					Kubernetes: operatorv1alpha1.Kubernetes{
 						Version: "1.26.3",
@@ -264,6 +264,8 @@ var _ = Describe("Garden controller tests", func() {
 			return crdList.Items
 		}).Should(ContainElements(
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("hvpas.autoscaling.k8s.io")})}),
+			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("etcds.druid.gardener.cloud")})}),
+			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("etcdcopybackupstasks.druid.gardener.cloud")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("managedresources.resources.gardener.cloud")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("verticalpodautoscalers.autoscaling.k8s.io")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("verticalpodautoscalercheckpoints.autoscaling.k8s.io")})}),
@@ -644,6 +646,7 @@ var _ = Describe("Garden controller tests", func() {
 		}).ShouldNot(ContainElements(
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("hvpas.autoscaling.k8s.io")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("etcds.druid.gardener.cloud")})}),
+			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("etcdcopybackupstasks.druid.gardener.cloud")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("managedresources.resources.gardener.cloud")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("verticalpodautoscalers.autoscaling.k8s.io")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("verticalpodautoscalercheckpoints.autoscaling.k8s.io")})}),

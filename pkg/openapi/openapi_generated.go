@@ -97,6 +97,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.HorizontalPodAutoscalerConfig":           schema_pkg_apis_core_v1beta1_HorizontalPodAutoscalerConfig(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.Ingress":                                 schema_pkg_apis_core_v1beta1_Ingress(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.IngressController":                       schema_pkg_apis_core_v1beta1_IngressController(ref),
+		"github.com/gardener/gardener/pkg/apis/core/v1beta1.InternalSecret":                          schema_pkg_apis_core_v1beta1_InternalSecret(ref),
+		"github.com/gardener/gardener/pkg/apis/core/v1beta1.InternalSecretList":                      schema_pkg_apis_core_v1beta1_InternalSecretList(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.KubeAPIServerConfig":                     schema_pkg_apis_core_v1beta1_KubeAPIServerConfig(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.KubeAPIServerLogging":                    schema_pkg_apis_core_v1beta1_KubeAPIServerLogging(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.KubeAPIServerRequests":                   schema_pkg_apis_core_v1beta1_KubeAPIServerRequests(ref),
@@ -3268,6 +3270,138 @@ func schema_pkg_apis_core_v1beta1_IngressController(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/runtime.RawExtension"},
+	}
+}
+
+func schema_pkg_apis_core_v1beta1_InternalSecret(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalSecret holds secret data of a certain type. The total bytes of the values in the Data field must be less than MaxSecretSize bytes.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"immutable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Immutable, if set to true, ensures that data stored in the Secret cannot be updated (only object metadata can be modified). If not set to true, the field can be modified at any time. Defaulted to nil.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"data": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Data contains the secret data. Each key must consist of alphanumeric characters, '-', '_' or '.'. The serialized form of the secret data is a base64 encoded string, representing the arbitrary (possibly non-string) data value here. Described in https://tools.ietf.org/html/rfc4648#section-4",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "byte",
+									},
+								},
+							},
+						},
+					},
+					"stringData": {
+						SchemaProps: spec.SchemaProps{
+							Description: "stringData allows specifying non-binary secret data in string form. It is provided as a write-only input field for convenience. All keys and values are merged into the data field on write, overwriting any existing values. The stringData field is never output when reading from the API.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Used to facilitate programmatic handling of secret data. More info: https://kubernetes.io/docs/concepts/configuration/secret/#secret-types",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_core_v1beta1_InternalSecretList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalSecretList is a list of InternalSecret.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is a list of secret objects. More info: https://kubernetes.io/docs/concepts/configuration/secret",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.InternalSecret"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.InternalSecret", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
@@ -6573,7 +6707,7 @@ func schema_pkg_apis_core_v1beta1_SeedSettingOwnerChecks(ref common.ReferenceCal
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "SeedSettingOwnerChecks controls certain owner checks settings for shoots scheduled on this seed.\n\nDeprecated: This field is deprecated. The \"bad-case\" control plane migration is being removed in favor of the HA Shoot control planes (see https://github.com/gardener/gardener/issues/6302). The field is locked to false (i.e. if the field value is true a validation error will be returned). In this way gardenlet will clean up all owner DNSRecords. Finally, the field will be removed from the API in a future version of Gardener.",
+				Description: "SeedSettingOwnerChecks controls certain owner checks settings for shoots scheduled on this seed.\n\nDeprecated: This field is deprecated. The \"bad-case\" control plane migration is being removed in favor of the HA Shoot control planes (see https://github.com/gardener/gardener/issues/6302). The field is no-op and will be removed in a future version.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"enabled": {
@@ -6750,7 +6884,7 @@ func schema_pkg_apis_core_v1beta1_SeedSpec(ref common.ReferenceCallback) common.
 					},
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SecretRef is a reference to a Secret object containing the Kubeconfig of the Kubernetes cluster to be registered as Seed.",
+							Description: "SecretRef is a reference to a Secret object containing the Kubeconfig of the Kubernetes cluster to be registered as Seed.\n\nDeprecated: This field is deprecated, gardenlet must run in the Seed cluster, hence it should use the in-cluster rest config via ServiceAccount to communicate with the Seed cluster.",
 							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
 						},
 					},
@@ -7051,7 +7185,7 @@ func schema_pkg_apis_core_v1beta1_ServiceAccountConfig(ref common.ReferenceCallb
 					},
 					"acceptedIssuers": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AcceptedIssuers is an additional set of issuers that are used to determine which service account tokens are accepted. These values are not used to generate new service account tokens. Only useful when service account tokens are also issued by another external system or a change of the current issuer that is used for generating tokens is being performed. This field is only available for Kubernetes v1.22 or later.",
+							Description: "AcceptedIssuers is an additional set of issuers that are used to determine which service account tokens are accepted. These values are not used to generate new service account tokens. Only useful when service account tokens are also issued by another external system or a change of the current issuer that is used for generating tokens is being performed.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -7571,7 +7705,7 @@ func schema_pkg_apis_core_v1beta1_ShootSpec(ref common.ReferenceCallback) common
 					},
 					"seedName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SeedName is the name of the seed cluster that runs the control plane of the Shoot. This field is immutable when the SeedChange feature gate is disabled.",
+							Description: "SeedName is the name of the seed cluster that runs the control plane of the Shoot.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -8290,7 +8424,7 @@ func schema_pkg_apis_core_v1beta1_Worker(ref common.ReferenceCallback) common.Op
 					},
 					"cri": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CRI contains configurations of CRI support of every machine in the worker pool. Defaults to a CRI with name `containerd` when the Kubernetes version of the `Shoot` is >= 1.22.",
+							Description: "CRI contains configurations of CRI support of every machine in the worker pool. Defaults to a CRI with name `containerd`.",
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.CRI"),
 						},
 					},
@@ -8333,7 +8467,7 @@ func schema_pkg_apis_core_v1beta1_Worker(ref common.ReferenceCallback) common.Op
 					},
 					"maximum": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Maximum is the maximum number of VMs to create.",
+							Description: "Maximum is the maximum number of machines to create. This value is divided by the number of configured zones for a fair distribution.",
 							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
@@ -8341,7 +8475,7 @@ func schema_pkg_apis_core_v1beta1_Worker(ref common.ReferenceCallback) common.Op
 					},
 					"minimum": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Minimum is the minimum number of VMs to create.",
+							Description: "Minimum is the minimum number of machines to create. This value is divided by the number of configured zones for a fair distribution.",
 							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
@@ -8349,13 +8483,13 @@ func schema_pkg_apis_core_v1beta1_Worker(ref common.ReferenceCallback) common.Op
 					},
 					"maxSurge": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MaxSurge is maximum number of VMs that are created during an update.",
+							Description: "MaxSurge is maximum number of machines that are created during an update. This value is divided by the number of configured zones for a fair distribution.",
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
 					"maxUnavailable": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MaxUnavailable is the maximum number of VMs that can be unavailable during an update.",
+							Description: "MaxUnavailable is the maximum number of machines that can be unavailable during an update. This value is divided by the number of configured zones for a fair distribution.",
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
@@ -8435,7 +8569,7 @@ func schema_pkg_apis_core_v1beta1_Worker(ref common.ReferenceCallback) common.Op
 					},
 					"sysctls": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Sysctls is a map of kernel settings to apply on all VMs in this worker pool.",
+							Description: "Sysctls is a map of kernel settings to apply on all machines in this worker pool.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,

@@ -105,6 +105,10 @@ func (b *Botanist) computeKubeAPIServerAutoscalingConfig() kubeapiserver.Autosca
 		apiServerResources        corev1.ResourceRequirements
 	)
 
+	if b.ManagedSeed != nil {
+		hvpaEnabled = features.DefaultFeatureGate.Enabled(features.HVPAForShootedSeed)
+	}
+
 	if b.Shoot.Purpose == gardencorev1beta1.ShootPurposeProduction {
 		minReplicas = 2
 	}
@@ -122,10 +126,19 @@ func (b *Botanist) computeKubeAPIServerAutoscalingConfig() kubeapiserver.Autosca
 	if hvpaEnabled {
 		nodeCount = b.Shoot.GetMaxNodeCount()
 	}
-	apiServerResources = resourcesRequirementsForKubeAPIServer(nodeCount, b.Shoot.GetInfo().Annotations[v1beta1constants.ShootAlphaScalingAPIServerClass])
+
+	if hvpaEnabled && features.DefaultFeatureGate.Enabled(features.DisableScalingClassesForShoots) {
+		apiServerResources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+		}
+	} else {
+		apiServerResources = resourcesRequirementsForKubeAPIServer(nodeCount, b.Shoot.GetInfo().Annotations[v1beta1constants.ShootAlphaScalingAPIServerClass])
+	}
 
 	if b.ManagedSeed != nil {
-		hvpaEnabled = features.DefaultFeatureGate.Enabled(features.HVPAForShootedSeed)
 		useMemoryMetricForHvpaHPA = true
 
 		if b.ManagedSeedAPIServer != nil {
@@ -233,7 +246,7 @@ func (b *Botanist) computeKubeAPIServerServerCertificateConfig() kubeapiserver.S
 func (b *Botanist) computeKubeAPIServerSNIConfig() kubeapiserver.SNIConfig {
 	var config kubeapiserver.SNIConfig
 
-	if b.APIServerSNIEnabled() {
+	if b.ShootUsesDNS() {
 		config.Enabled = true
 		config.AdvertiseAddress = b.APIServerClusterIP
 	}
@@ -298,20 +311,7 @@ func (b *Botanist) DeployKubeAPIServer(ctx context.Context) error {
 		}
 	}
 
-	// TODO(rfranzke): Remove in a future release.
-	if err := b.SaveGardenerResourceDataInShootState(ctx, func(gardenerResourceData *[]gardencorev1beta1.GardenerResourceData) error {
-		gardenerResourceDataList := v1beta1helper.GardenerResourceDataList(*gardenerResourceData)
-		gardenerResourceDataList.Delete("etcdEncryptionConfiguration")
-		gardenerResourceDataList.Delete("service-account-key")
-		*gardenerResourceData = gardenerResourceDataList
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	return kubernetesutils.DeleteObjects(ctx, b.SeedClientSet.Client(),
-		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: b.Shoot.SeedNamespace, Name: "etcd-encryption-secret"}},
-	)
+	return nil
 }
 
 // DeleteKubeAPIServer deletes the kube-apiserver deployment in the Seed cluster which holds the Shoot's control plane.
@@ -327,15 +327,13 @@ func (b *Botanist) DeleteKubeAPIServer(ctx context.Context) error {
 
 // WakeUpKubeAPIServer creates a service and ensures API Server is scaled up
 func (b *Botanist) WakeUpKubeAPIServer(ctx context.Context) error {
-	sniPhase := b.Shoot.Components.ControlPlane.KubeAPIServerSNIPhase.Done()
-
-	if err := b.DeployKubeAPIService(ctx, sniPhase); err != nil {
+	if err := b.Shoot.Components.ControlPlane.KubeAPIServerService.Deploy(ctx); err != nil {
 		return err
 	}
 	if err := b.Shoot.Components.ControlPlane.KubeAPIServerService.Wait(ctx); err != nil {
 		return err
 	}
-	if b.APIServerSNIEnabled() {
+	if b.ShootUsesDNS() {
 		if err := b.DeployKubeAPIServerSNI(ctx); err != nil {
 			return err
 		}

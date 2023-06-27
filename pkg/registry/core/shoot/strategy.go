@@ -36,6 +36,7 @@ import (
 	"github.com/gardener/gardener/pkg/api"
 	"github.com/gardener/gardener/pkg/api/core/shoot"
 	"github.com/gardener/gardener/pkg/apis/core"
+	"github.com/gardener/gardener/pkg/apis/core/helper"
 	gardencorehelper "github.com/gardener/gardener/pkg/apis/core/helper"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/apis/core/validation"
@@ -67,8 +68,6 @@ func (shootStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
 
 	shoot.Generation = 1
 	shoot.Status = core.ShootStatus{}
-
-	dropDisabledFields(shoot, nil)
 }
 
 func (shootStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
@@ -83,8 +82,6 @@ func (shootStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obje
 	if mustIncreaseGeneration(oldShoot, newShoot) {
 		newShoot.Generation = oldShoot.Generation + 1
 	}
-
-	dropDisabledFields(newShoot, oldShoot)
 }
 
 // defaultNodeMonitorGracePeriod will set the kube controller manager's nodeMonitorGracePeriod to 40s when upgrading the shoot to k8s version 1.27
@@ -96,15 +93,6 @@ func defaultNodeMonitorGracePeriod(newShoot, oldShoot *core.Shoot) {
 
 	if oldShootK8sLess127 && newShootK8sGreaterEqual127 && newShoot.Spec.Kubernetes.KubeControllerManager != nil && reflect.DeepEqual(newShoot.Spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod, defaultNodeMonitorGracePeriod) {
 		newShoot.Spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod = &metav1.Duration{Duration: 40 * time.Second}
-	}
-}
-
-// dropDisabledFields removes disabled fields from shoot.
-func dropDisabledFields(newShoot, oldShoot *core.Shoot) {
-	// Removes disabled HighAvailability related fields from shoot spec if it is not already used by the old spec
-	oldShootIsHA := oldShoot != nil && gardencorehelper.IsHAControlPlaneConfigured(oldShoot)
-	if !features.DefaultFeatureGate.Enabled(features.HAControlPlanes) && !oldShootIsHA && newShoot.Spec.ControlPlane != nil {
-		newShoot.Spec.ControlPlane.HighAvailability = nil
 	}
 }
 
@@ -145,11 +133,18 @@ func mustIncreaseGeneration(oldShoot, newShoot *core.Shoot) bool {
 				v1beta1constants.OperationRotateETCDEncryptionKeyStart,
 				v1beta1constants.OperationRotateETCDEncryptionKeyComplete,
 				v1beta1constants.ShootOperationRotateKubeconfigCredentials,
-				v1beta1constants.ShootOperationRotateSSHKeypair,
 				v1beta1constants.ShootOperationRotateObservabilityCredentials:
 				// We don't want to remove the annotation so that the gardenlet can pick it up and perform
 				// the rotation. It has to remove the annotation after it is done.
 				mustIncrease, mustRemoveOperationAnnotation = true, false
+
+			case v1beta1constants.ShootOperationRotateSSHKeypair:
+				if !helper.ShootEnablesSSHAccess(newShoot) {
+					// If SSH is not enabled for the Shoot, don't increase generation, just remove the annotation
+					mustIncrease, mustRemoveOperationAnnotation = false, true
+				} else {
+					mustIncrease, mustRemoveOperationAnnotation = true, false
+				}
 			}
 		}
 

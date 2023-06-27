@@ -29,7 +29,6 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -101,6 +100,7 @@ var _ = Describe("ResourceManager", func() {
 		maxConcurrentTokenInvalidatorWorkers = 23
 		maxConcurrentTokenRequestorWorkers   = 21
 		maxConcurrentCSRApproverWorkers      = 24
+		maxConcurrentNetworkPolicyWorkers    = 25
 		resourceClass                        = "fake-ResourceClass"
 		syncPeriod                           = metav1.Duration{Duration: time.Second * 80}
 		watchedNamespace                     = "fake-ns"
@@ -140,8 +140,7 @@ var _ = Describe("ResourceManager", func() {
 		serviceAccount                      *corev1.ServiceAccount
 		updateMode                          = vpaautoscalingv1.UpdateModeAuto
 		controlledValues                    = vpaautoscalingv1.ContainerControlledValuesRequestsOnly
-		pdbV1beta1                          *policyv1beta1.PodDisruptionBudget
-		pdbV1                               *policyv1.PodDisruptionBudget
+		pdb                                 *policyv1.PodDisruptionBudget
 		vpa                                 *vpaautoscalingv1.VerticalPodAutoscaler
 		mutatingWebhookConfiguration        *admissionregistrationv1.MutatingWebhookConfiguration
 		validatingWebhookConfiguration      *admissionregistrationv1.ValidatingWebhookConfiguration
@@ -270,7 +269,9 @@ var _ = Describe("ResourceManager", func() {
 				},
 				Labels: map[string]string{
 					"resources.gardener.cloud/purpose": "token-requestor",
+					"resources.gardener.cloud/class":   "shoot",
 				},
+				ResourceVersion: "0",
 			},
 			Type: corev1.SecretTypeOpaque,
 		}
@@ -315,7 +316,6 @@ var _ = Describe("ResourceManager", func() {
 			ConcurrentSyncs:                                  &concurrentSyncs,
 			DefaultNotReadyToleration:                        defaultNotReadyTolerationSeconds,
 			DefaultUnreachableToleration:                     defaultUnreachableTolerationSeconds,
-			FullNetworkPolicies:                              true,
 			NetworkPolicyAdditionalNamespaceSelectors:        additionalNetworkPolicyNamespaceSelectors,
 			NetworkPolicyControllerIngressControllerSelector: ingressControllerSelector,
 			HealthSyncPeriod:                                 &healthSyncPeriod,
@@ -325,6 +325,7 @@ var _ = Describe("ResourceManager", func() {
 			MaxConcurrentTokenInvalidatorWorkers:             &maxConcurrentTokenInvalidatorWorkers,
 			MaxConcurrentTokenRequestorWorkers:               &maxConcurrentTokenRequestorWorkers,
 			MaxConcurrentCSRApproverWorkers:                  &maxConcurrentCSRApproverWorkers,
+			MaxConcurrentNetworkPolicyWorkers:                &maxConcurrentNetworkPolicyWorkers,
 			PriorityClassName:                                priorityClassName,
 			Replicas:                                         &replicas,
 			ResourceClass:                                    &resourceClass,
@@ -477,15 +478,16 @@ var _ = Describe("ResourceManager", func() {
 				}
 			} else {
 				config.Controllers.NetworkPolicy = resourcemanagerv1alpha1.NetworkPolicyControllerConfig{
-					Enabled: true,
+					Enabled:         true,
+					ConcurrentSyncs: &maxConcurrentNetworkPolicyWorkers,
 					NamespaceSelectors: []metav1.LabelSelector{
 						{MatchLabels: map[string]string{"gardener.cloud/role": "shoot"}},
+						{MatchLabels: map[string]string{"gardener.cloud/role": "extension"}},
 						{MatchLabels: map[string]string{"gardener.cloud/role": "istio-system"}},
 						{MatchLabels: map[string]string{"gardener.cloud/role": "istio-ingress"}},
 						{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "handler.exposureclass.gardener.cloud/name", Operator: metav1.LabelSelectorOpExists}}},
 						{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "garden"}},
 						{MatchLabels: map[string]string{"foo": "bar"}},
-						{MatchLabels: map[string]string{"gardener.cloud/role": "extension"}},
 					},
 					IngressControllerSelector: ingressControllerSelector,
 				}
@@ -835,23 +837,7 @@ var _ = Describe("ResourceManager", func() {
 				},
 			},
 		}
-		pdbV1beta1 = &policyv1beta1.PodDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "gardener-resource-manager",
-				Namespace: deployNamespace,
-				Labels:    defaultLabels,
-			},
-			Spec: policyv1beta1.PodDisruptionBudgetSpec{
-				MaxUnavailable: &maxUnavailable,
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						v1beta1constants.GardenRole: v1beta1constants.GardenRoleControlPlane,
-						v1beta1constants.LabelApp:   "gardener-resource-manager",
-					},
-				},
-			},
-		}
-		pdbV1 = &policyv1.PodDisruptionBudget{
+		pdb = &policyv1.PodDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "gardener-resource-manager",
 				Namespace: deployNamespace,
@@ -1877,6 +1863,7 @@ subjects:
 				role.Namespace = watchedNamespace
 				configMap = configMapFor(&watchedNamespace, pointer.String(gardenerutils.PathGenericKubeconfig), false)
 				deployment = deploymentFor(configMap.Name, cfg.RuntimeKubernetesVersion, &watchedNamespace, pointer.String(gardenerutils.PathGenericKubeconfig), true, nil)
+				cfg.RuntimeKubernetesVersion = semver.MustParse("1.24.0")
 				resourceManager = New(c, deployNamespace, sm, cfg)
 				resourceManager.SetSecrets(secrets)
 			})
@@ -1884,7 +1871,10 @@ subjects:
 			Context("should successfully deploy all resources (w/ shoot access secret)", func() {
 				JustBeforeEach(func() {
 					gomock.InOrder(
-						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})),
+						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+							Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+								obj.SetResourceVersion("0")
+							}),
 						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 							Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 								Expect(obj).To(DeepEqual(secret))
@@ -1934,36 +1924,14 @@ subjects:
 					)
 				})
 
-				Context("Kubernetes version >= 1.21", func() {
-					BeforeEach(func() {
-						cfg.RuntimeKubernetesVersion = semver.MustParse("1.24.0")
-					})
+				It("should successfully deploy all resources (w/ shoot access secret)", func() {
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdb.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}))
+					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}), gomock.Any()).
+						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
+							Expect(obj).To(DeepEqual(pdb))
+						})
 
-					It("should successfully deploy all resources (w/ shoot access secret)", func() {
-						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdbV1.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}))
-						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}), gomock.Any()).
-							Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
-								Expect(obj).To(DeepEqual(pdbV1))
-							})
-
-						Expect(resourceManager.Deploy(ctx)).To(Succeed())
-					})
-				})
-
-				Context("Kubernetes version < 1.21", func() {
-					BeforeEach(func() {
-						cfg.RuntimeKubernetesVersion = semver.MustParse("1.20.0")
-					})
-
-					It("should successfully deploy all resources (w/ shoot access secret)", func() {
-						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdbV1beta1.Name), gomock.AssignableToTypeOf(&policyv1beta1.PodDisruptionBudget{}))
-						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1beta1.PodDisruptionBudget{}), gomock.Any()).
-							Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
-								Expect(obj).To(DeepEqual(pdbV1beta1))
-							})
-
-						Expect(resourceManager.Deploy(ctx)).To(Succeed())
-					})
+					Expect(resourceManager.Deploy(ctx)).To(Succeed())
 				})
 			})
 
@@ -1972,13 +1940,18 @@ subjects:
 					secretNameBootstrapKubeconfig := "bootstrap-kubeconfig"
 
 					secrets.BootstrapKubeconfig = &component.Secret{Name: secretNameBootstrapKubeconfig}
+
+					cfg.RuntimeKubernetesVersion = semver.MustParse("1.24.0")
 					resourceManager = New(c, deployNamespace, sm, cfg)
 					resourceManager.SetSecrets(secrets)
 
 					deployment = deploymentFor(configMap.Name, cfg.RuntimeKubernetesVersion, &watchedNamespace, pointer.String(gardenerutils.PathGenericKubeconfig), true, &secretNameBootstrapKubeconfig)
 
 					gomock.InOrder(
-						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})),
+						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+							Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+								obj.SetResourceVersion("0")
+							}),
 						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 							Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 								Expect(obj).To(DeepEqual(secret))
@@ -2028,36 +2001,14 @@ subjects:
 					)
 				})
 
-				Context("Kubernetes version >= 1.21", func() {
-					BeforeEach(func() {
-						cfg.RuntimeKubernetesVersion = semver.MustParse("1.24.0")
-					})
+				It("should successfully deploy all resources (w/ bootstrap kubeconfig)", func() {
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdb.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}))
+					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}), gomock.Any()).
+						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
+							Expect(obj).To(DeepEqual(pdb))
+						})
 
-					It("should successfully deploy all resources (w/ bootstrap kubeconfig)", func() {
-						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdbV1.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}))
-						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}), gomock.Any()).
-							Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
-								Expect(obj).To(DeepEqual(pdbV1))
-							})
-
-						Expect(resourceManager.Deploy(ctx)).To(Succeed())
-					})
-				})
-
-				Context("Kubernetes version < 1.21", func() {
-					BeforeEach(func() {
-						cfg.RuntimeKubernetesVersion = semver.MustParse("1.20.0")
-					})
-
-					It("should successfully deploy all resources (w/ bootstrap kubeconfig)", func() {
-						c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdbV1beta1.Name), gomock.AssignableToTypeOf(&policyv1beta1.PodDisruptionBudget{}))
-						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1beta1.PodDisruptionBudget{}), gomock.Any()).
-							Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
-								Expect(obj).To(DeepEqual(pdbV1beta1))
-							})
-
-						Expect(resourceManager.Deploy(ctx)).To(Succeed())
-					})
+					Expect(resourceManager.Deploy(ctx)).To(Succeed())
 				})
 			})
 		})
@@ -2076,7 +2027,10 @@ subjects:
 
 			It("should deploy a ClusterRole allowing access to mr related resources", func() {
 				gomock.InOrder(
-					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 						Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 							Expect(obj).To(DeepEqual(secret))
@@ -2110,10 +2064,10 @@ subjects:
 						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
 							Expect(obj).To(DeepEqual(deployment))
 						}),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdbV1.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdb.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}), gomock.Any()).
 						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
-							Expect(obj).To(DeepEqual(pdbV1))
+							Expect(obj).To(DeepEqual(pdb))
 						}),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, "gardener-resource-manager-vpa"), gomock.AssignableToTypeOf(&vpaautoscalingv1.VerticalPodAutoscaler{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&vpaautoscalingv1.VerticalPodAutoscaler{}), gomock.Any()).
@@ -2134,7 +2088,10 @@ subjects:
 
 			It("should fail because the ClusterRole can not be created", func() {
 				gomock.InOrder(
-					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, "gardener-resource-manager"), gomock.AssignableToTypeOf(&corev1.ServiceAccount{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.ServiceAccount{}), gomock.Any()),
@@ -2148,7 +2105,10 @@ subjects:
 
 			It("should fail because the ClusterRoleBinding can not be created", func() {
 				gomock.InOrder(
-					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, "gardener-resource-manager"), gomock.AssignableToTypeOf(&corev1.ServiceAccount{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.ServiceAccount{}), gomock.Any()),
@@ -2178,7 +2138,10 @@ subjects:
 
 			It("should disable controllers and webhooks properly in resource manager configuration", func() {
 				gomock.InOrder(
-					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 						Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 							Expect(obj).To(DeepEqual(secret))
@@ -2212,10 +2175,10 @@ subjects:
 						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
 							Expect(obj).To(DeepEqual(deployment))
 						}),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdbV1.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdb.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}), gomock.Any()).
 						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
-							Expect(obj).To(DeepEqual(pdbV1))
+							Expect(obj).To(DeepEqual(pdb))
 						}),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, "gardener-resource-manager-vpa"), gomock.AssignableToTypeOf(&vpaautoscalingv1.VerticalPodAutoscaler{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&vpaautoscalingv1.VerticalPodAutoscaler{}), gomock.Any()).
@@ -2248,7 +2211,7 @@ subjects:
 				deployment.Spec.Template.Spec.Volumes = deployment.Spec.Template.Spec.Volumes[:len(deployment.Spec.Template.Spec.Volumes)-2]
 				deployment.Spec.Template.Spec.Containers[0].VolumeMounts = deployment.Spec.Template.Spec.Containers[0].VolumeMounts[:len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts)-2]
 				deployment.Spec.Template.Labels["gardener.cloud/role"] = "seed"
-				pdbV1.Spec.Selector.MatchLabels["gardener.cloud/role"] = "seed"
+				pdb.Spec.Selector.MatchLabels["gardener.cloud/role"] = "seed"
 				for i := range deployment.Spec.Template.Spec.TopologySpreadConstraints {
 					deployment.Spec.Template.Spec.TopologySpreadConstraints[i].LabelSelector.MatchLabels["gardener.cloud/role"] = "seed"
 				}
@@ -2260,7 +2223,7 @@ subjects:
 				delete(service.ObjectMeta.Labels, v1beta1constants.GardenRole)
 				delete(deployment.ObjectMeta.Labels, v1beta1constants.GardenRole)
 				delete(vpa.ObjectMeta.Labels, v1beta1constants.GardenRole)
-				delete(pdbV1.ObjectMeta.Labels, v1beta1constants.GardenRole)
+				delete(pdb.ObjectMeta.Labels, v1beta1constants.GardenRole)
 				// Remove networking label from deployment template
 				delete(deployment.Spec.Template.Labels, "networking.resources.gardener.cloud/to-kube-apiserver-tcp-443")
 
@@ -2308,10 +2271,10 @@ subjects:
 						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
 							Expect(obj).To(DeepEqual(deployment))
 						}),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdbV1.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, pdb.Name), gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&policyv1.PodDisruptionBudget{}), gomock.Any()).
 						Do(func(ctx context.Context, obj runtime.Object, _ client.Patch, _ ...client.PatchOption) {
-							Expect(obj).To(DeepEqual(pdbV1))
+							Expect(obj).To(DeepEqual(pdb))
 						}),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(deployNamespace, "gardener-resource-manager-vpa"), gomock.AssignableToTypeOf(&vpaautoscalingv1.VerticalPodAutoscaler{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&vpaautoscalingv1.VerticalPodAutoscaler{}), gomock.Any()).
@@ -2337,15 +2300,17 @@ subjects:
 	Describe("#Destroy", func() {
 		Context("target differs from source cluster", func() {
 			JustBeforeEach(func() {
+				cfg.RuntimeKubernetesVersion = semver.MustParse("1.22")
 				resourceManager = New(c, deployNamespace, sm, cfg)
 			})
 
 			Context("should delete all created resources", func() {
-				JustBeforeEach(func() {
+				It("should delete all created resources", func() {
 					gomock.InOrder(
 						c.EXPECT().Delete(ctx, &resourcesv1alpha1.ManagedResource{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "shoot-core-gardener-resource-manager"}}),
 						c.EXPECT().Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "managedresource-shoot-core-gardener-resource-manager"}}),
 						c.EXPECT().Get(gomock.Any(), client.ObjectKey{Namespace: deployNamespace, Name: "shoot-core-gardener-resource-manager"}, gomock.AssignableToTypeOf(&resourcesv1alpha1.ManagedResource{})).Return(apierrors.NewNotFound(schema.GroupResource{}, "")),
+						c.EXPECT().Delete(ctx, &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}}),
 						c.EXPECT().Delete(ctx, &vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager-vpa"}}),
 						c.EXPECT().Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}}),
 						c.EXPECT().Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}}),
@@ -2354,28 +2319,8 @@ subjects:
 						c.EXPECT().Delete(ctx, &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}}),
 						c.EXPECT().Delete(ctx, &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}}),
 					)
-				})
 
-				Context("Kubernetes version >= v1.21", func() {
-					BeforeEach(func() {
-						cfg.RuntimeKubernetesVersion = semver.MustParse("1.22")
-					})
-					It("should delete all created resources", func() {
-						c.EXPECT().Delete(ctx, &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}})
-
-						Expect(resourceManager.Destroy(ctx)).To(Succeed())
-					})
-				})
-
-				Context("Kubernetes version < v1.21", func() {
-					BeforeEach(func() {
-						cfg.RuntimeKubernetesVersion = semver.MustParse("1.20")
-					})
-					It("should delete all created resources", func() {
-						c.EXPECT().Delete(ctx, &policyv1beta1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Namespace: deployNamespace, Name: "gardener-resource-manager"}})
-
-						Expect(resourceManager.Destroy(ctx)).To(Succeed())
-					})
+					Expect(resourceManager.Destroy(ctx)).To(Succeed())
 				})
 			})
 

@@ -24,6 +24,8 @@ Resource Types:
 </li><li>
 <a href="#core.gardener.cloud/v1beta1.ExposureClass">ExposureClass</a>
 </li><li>
+<a href="#core.gardener.cloud/v1beta1.InternalSecret">InternalSecret</a>
+</li><li>
 <a href="#core.gardener.cloud/v1beta1.Project">Project</a>
 </li><li>
 <a href="#core.gardener.cloud/v1beta1.Quota">Quota</a>
@@ -814,6 +816,116 @@ This field is immutable.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="core.gardener.cloud/v1beta1.InternalSecret">InternalSecret
+</h3>
+<p>
+<p>InternalSecret holds secret data of a certain type. The total bytes of the values in
+the Data field must be less than MaxSecretSize bytes.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code></br>
+string</td>
+<td>
+<code>
+core.gardener.cloud/v1beta1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code></br>
+string
+</td>
+<td><code>InternalSecret</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Standard object&rsquo;s metadata.
+More info: <a href="https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata">https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata</a></p>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>immutable</code></br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Immutable, if set to true, ensures that data stored in the Secret cannot
+be updated (only object metadata can be modified).
+If not set to true, the field can be modified at any time.
+Defaulted to nil.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>data</code></br>
+<em>
+map[string][]byte
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Data contains the secret data. Each key must consist of alphanumeric
+characters, &lsquo;-&rsquo;, &lsquo;_&rsquo; or &lsquo;.&rsquo;. The serialized form of the secret data is a
+base64 encoded string, representing the arbitrary (possibly non-string)
+data value here. Described in <a href="https://tools.ietf.org/html/rfc4648#section-4">https://tools.ietf.org/html/rfc4648#section-4</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>stringData</code></br>
+<em>
+map[string]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>stringData allows specifying non-binary secret data in string form.
+It is provided as a write-only input field for convenience.
+All keys and values are merged into the data field on write, overwriting any existing values.
+The stringData field is never output when reading from the API.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>type</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#secrettype-v1-core">
+Kubernetes core/v1.SecretType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Used to facilitate programmatic handling of secret data.
+More info: <a href="https://kubernetes.io/docs/concepts/configuration/secret/#secret-types">https://kubernetes.io/docs/concepts/configuration/secret/#secret-types</a></p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.gardener.cloud/v1beta1.Project">Project
 </h3>
 <p>
@@ -1319,6 +1431,8 @@ Kubernetes core/v1.SecretReference
 <em>(Optional)</em>
 <p>SecretRef is a reference to a Secret object containing the Kubeconfig of the Kubernetes
 cluster to be registered as Seed.</p>
+<p>Deprecated: This field is deprecated, gardenlet must run in the Seed cluster,
+hence it should use the in-cluster rest config via ServiceAccount to communicate with the Seed cluster.</p>
 </td>
 </tr>
 <tr>
@@ -1641,8 +1755,7 @@ string
 </td>
 <td>
 <em>(Optional)</em>
-<p>SeedName is the name of the seed cluster that runs the control plane of the Shoot.
-This field is immutable when the SeedChange feature gate is disabled.</p>
+<p>SeedName is the name of the seed cluster that runs the control plane of the Shoot.</p>
 </td>
 </tr>
 <tr>
@@ -9130,8 +9243,7 @@ Defaults to &ldquo;Cluster&rdquo;.</p>
 <p>
 <p>SeedSettingOwnerChecks controls certain owner checks settings for shoots scheduled on this seed.</p>
 <p>Deprecated: This field is deprecated. The &ldquo;bad-case&rdquo; control plane migration is being removed in favor of the HA Shoot control planes (see <a href="https://github.com/gardener/gardener/issues/6302">https://github.com/gardener/gardener/issues/6302</a>).
-The field is locked to false (i.e. if the field value is true a validation error will be returned). In this way gardenlet will clean up all owner DNSRecords.
-Finally, the field will be removed from the API in a future version of Gardener.</p>
+The field is no-op and will be removed in a future version.</p>
 </p>
 <table>
 <thead>
@@ -9458,6 +9570,8 @@ Kubernetes core/v1.SecretReference
 <em>(Optional)</em>
 <p>SecretRef is a reference to a Secret object containing the Kubeconfig of the Kubernetes
 cluster to be registered as Seed.</p>
+<p>Deprecated: This field is deprecated, gardenlet must run in the Seed cluster,
+hence it should use the in-cluster rest config via ServiceAccount to communicate with the Seed cluster.</p>
 </td>
 </tr>
 <tr>
@@ -9800,6 +9914,8 @@ Kubernetes core/v1.SecretReference
 <em>(Optional)</em>
 <p>SecretRef is a reference to a Secret object containing the Kubeconfig of the Kubernetes
 cluster to be registered as Seed.</p>
+<p>Deprecated: This field is deprecated, gardenlet must run in the Seed cluster,
+hence it should use the in-cluster rest config via ServiceAccount to communicate with the Seed cluster.</p>
 </td>
 </tr>
 <tr>
@@ -10025,8 +10141,7 @@ This field must be within [30d,90d].</p>
 <em>(Optional)</em>
 <p>AcceptedIssuers is an additional set of issuers that are used to determine which service account tokens are accepted.
 These values are not used to generate new service account tokens. Only useful when service account tokens are also
-issued by another external system or a change of the current issuer that is used for generating tokens is being performed.
-This field is only available for Kubernetes v1.22 or later.</p>
+issued by another external system or a change of the current issuer that is used for generating tokens is being performed.</p>
 </td>
 </tr>
 </tbody>
@@ -10752,8 +10867,7 @@ string
 </td>
 <td>
 <em>(Optional)</em>
-<p>SeedName is the name of the seed cluster that runs the control plane of the Shoot.
-This field is immutable when the SeedChange feature gate is disabled.</p>
+<p>SeedName is the name of the seed cluster that runs the control plane of the Shoot.</p>
 </td>
 </tr>
 <tr>
@@ -11379,8 +11493,7 @@ string
 </td>
 <td>
 <em>(Optional)</em>
-<p>SeedName is the name of the seed cluster that runs the control plane of the Shoot.
-This field is immutable when the SeedChange feature gate is disabled.</p>
+<p>SeedName is the name of the seed cluster that runs the control plane of the Shoot.</p>
 </td>
 </tr>
 <tr>
@@ -11939,7 +12052,7 @@ CRI
 <td>
 <em>(Optional)</em>
 <p>CRI contains configurations of CRI support of every machine in the worker pool.
-Defaults to a CRI with name <code>containerd</code> when the Kubernetes version of the <code>Shoot</code> is &gt;= 1.22.</p>
+Defaults to a CRI with name <code>containerd</code>.</p>
 </td>
 </tr>
 <tr>
@@ -12000,7 +12113,8 @@ int32
 </em>
 </td>
 <td>
-<p>Maximum is the maximum number of VMs to create.</p>
+<p>Maximum is the maximum number of machines to create.
+This value is divided by the number of configured zones for a fair distribution.</p>
 </td>
 </tr>
 <tr>
@@ -12011,7 +12125,8 @@ int32
 </em>
 </td>
 <td>
-<p>Minimum is the minimum number of VMs to create.</p>
+<p>Minimum is the minimum number of machines to create.
+This value is divided by the number of configured zones for a fair distribution.</p>
 </td>
 </tr>
 <tr>
@@ -12025,7 +12140,8 @@ k8s.io/apimachinery/pkg/util/intstr.IntOrString
 </td>
 <td>
 <em>(Optional)</em>
-<p>MaxSurge is maximum number of VMs that are created during an update.</p>
+<p>MaxSurge is maximum number of machines that are created during an update.
+This value is divided by the number of configured zones for a fair distribution.</p>
 </td>
 </tr>
 <tr>
@@ -12039,7 +12155,8 @@ k8s.io/apimachinery/pkg/util/intstr.IntOrString
 </td>
 <td>
 <em>(Optional)</em>
-<p>MaxUnavailable is the maximum number of VMs that can be unavailable during an update.</p>
+<p>MaxUnavailable is the maximum number of machines that can be unavailable during an update.
+This value is divided by the number of configured zones for a fair distribution.</p>
 </td>
 </tr>
 <tr>
@@ -12160,7 +12277,7 @@ map[string]string
 </td>
 <td>
 <em>(Optional)</em>
-<p>Sysctls is a map of kernel settings to apply on all VMs in this worker pool.</p>
+<p>Sysctls is a map of kernel settings to apply on all machines in this worker pool.</p>
 </td>
 </tr>
 </tbody>

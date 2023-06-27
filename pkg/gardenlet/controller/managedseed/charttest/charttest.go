@@ -24,7 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -43,7 +43,6 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/apis/seedmanagement"
-	"github.com/gardener/gardener/pkg/features"
 	gardenletv1alpha1 "github.com/gardener/gardener/pkg/gardenlet/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/utils"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -111,8 +110,7 @@ func getEmptyPriorityClass() *schedulingv1.PriorityClass {
 func ValidateGardenletChartRBAC(ctx context.Context, c client.Client, expectedLabels map[string]string, serviceAccountName string, featureGates map[string]bool) {
 	// ClusterRoles
 	gardenletClusterRole := getGardenletClusterRole(expectedLabels)
-	apiServerSNIEnabled, ok := featureGates[string(features.APIServerSNI)]
-	apiServerSNIClusterRole := getAPIServerSNIClusterRole(expectedLabels, !ok || apiServerSNIEnabled)
+	apiServerSNIClusterRole := getAPIServerSNIClusterRole(expectedLabels)
 	managedIstioClusterRole := getManagedIstioClusterRole(expectedLabels)
 	expectedClusterRoles := map[types.NamespacedName]*rbacv1.ClusterRole{
 		{Name: gardenletClusterRole.Name}:    gardenletClusterRole,
@@ -252,6 +250,8 @@ func getGardenletClusterRole(labels map[string]string) *rbacv1.ClusterRole {
 				APIGroups: []string{"apiextensions.k8s.io"},
 				Resources: []string{"customresourcedefinitions"},
 				ResourceNames: []string{
+					"etcds.druid.gardener.cloud",
+					"etcdcopybackupstasks.druid.gardener.cloud",
 					"hvpas.autoscaling.k8s.io",
 					"destinationrules.networking.istio.io",
 					"envoyfilters.networking.istio.io",
@@ -284,7 +284,7 @@ func getGardenletClusterRole(labels map[string]string) *rbacv1.ClusterRole {
 			},
 			{
 				APIGroups: []string{"apps"},
-				Resources: []string{"deployments", "deployments/scale", "daemonsets", "statefulsets", "statefulsets/scale", "replicasets"},
+				Resources: []string{"deployments", "deployments/scale", "statefulsets", "statefulsets/scale", "replicasets"},
 				Verbs:     []string{"create", "delete", "deletecollection", "get", "list", "watch", "patch", "update"},
 			},
 			{
@@ -320,7 +320,7 @@ func getGardenletClusterRole(labels map[string]string) *rbacv1.ClusterRole {
 			},
 			{
 				APIGroups: []string{"extensions.gardener.cloud"},
-				Resources: []string{"backupbuckets/status", "backupentries/status", "containerruntimes/status", "controlplanes/status", "extensions/status", "infrastructures/status", "networks/status", "operatingsystemconfigs/status", "workers/status"},
+				Resources: []string{"backupbuckets/status", "backupentries/status", "containerruntimes/status", "controlplanes/status", "dnsrecords/status", "extensions/status", "infrastructures/status", "networks/status", "operatingsystemconfigs/status", "workers/status"},
 				Verbs:     []string{"patch", "update"},
 			},
 			{
@@ -390,22 +390,24 @@ func getGardenletClusterRole(labels map[string]string) *rbacv1.ClusterRole {
 				Resources: []string{"destinationrules", "gateways", "virtualservices", "envoyfilters"},
 				Verbs:     []string{"delete"},
 			},
+			{
+				APIGroups: []string{"machine.sapcloud.io"},
+				Resources: []string{"machinedeployments", "machines"},
+				Verbs:     []string{"list", "watch", "get"},
+			},
 		},
 	}
 }
 
-func getAPIServerSNIClusterRole(labels map[string]string, apiServerSNIEnabled bool) *rbacv1.ClusterRole {
-	clusterRole := rbacv1.ClusterRole{
+func getAPIServerSNIClusterRole(labels map[string]string) *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: rbacv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "gardener.cloud:system:gardenlet:apiserver-sni",
 			Labels:          labels,
 			ResourceVersion: "1",
 		},
-	}
-
-	if apiServerSNIEnabled {
-		clusterRole.Rules = []rbacv1.PolicyRule{
+		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"networking.istio.io"},
 				Resources: []string{"envoyfilters", "gateways", "virtualservices"},
@@ -423,24 +425,8 @@ func getAPIServerSNIClusterRole(labels map[string]string, apiServerSNIEnabled bo
 				ResourceNames: []string{"proxy-protocol-blackhole"},
 				Verbs:         []string{"get", "patch", "update"},
 			},
-		}
-	} else {
-		clusterRole.Rules = []rbacv1.PolicyRule{
-			{
-				APIGroups:     []string{"networking.istio.io"},
-				Resources:     []string{"envoyfilters", "gateways"},
-				ResourceNames: []string{"proxy-protocol"},
-				Verbs:         []string{"delete"},
-			},
-			{
-				APIGroups:     []string{"networking.istio.io"},
-				Resources:     []string{"virtualservices"},
-				ResourceNames: []string{"proxy-protocol-blackhole"},
-				Verbs:         []string{"delete"},
-			},
-		}
+		},
 	}
-	return &clusterRole
 }
 
 func getManagedIstioClusterRole(labels map[string]string) *rbacv1.ClusterRole {
@@ -630,12 +616,12 @@ func ValidateGardenletChartServiceAccount(ctx context.Context, c client.Client, 
 func ValidateGardenletChartPodDisruptionBudget(ctx context.Context, c client.Client, expectedLabels map[string]string, replicaCount *int32) {
 	maxUnavailable := intstr.FromInt(1)
 
-	pdb := &policyv1beta1.PodDisruptionBudget{
+	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "gardenlet",
 			Namespace: v1beta1constants.GardenNamespace,
 		},
-		Spec: policyv1beta1.PodDisruptionBudgetSpec{
+		Spec: policyv1.PodDisruptionBudgetSpec{
 			MaxUnavailable: &maxUnavailable,
 			Selector:       &metav1.LabelSelector{},
 		},
@@ -804,10 +790,11 @@ func ComputeExpectedGardenletConfiguration(
 					},
 				},
 			},
-			ShootSecret: &gardenletv1alpha1.ShootSecretControllerConfiguration{
+			ShootState: &gardenletv1alpha1.ShootStateControllerConfiguration{
 				ConcurrentSyncs: &five,
+				SyncPeriod:      &metav1.Duration{Duration: 6 * time.Hour},
 			},
-			ShootStateSync: &gardenletv1alpha1.ShootStateSyncControllerConfiguration{
+			TokenRequestor: &gardenletv1alpha1.TokenRequestorControllerConfiguration{
 				ConcurrentSyncs: &five,
 			},
 			ControllerInstallation: &gardenletv1alpha1.ControllerInstallationControllerConfiguration{

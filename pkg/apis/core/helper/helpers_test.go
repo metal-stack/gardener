@@ -510,17 +510,6 @@ var _ = Describe("helper", func() {
 		Entry("scheduling 'visible' is true", &core.SeedSettings{Scheduling: &core.SeedSettingScheduling{Visible: true}}, true),
 	)
 
-	DescribeTable("#SeedSettingOwnerChecksEnabled",
-		func(settings *core.SeedSettings, expected bool) {
-			Expect(SeedSettingOwnerChecksEnabled(settings)).To(Equal(expected))
-		},
-
-		Entry("no settings", nil, false),
-		Entry("no owner checks setting", &core.SeedSettings{}, false),
-		Entry("owner checks enabled", &core.SeedSettings{OwnerChecks: &core.SeedSettingOwnerChecks{Enabled: true}}, true),
-		Entry("owner checks disabled", &core.SeedSettings{OwnerChecks: &core.SeedSettingOwnerChecks{Enabled: false}}, false),
-	)
-
 	DescribeTable("#SeedSettingTopologyAwareRoutingEnabled",
 		func(settings *core.SeedSettings, expected bool) {
 			Expect(SeedSettingTopologyAwareRoutingEnabled(settings)).To(Equal(expected))
@@ -890,6 +879,26 @@ var _ = Describe("helper", func() {
 			Expect(IsWorkerless(shoot)).To(BeTrue())
 		})
 	})
+
+	DescribeTable("#ShootEnablesSSHAccess",
+		func(workers []core.Worker, workersSettings *core.WorkersSettings, expectedResult bool) {
+			shoot := &core.Shoot{
+				Spec: core.ShootSpec{
+					Provider: core.Provider{
+						Workers:         workers,
+						WorkersSettings: workersSettings,
+					},
+				},
+			}
+			Expect(ShootEnablesSSHAccess(shoot)).To(Equal(expectedResult))
+		},
+
+		Entry("should return false when shoot provider has zero workers", nil, nil, false),
+		Entry("should return true when shoot provider has no WorkersSettings", []core.Worker{core.Worker{}}, nil, true),
+		Entry("should return true when shoot worker settings has no SSHAccess", []core.Worker{core.Worker{}}, &core.WorkersSettings{}, true),
+		Entry("should return true when shoot worker settings has SSHAccess set to true", []core.Worker{core.Worker{}}, &core.WorkersSettings{SSHAccess: &core.SSHAccess{Enabled: true}}, true),
+		Entry("should return false when shoot worker settings has SSHAccess set to false", []core.Worker{core.Worker{}}, &core.WorkersSettings{SSHAccess: &core.SSHAccess{Enabled: false}}, false),
+	)
 
 	Describe("#DeterminePrimaryIPFamily", func() {
 		It("should return IPv4 for empty ipFamilies", func() {

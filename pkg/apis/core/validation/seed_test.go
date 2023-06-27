@@ -153,6 +153,27 @@ var _ = Describe("Seed Validation Tests", func() {
 			),
 		)
 
+		Context("operation annotation", func() {
+			It("should do nothing if the operation annotation is not set", func() {
+				Expect(ValidateSeed(seed)).To(BeEmpty())
+			})
+
+			It("should return an error if the operation annotation is invalid", func() {
+				metav1.SetMetaDataAnnotation(&seed.ObjectMeta, "gardener.cloud/operation", "foo-bar")
+				Expect(ValidateSeed(seed)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":  Equal(field.ErrorTypeNotSupported),
+					"Field": Equal("metadata.annotations[gardener.cloud/operation]"),
+				}))))
+			})
+
+			DescribeTable("should return nothing if the operation annotations is valid", func(operation string) {
+				metav1.SetMetaDataAnnotation(&seed.ObjectMeta, "gardener.cloud/operation", operation)
+				Expect(ValidateSeed(seed)).To(BeEmpty())
+			},
+				Entry("renew-garden-access-secrets", "renew-garden-access-secrets"),
+			)
+		})
+
 		It("should forbid Seed specification with empty or invalid keys", func() {
 			invalidCIDR := "invalid-cidr"
 			seed.Spec.Provider = core.SeedProvider{
@@ -888,46 +909,6 @@ var _ = Describe("Seed Validation Tests", func() {
 				errorList := ValidateSeed(seed)
 
 				Expect(errorList).To(BeEmpty())
-			})
-
-			Context("ownerChecks", func() {
-				It("should allow unspecified owner checks", func() {
-					seed.Spec.Settings = &core.SeedSettings{}
-
-					errorList := ValidateSeed(seed)
-
-					Expect(errorList).To(BeEmpty())
-				})
-
-				It("should allow owner checks disablement", func() {
-					seed.Spec.Settings = &core.SeedSettings{
-						OwnerChecks: &core.SeedSettingOwnerChecks{
-							Enabled: false,
-						},
-					}
-
-					errorList := ValidateSeed(seed)
-
-					Expect(errorList).To(BeEmpty())
-				})
-
-				It("should prevent owner checks enablement", func() {
-					seed.Spec.Settings = &core.SeedSettings{
-						OwnerChecks: &core.SeedSettingOwnerChecks{
-							Enabled: true,
-						},
-					}
-
-					errorList := ValidateSeed(seed)
-
-					Expect(errorList).To(ConsistOf(
-						PointTo(MatchFields(IgnoreExtras, Fields{
-							"Type":   Equal(field.ErrorTypeForbidden),
-							"Field":  Equal("spec.settings.ownerChecks.enabled"),
-							"Detail": Equal("owner checks is locked to false in Gardener v1.72+"),
-						})),
-					))
-				})
 			})
 		})
 

@@ -66,6 +66,7 @@ build:
         - pkg/component/nodelocaldns/constants
         - pkg/component/logging/fluentoperator
         - pkg/component/logging/fluentoperator/customresources
+        - pkg/component/logging/vali
         - pkg/component/resourcemanager
         - pkg/component/resourcemanager/constants
         - pkg/component/shared
@@ -181,6 +182,7 @@ build:
         - pkg/chartrenderer
         - pkg/client/kubernetes
         - pkg/client/kubernetes/cache
+        - pkg/controller/tokenrequestor
         - pkg/controllerutils
         - pkg/controllerutils/mapper
         - pkg/controllerutils/predicate
@@ -209,7 +211,6 @@ build:
         - pkg/resourcemanager/controller/node/helper
         - pkg/resourcemanager/controller/secret
         - pkg/resourcemanager/controller/tokeninvalidator
-        - pkg/resourcemanager/controller/tokenrequestor
         - pkg/resourcemanager/predicate
         - pkg/resourcemanager/webhook
         - pkg/resourcemanager/webhook/crddeletionprotection

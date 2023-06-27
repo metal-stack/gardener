@@ -21,7 +21,6 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -88,8 +87,6 @@ func DefaultShoot(name string) *gardencorev1beta1.Shoot {
 			},
 			Networking: &gardencorev1beta1.Networking{
 				Type: pointer.String("calico"),
-				// TODO(scheererj): Drop this emtpy provider config after v1.71 has been released (otherwise, e2e upgrade tests break)
-				ProviderConfig: &runtime.RawExtension{Raw: []byte(`{"apiVersion":"calico.networking.extensions.gardener.cloud/v1alpha1","kind":"NetworkConfig"}`)},
 			},
 			Provider: gardencorev1beta1.Provider{
 				Type: "local",
@@ -131,7 +128,7 @@ func DefaultWorkerlessShoot(name string) *gardencorev1beta1.Shoot {
 			Region:           "local",
 			CloudProfileName: "local",
 			Kubernetes: gardencorev1beta1.Kubernetes{
-				Version:                     "1.26.0",
+				Version:                     "1.27.1",
 				EnableStaticTokenKubeconfig: pointer.Bool(false),
 			},
 			Provider: gardencorev1beta1.Provider{

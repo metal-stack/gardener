@@ -853,17 +853,6 @@ var _ = Describe("helper", func() {
 		),
 	)
 
-	DescribeTable("#SeedSettingOwnerChecksEnabled",
-		func(settings *gardencorev1beta1.SeedSettings, expected bool) {
-			Expect(SeedSettingOwnerChecksEnabled(settings)).To(Equal(expected))
-		},
-
-		Entry("no settings", nil, false),
-		Entry("no owner checks setting", &gardencorev1beta1.SeedSettings{}, false),
-		Entry("owner checks enabled", &gardencorev1beta1.SeedSettings{OwnerChecks: &gardencorev1beta1.SeedSettingOwnerChecks{Enabled: true}}, true),
-		Entry("owner checks disabled", &gardencorev1beta1.SeedSettings{OwnerChecks: &gardencorev1beta1.SeedSettingOwnerChecks{Enabled: false}}, false),
-	)
-
 	DescribeTable("#SeedSettingDependencyWatchdogWeederEnabled",
 		func(settings *gardencorev1beta1.SeedSettings, expected bool) {
 			Expect(SeedSettingDependencyWatchdogWeederEnabled(settings)).To(Equal(expected))
@@ -891,22 +880,6 @@ var _ = Describe("helper", func() {
 		Entry("no topology-aware routing setting", &gardencorev1beta1.SeedSettings{}, false),
 		Entry("topology-aware routing enabled", &gardencorev1beta1.SeedSettings{TopologyAwareRouting: &gardencorev1beta1.SeedSettingTopologyAwareRouting{Enabled: true}}, true),
 		Entry("topology-aware routing disabled", &gardencorev1beta1.SeedSettings{TopologyAwareRouting: &gardencorev1beta1.SeedSettingTopologyAwareRouting{Enabled: false}}, false),
-	)
-
-	DescribeTable("#SeedUsesNginxIngressController",
-		func(dns gardencorev1beta1.SeedDNS, ingress *gardencorev1beta1.Ingress, expected bool) {
-			seed := &gardencorev1beta1.Seed{
-				Spec: gardencorev1beta1.SeedSpec{
-					DNS:     dns,
-					Ingress: ingress,
-				},
-			}
-			Expect(SeedUsesNginxIngressController(seed)).To(Equal(expected))
-		},
-		Entry("no dns provider", gardencorev1beta1.SeedDNS{}, nil, false),
-		Entry("no ingress", gardencorev1beta1.SeedDNS{Provider: &gardencorev1beta1.SeedDNSProvider{}}, nil, false),
-		Entry("ingress controller kind is not nginx", gardencorev1beta1.SeedDNS{Provider: &gardencorev1beta1.SeedDNSProvider{}}, &gardencorev1beta1.Ingress{Controller: gardencorev1beta1.IngressController{Kind: "foo"}}, false),
-		Entry("ingress controller kind is nginx", gardencorev1beta1.SeedDNS{Provider: &gardencorev1beta1.SeedDNSProvider{}}, &gardencorev1beta1.Ingress{Controller: gardencorev1beta1.IngressController{Kind: "nginx"}}, true),
 	)
 
 	Describe("#FindMachineImageVersion", func() {
@@ -1998,18 +1971,20 @@ var _ = Describe("helper", func() {
 		Entry("equality", &gardencorev1beta1.DNS{Providers: []gardencorev1beta1.DNSProvider{{SecretName: pointer.String("foo")}}}, &gardencorev1beta1.DNS{Providers: []gardencorev1beta1.DNSProvider{{SecretName: pointer.String("foo")}}}, BeTrue()),
 	)
 
-	DescribeTable("#ShootSecretResourceReferencesEqual",
+	DescribeTable("#ShootResourceReferencesEqual",
 		func(oldResources, newResources []gardencorev1beta1.NamedResourceReference, matcher gomegatypes.GomegaMatcher) {
-			Expect(ShootSecretResourceReferencesEqual(oldResources, newResources)).To(matcher)
+			Expect(ShootResourceReferencesEqual(oldResources, newResources)).To(matcher)
 		},
 
 		Entry("both nil", nil, nil, BeTrue()),
 		Entry("old empty, new w/o secrets", []gardencorev1beta1.NamedResourceReference{}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{Name: "foo"}}}, BeTrue()),
 		Entry("old empty, new w/ secrets", []gardencorev1beta1.NamedResourceReference{}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, BeFalse()),
+		Entry("old empty, new w/ configMap", []gardencorev1beta1.NamedResourceReference{}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "ConfigMap", Name: "foo"}}}, BeFalse()),
 		Entry("old w/o secrets, new empty", []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{Name: "foo"}}}, []gardencorev1beta1.NamedResourceReference{}, BeTrue()),
 		Entry("old w/ secrets, new empty", []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, []gardencorev1beta1.NamedResourceReference{}, BeFalse()),
 		Entry("difference", []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "bar"}}}, BeFalse()),
-		Entry("difference because no secret", []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "ConfigMap", Name: "foo"}}}, BeFalse()),
+		Entry("difference because no secret", []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "ConfigMap", Name: "bar"}}}, BeFalse()),
+		Entry("difference beacuse new is configMap with same name", []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "ConfigMap", Name: "foo"}}}, BeFalse()),
 		Entry("equality", []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, []gardencorev1beta1.NamedResourceReference{{ResourceRef: autoscalingv1.CrossVersionObjectReference{APIVersion: "v1", Kind: "Secret", Name: "foo"}}}, BeTrue()),
 	)
 
@@ -2667,17 +2642,6 @@ var _ = Describe("helper", func() {
 		})
 	})
 
-	DescribeTable("#SeedWantsManagedIngress",
-		func(seed *gardencorev1beta1.Seed, expected gomegatypes.GomegaMatcher) {
-			Expect(SeedWantsManagedIngress(seed)).To(expected)
-		},
-
-		Entry("dns provider nil", &gardencorev1beta1.Seed{}, BeFalse()),
-		Entry("ingress nil", &gardencorev1beta1.Seed{Spec: gardencorev1beta1.SeedSpec{DNS: gardencorev1beta1.SeedDNS{Provider: &gardencorev1beta1.SeedDNSProvider{}}}}, BeFalse()),
-		Entry("ingress controller kind not nginx", &gardencorev1beta1.Seed{Spec: gardencorev1beta1.SeedSpec{DNS: gardencorev1beta1.SeedDNS{Provider: &gardencorev1beta1.SeedDNSProvider{}}, Ingress: &gardencorev1beta1.Ingress{Controller: gardencorev1beta1.IngressController{Kind: "foo"}}}}, BeFalse()),
-		Entry("ingress controller kind nginx", &gardencorev1beta1.Seed{Spec: gardencorev1beta1.SeedSpec{DNS: gardencorev1beta1.SeedDNS{Provider: &gardencorev1beta1.SeedDNSProvider{}}, Ingress: &gardencorev1beta1.Ingress{Controller: gardencorev1beta1.IngressController{Kind: "nginx"}}}}, BeTrue()),
-	)
-
 	DescribeTable("#IsTopologyAwareRoutingForShootControlPlaneEnabled",
 		func(seed *gardencorev1beta1.Seed, shoot *gardencorev1beta1.Shoot, matcher gomegatypes.GomegaMatcher) {
 			Expect(IsTopologyAwareRoutingForShootControlPlaneEnabled(seed, shoot)).To(matcher)
@@ -2713,6 +2677,15 @@ var _ = Describe("helper", func() {
 			&gardencorev1beta1.Shoot{Spec: gardencorev1beta1.ShootSpec{ControlPlane: &gardencorev1beta1.ControlPlane{HighAvailability: &gardencorev1beta1.HighAvailability{FailureTolerance: gardencorev1beta1.FailureTolerance{Type: gardencorev1beta1.FailureToleranceTypeZone}}}}},
 			BeTrue(),
 		),
+	)
+
+	DescribeTable("#ShootHasOperationType",
+		func(lastOperation *gardencorev1beta1.LastOperation, lastOperationType gardencorev1beta1.LastOperationType, matcher gomegatypes.GomegaMatcher) {
+			Expect(ShootHasOperationType(lastOperation, lastOperationType)).To(matcher)
+		},
+		Entry("last operation nil", nil, gardencorev1beta1.LastOperationTypeCreate, BeFalse()),
+		Entry("last operation type does not match", &gardencorev1beta1.LastOperation{}, gardencorev1beta1.LastOperationTypeCreate, BeFalse()),
+		Entry("last operation type matches", &gardencorev1beta1.LastOperation{Type: gardencorev1beta1.LastOperationTypeCreate}, gardencorev1beta1.LastOperationTypeCreate, BeTrue()),
 	)
 })
 

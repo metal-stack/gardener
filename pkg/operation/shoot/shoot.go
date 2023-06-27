@@ -22,6 +22,7 @@ import (
 
 	"github.com/Masterminds/semver"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -257,6 +258,16 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 		}
 	}
 
+	if lastOperation := shootObject.Status.LastOperation; lastOperation != nil &&
+		lastOperation.Type == gardencorev1beta1.LastOperationTypeRestore &&
+		lastOperation.State != gardencorev1beta1.LastOperationStateSucceeded {
+		shootState := &gardencorev1beta1.ShootState{ObjectMeta: metav1.ObjectMeta{Name: shootObject.Name, Namespace: shootObject.Namespace}}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(shootState), shootState); err != nil {
+			return nil, err
+		}
+		shoot.SetShootState(shootState)
+	}
+
 	return shoot, nil
 }
 
@@ -275,6 +286,27 @@ func (s *Shoot) GetInfo() *gardencorev1beta1.Shoot {
 // To properly update the shoot resource of this Shoot use UpdateInfo or UpdateInfoStatus.
 func (s *Shoot) SetInfo(shoot *gardencorev1beta1.Shoot) {
 	s.info.Store(shoot)
+}
+
+// GetShootState returns the shootstate resource of this Shoot in a concurrency safe way.
+// This method should be used only for reading the data of the returned shootstate resource. The returned shootstate
+// resource MUST NOT BE MODIFIED (except in test code) since this might interfere with other concurrent reads and writes.
+// To properly update the shootstate resource of this Shoot use SaveGardenerResourceDataInShootState.
+func (s *Shoot) GetShootState() *gardencorev1beta1.ShootState {
+	shootState, ok := s.shootState.Load().(*gardencorev1beta1.ShootState)
+	if !ok {
+		return nil
+	}
+	return shootState
+}
+
+// SetShootState sets the shootstate resource of this Shoot in a concurrency safe way.
+// This method is not protected by a mutex and does not update the shootstate resource in the cluster and so
+// should be used only in exceptional situations, or as a convenience in test code. The shootstate passed as a parameter
+// MUST NOT BE MODIFIED after the call to SetShootState (except in test code) since this might interfere with other concurrent reads and writes.
+// To properly update the shootstate resource of this Shoot use SaveGardenerResourceDataInShootState.
+func (s *Shoot) SetShootState(shootState *gardencorev1beta1.ShootState) {
+	s.shootState.Store(shootState)
 }
 
 // UpdateInfo updates the shoot resource of this Shoot in a concurrency safe way,
@@ -355,7 +387,6 @@ func (s *Shoot) GetDNSRecordComponentsForMigration() []component.DeployMigrateWa
 		s.Components.Extensions.IngressDNSRecord,
 		s.Components.Extensions.ExternalDNSRecord,
 		s.Components.Extensions.InternalDNSRecord,
-		s.Components.Extensions.OwnerDNSRecord,
 	}
 }
 

@@ -46,6 +46,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/kubernetesdashboard"
 	"github.com/gardener/gardener/pkg/component/kubescheduler"
 	"github.com/gardener/gardener/pkg/component/kubestatemetrics"
+	"github.com/gardener/gardener/pkg/component/machinecontrollermanager"
 	"github.com/gardener/gardener/pkg/component/nodelocaldns"
 	"github.com/gardener/gardener/pkg/component/resourcemanager"
 	"github.com/gardener/gardener/pkg/component/vpa"
@@ -69,6 +70,9 @@ type Builder struct {
 type Shoot struct {
 	info      atomic.Value
 	infoMutex sync.Mutex
+
+	shootState      atomic.Value
+	shootStateMutex sync.Mutex
 
 	Secret       *corev1.Secret
 	CloudProfile *gardencorev1beta1.CloudProfile
@@ -116,21 +120,21 @@ type Components struct {
 
 // ControlPlane contains references to K8S control plane components.
 type ControlPlane struct {
-	ClusterAutoscaler     clusterautoscaler.Interface
-	EtcdMain              etcd.Interface
-	EtcdEvents            etcd.Interface
-	EtcdCopyBackupsTask   etcdcopybackupstask.Interface
-	KubeAPIServerIngress  component.Deployer
-	KubeAPIServerService  component.DeployWaiter
-	KubeAPIServerSNI      component.DeployWaiter
-	KubeAPIServerSNIPhase component.Phase
-	KubeAPIServer         kubeapiserver.Interface
-	KubeScheduler         kubescheduler.Interface
-	KubeControllerManager kubecontrollermanager.Interface
-	KubeStateMetrics      kubestatemetrics.Interface
-	ResourceManager       resourcemanager.Interface
-	VerticalPodAutoscaler vpa.Interface
-	VPNSeedServer         vpnseedserver.Interface
+	ClusterAutoscaler        clusterautoscaler.Interface
+	EtcdMain                 etcd.Interface
+	EtcdEvents               etcd.Interface
+	EtcdCopyBackupsTask      etcdcopybackupstask.Interface
+	KubeAPIServerIngress     component.Deployer
+	KubeAPIServerService     component.DeployWaiter
+	KubeAPIServerSNI         component.DeployWaiter
+	KubeAPIServer            kubeapiserver.Interface
+	KubeScheduler            kubescheduler.Interface
+	KubeControllerManager    kubecontrollermanager.Interface
+	KubeStateMetrics         kubestatemetrics.Interface
+	MachineControllerManager machinecontrollermanager.Interface
+	ResourceManager          resourcemanager.Interface
+	VerticalPodAutoscaler    vpa.Interface
+	VPNSeedServer            vpnseedserver.Interface
 }
 
 // Extensions contains references to extension resources.
@@ -141,7 +145,6 @@ type Extensions struct {
 	ExternalDNSRecord     dnsrecord.Interface
 	InternalDNSRecord     dnsrecord.Interface
 	IngressDNSRecord      dnsrecord.Interface
-	OwnerDNSRecord        dnsrecord.Interface
 	Extension             extension.Interface
 	Infrastructure        infrastructure.Interface
 	Network               component.DeployMigrateWaiter
@@ -169,6 +172,7 @@ type SystemComponents struct {
 type Logging struct {
 	ShootRBACProxy   component.Deployer
 	ShootEventLogger component.Deployer
+	Vali             component.Deployer
 }
 
 // Addons contains references for the addons.

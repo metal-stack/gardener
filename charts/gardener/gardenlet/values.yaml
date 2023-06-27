@@ -113,10 +113,9 @@ config:
       - type: EveryNodeReady
         duration: 5m
       webhookRemediatorEnabled: false
-    shootSecret:
+    shootState:
       concurrentSyncs: 5
-    shootStateSync:
-      concurrentSyncs: 5
+      syncPeriod: 6h
     managedSeed:
       concurrentSyncs: 5
       syncPeriod: 1h
@@ -128,6 +127,8 @@ config:
     # additionalNamespaceSelectors:
     # - matchLabels:
     #     foo: bar
+    tokenRequestor:
+      concurrentSyncs: 5
   resources:
     capacity:
       shoots: 250
@@ -153,7 +154,7 @@ config:
     enableContentionProfiling: false
   featureGates: {}
   seedConfig: {}
-  # sni: # SNI configuration used for APIServerSNI feature gate.
+  # sni:
   #   ingress:
   #     serviceName: istio-ingress
   #     namespace: istio-ingress

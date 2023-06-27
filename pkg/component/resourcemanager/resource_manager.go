@@ -34,7 +34,6 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -83,7 +82,6 @@ import (
 	"github.com/gardener/gardener/pkg/utils/retry"
 	"github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
-	"github.com/gardener/gardener/pkg/utils/version"
 )
 
 var (
@@ -258,8 +256,6 @@ type Values struct {
 	DefaultUnreachableToleration *int64
 	// HealthSyncPeriod describes the duration of how often the health of existing resources should be synced
 	HealthSyncPeriod *metav1.Duration
-	// FullNetworkPolicies makes the network policy controller to consider all relevant namespaces.
-	FullNetworkPolicies bool
 	// NetworkPolicyAdditionalNamespaceSelectors is the list of additional namespace selectors to consider for the
 	// NetworkPolicy controller.
 	NetworkPolicyAdditionalNamespaceSelectors []metav1.LabelSelector
@@ -272,14 +268,16 @@ type Values struct {
 	LogLevel string
 	// LogFormat is the output format for the logs. Must be one of [text,json].
 	LogFormat string
-	// MaxConcurrentHealthWorkers configures the number of worker threads for concurrent health reconciliation of resources
+	// MaxConcurrentHealthWorkers configures the number of worker threads for concurrent health reconciliation of resources.
 	MaxConcurrentHealthWorkers *int
-	// MaxConcurrentTokenInvalidatorWorkers configures the number of worker threads for concurrent token invalidator reconciliations
+	// MaxConcurrentTokenInvalidatorWorkers configures the number of worker threads for concurrent token invalidator reconciliations.
 	MaxConcurrentTokenInvalidatorWorkers *int
-	// MaxConcurrentTokenRequestorWorkers configures the number of worker threads for concurrent token requestor reconciliations
+	// MaxConcurrentTokenRequestorWorkers configures the number of worker threads for concurrent token requestor reconciliations.
 	MaxConcurrentTokenRequestorWorkers *int
-	// MaxConcurrentCSRApproverWorkers configures the number of worker threads for concurrent kubelet CSR approver reconciliations
+	// MaxConcurrentCSRApproverWorkers configures the number of worker threads for concurrent kubelet CSR approver reconciliations.
 	MaxConcurrentCSRApproverWorkers *int
+	// MaxConcurrentCSRApproverWorkers configures the number of worker threads for the network policy controller.
+	MaxConcurrentNetworkPolicyWorkers *int
 	// NamePrefix is the prefix for the resource names.
 	NamePrefix string
 	// PriorityClassName is the name of the priority class.
@@ -365,11 +363,7 @@ func (r *resourceManager) Deploy(ctx context.Context) error {
 		fns = append(fns, r.ensureValidatingWebhookConfiguration)
 	}
 
-	if err := flow.Sequential(fns...)(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return flow.Sequential(fns...)(ctx)
 }
 
 func (r *resourceManager) Destroy(ctx context.Context) error {
@@ -590,9 +584,11 @@ func (r *resourceManager) ensureConfigMap(ctx context.Context, configMap *corev1
 		}
 	} else {
 		config.Controllers.NetworkPolicy = resourcemanagerv1alpha1.NetworkPolicyControllerConfig{
-			Enabled: true,
+			Enabled:         true,
+			ConcurrentSyncs: r.values.MaxConcurrentNetworkPolicyWorkers,
 			NamespaceSelectors: append([]metav1.LabelSelector{
 				{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleShoot}},
+				{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleExtension}},
 				{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleIstioSystem}},
 				{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleIstioIngress}},
 				{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: v1beta1constants.LabelExposureClassHandlerName, Operator: metav1.LabelSelectorOpExists}}},
@@ -602,12 +598,6 @@ func (r *resourceManager) ensureConfigMap(ctx context.Context, configMap *corev1
 		}
 		config.Webhooks.CRDDeletionProtection.Enabled = true
 		config.Webhooks.ExtensionValidation.Enabled = true
-
-		if r.values.FullNetworkPolicies {
-			config.Controllers.NetworkPolicy.NamespaceSelectors = append(config.Controllers.NetworkPolicy.NamespaceSelectors,
-				metav1.LabelSelector{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleExtension}},
-			)
-		}
 	}
 
 	if v := r.values.MaxConcurrentCSRApproverWorkers; v != nil {
@@ -1091,27 +1081,17 @@ func (r *resourceManager) emptyVPA() *vpaautoscalingv1.VerticalPodAutoscaler {
 }
 
 func (r *resourceManager) ensurePodDisruptionBudget(ctx context.Context) error {
-	obj := r.emptyPodDisruptionBudget()
+	pdb := r.emptyPodDisruptionBudget()
 
-	pdbSelector := &metav1.LabelSelector{
-		MatchLabels: r.getDeploymentTemplateLabels(),
-	}
 	maxUnavailable := intstr.FromInt(1)
 
-	_, err := controllerutils.GetAndCreateOrMergePatch(ctx, r.client, obj, func() error {
-		switch pdb := obj.(type) {
-		case *policyv1.PodDisruptionBudget:
-			pdb.Labels = r.getLabels()
-			pdb.Spec = policyv1.PodDisruptionBudgetSpec{
-				MaxUnavailable: &maxUnavailable,
-				Selector:       pdbSelector,
-			}
-		case *policyv1beta1.PodDisruptionBudget:
-			pdb.Labels = r.getLabels()
-			pdb.Spec = policyv1beta1.PodDisruptionBudgetSpec{
-				MaxUnavailable: &maxUnavailable,
-				Selector:       pdbSelector,
-			}
+	_, err := controllerutils.GetAndCreateOrMergePatch(ctx, r.client, pdb, func() error {
+		pdb.Labels = r.getLabels()
+		pdb.Spec = policyv1.PodDisruptionBudgetSpec{
+			MaxUnavailable: &maxUnavailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: r.getDeploymentTemplateLabels(),
+			},
 		}
 		return nil
 	})
@@ -1119,19 +1099,12 @@ func (r *resourceManager) ensurePodDisruptionBudget(ctx context.Context) error {
 	return err
 }
 
-func (r *resourceManager) emptyPodDisruptionBudget() client.Object {
-	pdbObjectMeta := metav1.ObjectMeta{
-		Name:      r.values.NamePrefix + v1beta1constants.DeploymentNameGardenerResourceManager,
-		Namespace: r.namespace,
-	}
-
-	if version.ConstraintK8sGreaterEqual121.Check(r.values.RuntimeKubernetesVersion) {
-		return &policyv1.PodDisruptionBudget{
-			ObjectMeta: pdbObjectMeta,
-		}
-	}
-	return &policyv1beta1.PodDisruptionBudget{
-		ObjectMeta: pdbObjectMeta,
+func (r *resourceManager) emptyPodDisruptionBudget() *policyv1.PodDisruptionBudget {
+	return &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.values.NamePrefix + v1beta1constants.DeploymentNameGardenerResourceManager,
+			Namespace: r.namespace,
+		},
 	}
 }
 

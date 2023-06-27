@@ -16,7 +16,6 @@ package etcd
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"strconv"
 	"time"
@@ -28,10 +27,10 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -53,33 +52,25 @@ import (
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
-	"github.com/gardener/gardener/pkg/utils/version"
 )
 
 const (
 	// Druid is a constant for the name of the etcd-druid.
 	Druid = "etcd-druid"
 
-	etcdCRDName                                  = "etcds.druid.gardener.cloud"
-	etcdCopyBackupsTaskCRDName                   = "etcdcopybackupstasks.druid.gardener.cloud"
 	druidRBACName                                = "gardener.cloud:system:" + Druid
 	druidServiceAccountName                      = Druid
 	druidVPAName                                 = Druid + "-vpa"
 	druidConfigMapImageVectorOverwriteNamePrefix = Druid + "-imagevector-overwrite"
+	druidServiceName                             = Druid
 	druidDeploymentName                          = Druid
 	managedResourceControlName                   = Druid
+
+	metricsPort = 8080
 
 	druidConfigMapImageVectorOverwriteDataKey          = "images_overwrite.yaml"
 	druidDeploymentVolumeMountPathImageVectorOverwrite = "/charts_overwrite"
 	druidDeploymentVolumeNameImageVectorOverwrite      = "imagevector-overwrite"
-)
-
-var (
-	//go:embed crds/templates/crd-druid.gardener.cloud_etcds.yaml
-	// CRD holds the etcd custom resource definition template
-	CRD string
-	//go:embed crds/templates/crd-druid.gardener.cloud_etcdcopybackupstasks.yaml
-	etcdCopyBackupsTaskCRD string
 )
 
 // NewBootstrapper creates a new instance of DeployWaiter for the etcd bootstrapper.
@@ -255,6 +246,28 @@ func (b *bootstrapper) Deploy(ctx context.Context) error {
 			},
 		}
 
+		service = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      druidServiceName,
+				Namespace: b.namespace,
+				Labels: utils.MergeStringMaps(map[string]string{
+					resourcesv1alpha1.HighAvailabilityConfigType: resourcesv1alpha1.HighAvailabilityConfigTypeController,
+				}, labels()),
+			},
+			Spec: corev1.ServiceSpec{
+				Type:     corev1.ServiceTypeClusterIP,
+				Selector: labels(),
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "metrics",
+						Protocol:   corev1.ProtocolTCP,
+						Port:       metricsPort,
+						TargetPort: intstr.FromInt(int(metricsPort)),
+					},
+				},
+			},
+		}
+
 		deployment = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      druidDeploymentName,
@@ -295,7 +308,7 @@ func (b *bootstrapper) Deploy(ctx context.Context) error {
 									},
 								},
 								Ports: []corev1.ContainerPort{{
-									ContainerPort: 9569,
+									ContainerPort: metricsPort,
 								}},
 							},
 						},
@@ -304,18 +317,7 @@ func (b *bootstrapper) Deploy(ctx context.Context) error {
 			},
 		}
 
-		resourcesToAdd = []client.Object{
-			serviceAccount,
-			clusterRole,
-			clusterRoleBinding,
-			vpa,
-		}
-
-		podDisruptionBudget client.Object
 		maxUnavailable      = intstr.FromInt(1)
-	)
-
-	if version.ConstraintK8sGreaterEqual121.Check(b.kubernetesVersion) {
 		podDisruptionBudget = &policyv1.PodDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      druidDeploymentName,
@@ -327,21 +329,24 @@ func (b *bootstrapper) Deploy(ctx context.Context) error {
 				Selector:       deployment.Spec.Selector,
 			},
 		}
-	} else {
-		podDisruptionBudget = &policyv1beta1.PodDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      druidDeploymentName,
-				Namespace: deployment.Namespace,
-				Labels:    labels(),
-			},
-			Spec: policyv1beta1.PodDisruptionBudgetSpec{
-				MaxUnavailable: &maxUnavailable,
-				Selector:       deployment.Spec.Selector,
-			},
+
+		resourcesToAdd = []client.Object{
+			serviceAccount,
+			clusterRole,
+			clusterRoleBinding,
+			podDisruptionBudget,
+			vpa,
 		}
+	)
+
+	portMetrics := networkingv1.NetworkPolicyPort{
+		Port:     utils.IntStrPtrFromInt(metricsPort),
+		Protocol: utils.ProtocolPtr(corev1.ProtocolTCP),
 	}
 
-	resourcesToAdd = append(resourcesToAdd, podDisruptionBudget)
+	utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForSeedScrapeTargets(service, portMetrics))
+
+	resourcesToAdd = append(resourcesToAdd, service)
 
 	if b.imageVectorOverwrite != nil {
 		configMapImageVectorOverwrite.Data = map[string]string{druidConfigMapImageVectorOverwriteDataKey: *b.imageVectorOverwrite}
@@ -375,8 +380,6 @@ func (b *bootstrapper) Deploy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	resources["crd.yaml"] = []byte(CRD)
-	resources["crdEtcdCopyBackupsTask.yaml"] = []byte(etcdCopyBackupsTaskCRD)
 
 	return managedresources.CreateForSeed(ctx, b.client, b.namespace, managedResourceControlName, false, resources)
 }
@@ -412,10 +415,6 @@ func (b *bootstrapper) Destroy(ctx context.Context) error {
 		return fmt.Errorf("cannot debootstrap etcd-druid because there are still druidv1alpha1.Etcd resources left in the cluster")
 	}
 
-	if err := gardenerutils.ConfirmDeletion(ctx, b.client, &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: etcdCRDName}}); client.IgnoreNotFound(err) != nil {
-		return err
-	}
-
 	etcdCopyBackupsTaskList := &druidv1alpha1.EtcdCopyBackupsTaskList{}
 	if err := b.client.List(ctx, etcdCopyBackupsTaskList); err != nil && !meta.IsNoMatchError(err) && !apierrors.IsNotFound(err) {
 		return err
@@ -423,10 +422,6 @@ func (b *bootstrapper) Destroy(ctx context.Context) error {
 
 	if len(etcdCopyBackupsTaskList.Items) > 0 {
 		return fmt.Errorf("cannot debootstrap etcd-druid because there are still druidv1alpha1.EtcdCopyBackupsTask resources left in the cluster")
-	}
-
-	if err := gardenerutils.ConfirmDeletion(ctx, b.client, &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: etcdCopyBackupsTaskCRDName}}); client.IgnoreNotFound(err) != nil {
-		return err
 	}
 
 	return managedresources.DeleteForSeed(ctx, b.client, b.namespace, managedResourceControlName)

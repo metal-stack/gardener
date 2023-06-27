@@ -100,7 +100,7 @@ make kind-operator-up
 This command sets up a new KinD cluster named `gardener-local` and stores the kubeconfig in the `./example/gardener-local/kind/operator/kubeconfig` file.
 
 > It might be helpful to copy this file to `$HOME/.kube/config`, since you will need to target this KinD cluster multiple times.
-Alternatively, make sure to set your `KUBECONFIG` environment variable to `./example/gardener-local/kind/operator/kubeconfig` for all future steps via `export KUBECONFIG=example/gardener-local/kind/operator/kubeconfig`.
+Alternatively, make sure to set your `KUBECONFIG` environment variable to `./example/gardener-local/kind/operator/kubeconfig` for all future steps via `export KUBECONFIG=$PWD/example/gardener-local/kind/operator/kubeconfig`.
  
 All the following steps assume that you are using this kubeconfig.
 
@@ -122,6 +122,14 @@ make operator-dev
 This is similar to `make operator-up` but additionally starts a [skaffold dev loop](https://skaffold.dev/docs/workflows/dev/).
 After the initial deployment, skaffold starts watching source files.
 Once it has detected changes, press any key to trigger a new build and deployment of the changed components.
+
+### Debugging Gardener Operator (Optional)
+
+```shell
+make operator-debug
+```
+
+This is similar to `make gardener-debug` but for Gardener Operator component. Please check [Debugging Gardener](../deployment/getting_started_locally.md#debugging-gardener) for details.
 
 ### Creating a `Garden`
 
@@ -185,20 +193,6 @@ Note that this kubeconfig uses a token that has validity of `12h` only, hence it
 ```shell
 make operator-down
 make kind-operator-down
-```
-
-## Alternative Development Variant
-
-An alternative approach is to start the process locally and manually deploy the `CustomResourceDefinition` for the `Garden` resources into the targeted cluster (potentially remote):
-
-```shell
-kubectl create -f example/operator/10-crd-operator.gardener.cloud_gardens.yaml
-make start-operator KUBECONFIG=...
-
-# now you can create Garden resources, for example
-kubectl create -f example/operator/20-garden.yaml
-# alternatively, you can run the e2e test
-make test-e2e-local-operator KUBECONFIG=...
 ```
 
 ## Implementation Details

@@ -267,7 +267,7 @@ func (r *Reconciler) reconcileDesiredPolicies(ctx context.Context, service *core
 }
 
 func (r *Reconciler) deleteStalePolicies(networkPolicyList *metav1.PartialObjectMetadataList, desiredObjectMetaKeys []string) []flow.TaskFn {
-	objectMetaKeysForDesiredPolicies := make(map[string]struct{})
+	objectMetaKeysForDesiredPolicies := make(map[string]struct{}, len(desiredObjectMetaKeys))
 	for _, objectMetaKey := range desiredObjectMetaKeys {
 		objectMetaKeysForDesiredPolicies[objectMetaKey] = struct{}{}
 	}
@@ -317,7 +317,7 @@ func (r *Reconciler) reconcileIngressPolicy(
 		networkPolicy.Spec.PolicyTypes = []networkingv1.PolicyType{networkingv1.PolicyTypeIngress}
 
 		return nil
-	})
+	}, controllerutils.SkipEmptyPatch{})
 
 	return err
 }
@@ -352,7 +352,7 @@ func (r *Reconciler) reconcileEgressPolicy(
 		networkPolicy.Spec.PolicyTypes = []networkingv1.PolicyType{networkingv1.PolicyTypeEgress}
 
 		return nil
-	})
+	}, controllerutils.SkipEmptyPatch{})
 
 	return err
 }
@@ -378,7 +378,7 @@ func (r *Reconciler) reconcileIngressFromWorldPolicy(ctx context.Context, servic
 		networkPolicy.Spec.PolicyTypes = []networkingv1.PolicyType{networkingv1.PolicyTypeIngress}
 
 		return nil
-	})
+	}, controllerutils.SkipEmptyPatch{})
 	return err
 }
 

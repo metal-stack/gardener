@@ -70,6 +70,9 @@ type SeedSpec struct {
 	Provider SeedProvider
 	// SecretRef is a reference to a Secret object containing the Kubeconfig of the Kubernetes
 	// cluster to be registered as Seed.
+	//
+	// Deprecated: This field is deprecated, gardenlet must run in the Seed cluster,
+	// hence it should use the in-cluster rest config via ServiceAccount to communicate with the Seed cluster.
 	SecretRef *corev1.SecretReference
 	// Settings contains certain settings for this seed cluster.
 	Settings *SeedSettings
@@ -205,8 +208,7 @@ type SeedSettings struct {
 	// SeedSettingOwnerChecks controls certain owner checks settings for shoots scheduled on this seed.
 	//
 	// Deprecated: This field is deprecated. The "bad-case" control plane migration is being removed in favor of the HA Shoot control planes (see https://github.com/gardener/gardener/issues/6302).
-	// The field is locked to false (i.e. if the field value is true a validation error will be returned). In this way gardenlet will clean up all owner DNSRecords.
-	// Finally, the field will be removed from the API in a future version of Gardener.
+	// The field is no-op and will be removed in a future version.
 	OwnerChecks *SeedSettingOwnerChecks
 	// DependencyWatchdog controls certain settings for the dependency-watchdog components deployed in the seed.
 	DependencyWatchdog *SeedSettingDependencyWatchdog
@@ -268,8 +270,7 @@ type SeedSettingVerticalPodAutoscaler struct {
 // SeedSettingOwnerChecks controls certain owner checks settings for shoots scheduled on this seed.
 //
 // Deprecated: This field is deprecated. The "bad-case" control plane migration is being removed in favor of the HA Shoot control planes (see https://github.com/gardener/gardener/issues/6302).
-// The field is locked to false (i.e. if the field value is true a validation error will be returned). In this way gardenlet will clean up all owner DNSRecords.
-// Finally, the field will be removed from the API in a future version of Gardener.
+// The field is no-op and will be removed in a future version.
 type SeedSettingOwnerChecks struct {
 	// Enabled controls whether owner checks are enabled for shoots scheduled on this seed.
 	Enabled bool

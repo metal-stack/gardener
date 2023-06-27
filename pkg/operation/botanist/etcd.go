@@ -64,7 +64,6 @@ func (b *Botanist) DefaultEtcd(role string, class etcd.Class) (etcd.Interface, e
 			StorageCapacity:             b.Seed.GetValidVolumeSize("10Gi"),
 			DefragmentationSchedule:     &defragmentationSchedule,
 			CARotationPhase:             v1beta1helper.GetShootCARotationPhase(b.Shoot.GetInfo().Status.Credentials),
-			KubernetesVersion:           b.Shoot.KubernetesVersion,
 			RuntimeKubernetesVersion:    b.Seed.KubernetesVersion,
 			PriorityClassName:           v1beta1constants.PriorityClassNameShootControlPlane500,
 			HighAvailabilityEnabled:     v1beta1helper.IsHAControlPlaneConfigured(b.Shoot.GetInfo()),
@@ -206,7 +205,7 @@ func (b *Botanist) deployOrRestoreMainEtcd(ctx context.Context) error {
 }
 
 func (b *Botanist) isRestorationOfMultiNodeMainEtcdRequired(ctx context.Context) (bool, error) {
-	if !b.isRestorePhase() || !v1beta1helper.IsHAControlPlaneConfigured(b.Shoot.GetInfo()) {
+	if !b.IsRestorePhase() || !v1beta1helper.IsHAControlPlaneConfigured(b.Shoot.GetInfo()) {
 		return false, nil
 	}
 

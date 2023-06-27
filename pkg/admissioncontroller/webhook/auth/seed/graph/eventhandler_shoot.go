@@ -54,7 +54,7 @@ func (g *graph) setupShootWatch(_ context.Context, informer cache.Informer) erro
 				!apiequality.Semantic.DeepEqual(oldShoot.Spec.CloudProfileName, newShoot.Spec.CloudProfileName) ||
 				v1beta1helper.GetShootAuditPolicyConfigMapName(oldShoot.Spec.Kubernetes.KubeAPIServer) != v1beta1helper.GetShootAuditPolicyConfigMapName(newShoot.Spec.Kubernetes.KubeAPIServer) ||
 				!v1beta1helper.ShootDNSProviderSecretNamesEqual(oldShoot.Spec.DNS, newShoot.Spec.DNS) ||
-				!v1beta1helper.ShootSecretResourceReferencesEqual(oldShoot.Spec.Resources, newShoot.Spec.Resources) {
+				!v1beta1helper.ShootResourceReferencesEqual(oldShoot.Spec.Resources, newShoot.Spec.Resources) {
 				g.handleShootCreateOrUpdate(newShoot)
 			}
 		},
@@ -83,6 +83,7 @@ func (g *graph) handleShootCreateOrUpdate(shoot *gardencorev1beta1.Shoot) {
 
 	g.deleteAllIncomingEdges(VertexTypeCloudProfile, VertexTypeShoot, shoot.Namespace, shoot.Name)
 	g.deleteAllIncomingEdges(VertexTypeExposureClass, VertexTypeShoot, shoot.Namespace, shoot.Name)
+	g.deleteAllIncomingEdges(VertexTypeInternalSecret, VertexTypeShoot, shoot.Namespace, shoot.Name)
 	g.deleteAllIncomingEdges(VertexTypeConfigMap, VertexTypeShoot, shoot.Namespace, shoot.Name)
 	g.deleteAllIncomingEdges(VertexTypeNamespace, VertexTypeShoot, shoot.Namespace, shoot.Name)
 	g.deleteAllIncomingEdges(VertexTypeSecret, VertexTypeShoot, shoot.Namespace, shoot.Name)
@@ -137,10 +138,16 @@ func (g *graph) handleShootCreateOrUpdate(shoot *gardencorev1beta1.Shoot) {
 	}
 
 	for _, resource := range shoot.Spec.Resources {
-		// only secrets are supported here
-		if resource.ResourceRef.APIVersion == "v1" && resource.ResourceRef.Kind == "Secret" {
-			secretVertex := g.getOrCreateVertex(VertexTypeSecret, shoot.Namespace, resource.ResourceRef.Name)
-			g.addEdge(secretVertex, shootVertex)
+		// only secrets and configMap are supported here
+		if resource.ResourceRef.APIVersion == "v1" {
+			if resource.ResourceRef.Kind == "Secret" {
+				secretVertex := g.getOrCreateVertex(VertexTypeSecret, shoot.Namespace, resource.ResourceRef.Name)
+				g.addEdge(secretVertex, shootVertex)
+			}
+			if resource.ResourceRef.Kind == "ConfigMap" {
+				configMapVertex := g.getOrCreateVertex(VertexTypeConfigMap, shoot.Namespace, resource.ResourceRef.Name)
+				g.addEdge(configMapVertex, shootVertex)
+			}
 		}
 	}
 
@@ -148,6 +155,13 @@ func (g *graph) handleShootCreateOrUpdate(shoot *gardencorev1beta1.Shoot) {
 	// gardenlet reconciliation and are bound to the lifetime of the shoot, so let's add them here.
 	for _, suffix := range gardenerutils.GetShootProjectSecretSuffixes() {
 		secretVertex := g.getOrCreateVertex(VertexTypeSecret, shoot.Namespace, gardenerutils.ComputeShootProjectSecretName(shoot.Name, suffix))
+		g.addEdge(secretVertex, shootVertex)
+	}
+
+	// Those internal secrets are not directly referenced in the shoot spec, however, they will be created/updated as part of the
+	// gardenlet reconciliation and are bound to the lifetime of the shoot, so let's add them here.
+	for _, suffix := range gardenerutils.GetShootProjectInternalSecretSuffixes() {
+		secretVertex := g.getOrCreateVertex(VertexTypeInternalSecret, shoot.Namespace, gardenerutils.ComputeShootProjectSecretName(shoot.Name, suffix))
 		g.addEdge(secretVertex, shootVertex)
 	}
 

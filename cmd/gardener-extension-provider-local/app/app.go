@@ -32,7 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -46,9 +45,7 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/controller/heartbeat"
 	extensionsheartbeatcmd "github.com/gardener/gardener/extensions/pkg/controller/heartbeat/cmd"
 	"github.com/gardener/gardener/extensions/pkg/controller/operatingsystemconfig/oscommon"
-	"github.com/gardener/gardener/extensions/pkg/controller/worker"
 	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	gardenerhealthz "github.com/gardener/gardener/pkg/healthz"
 	localinstall "github.com/gardener/gardener/pkg/provider-local/apis/local/install"
 	localbackupbucket "github.com/gardener/gardener/pkg/provider-local/controller/backupbucket"
@@ -62,6 +59,7 @@ import (
 	localservice "github.com/gardener/gardener/pkg/provider-local/controller/service"
 	localworker "github.com/gardener/gardener/pkg/provider-local/controller/worker"
 	"github.com/gardener/gardener/pkg/provider-local/local"
+	controlplanewebhook "github.com/gardener/gardener/pkg/provider-local/webhook/controlplane"
 	"github.com/gardener/gardener/pkg/utils/retry"
 )
 
@@ -121,7 +119,6 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 		serviceCtrlOpts = &localservice.ControllerOptions{
 			MaxConcurrentReconciles: 5,
 			HostIP:                  hostIP,
-			APIServerSNIEnabled:     true,
 		}
 
 		// options for the local backupbucket controller
@@ -145,10 +142,6 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 		workerCtrlOpts = &extensionscmdcontroller.ControllerOptions{
 			MaxConcurrentReconciles: 5,
 		}
-		workerReconcileOpts = &worker.Options{
-			DeployCRDs: true,
-		}
-		workerCtrlOptsUnprefixed = extensionscmdcontroller.NewOptionAggregator(workerCtrlOpts, workerReconcileOpts)
 
 		heartbeatCtrlOptions = &extensionsheartbeatcmd.Options{
 			ExtensionName:        local.Name,
@@ -178,7 +171,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			extensionscmdcontroller.PrefixOption("controlplane-", controlPlaneCtrlOpts),
 			extensionscmdcontroller.PrefixOption("dnsrecord-", dnsRecordCtrlOpts),
 			extensionscmdcontroller.PrefixOption("infrastructure-", infraCtrlOpts),
-			extensionscmdcontroller.PrefixOption("worker-", &workerCtrlOptsUnprefixed),
+			extensionscmdcontroller.PrefixOption("worker-", workerCtrlOpts),
 			extensionscmdcontroller.PrefixOption("ingress-", ingressCtrlOpts),
 			extensionscmdcontroller.PrefixOption("service-", serviceCtrlOpts),
 			extensionscmdcontroller.PrefixOption("backupbucket-", localBackupBucketOptions),
@@ -201,12 +194,6 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 
 			if err := heartbeatCtrlOptions.Validate(); err != nil {
 				return err
-			}
-
-			if workerReconcileOpts.Completed().DeployCRDs {
-				if err := worker.ApplyMachineResourcesForConfig(ctx, restOpts.Completed().Config); err != nil {
-					return fmt.Errorf("error ensuring the machine CRDs: %w", err)
-				}
 			}
 
 			mgr, err := manager.New(restOpts.Completed().Config, mgrOpts.Completed().Options())
@@ -251,6 +238,12 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			reconcileOpts.Completed().Apply(&oscommon.DefaultAddOptions.IgnoreOperationAnnotation)
 			reconcileOpts.Completed().Apply(&localworker.DefaultAddOptions.IgnoreOperationAnnotation)
 
+			// TODO(rfranzke): Remove the GardenletManagesMCM fields as soon as the general options no longer support the
+			//  GardenletManagesMCM field.
+			localworker.DefaultAddOptions.GardenletManagesMCM = generalOpts.Completed().GardenletManagesMCM
+			controlplanewebhook.GardenletManagesMCM = generalOpts.Completed().GardenletManagesMCM
+			localhealthcheck.GardenletManagesMCM = generalOpts.Completed().GardenletManagesMCM
+
 			if err := mgr.AddReadyzCheck("informer-sync", gardenerhealthz.NewCacheSyncHealthz(mgr.GetCache())); err != nil {
 				return fmt.Errorf("could not add readycheck for informers: %w", err)
 			}
@@ -271,65 +264,6 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			// Send empty patches on start-up to trigger webhooks
 			if err := mgr.Add(&webhookTriggerer{client: mgr.GetClient()}); err != nil {
 				return fmt.Errorf("error adding runnable for triggering DNS config webhook: %w", err)
-			}
-
-			// TODO(rfranzke): Remove this block after v1.71 got released.
-			// Migrate existing machine pods to new NetworkPolicy labels to make upgrade e2e tests work.
-			{
-				if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
-					machinePods := &corev1.PodList{}
-					if err := mgr.GetClient().List(ctx, machinePods, client.MatchingLabels{
-						"app":              "machine",
-						"machine-provider": "local",
-					}); err != nil {
-						return err
-					}
-
-					for _, p := range machinePods.Items {
-						pod := p
-						patch := client.MergeFrom(pod.DeepCopy())
-						metav1.SetMetaDataLabel(&pod.ObjectMeta, "networking.gardener.cloud/to-runtime-apiserver", "allowed")
-						metav1.SetMetaDataLabel(&pod.ObjectMeta, "networking.resources.gardener.cloud/to-kube-apiserver-tcp-443", "allowed")
-						if err := mgr.GetClient().Patch(ctx, &pod, patch); err != nil {
-							return err
-						}
-					}
-
-					shootNamespaces := &corev1.NamespaceList{}
-					if err := mgr.GetClient().List(ctx, shootNamespaces, client.MatchingLabels{v1beta1constants.GardenRole: v1beta1constants.GardenRoleShoot}); err != nil {
-						return err
-					}
-
-					for _, namespace := range shootNamespaces.Items {
-						service := &corev1.Service{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      "machines",
-								Namespace: namespace.Name,
-							},
-							Spec: corev1.ServiceSpec{
-								Type:      corev1.ServiceTypeClusterIP,
-								ClusterIP: corev1.ClusterIPNone,
-								Selector: map[string]string{
-									"app":              "machine",
-									"machine-provider": "local",
-								},
-								Ports: []corev1.ServicePort{{
-									Port:       10250,
-									Protocol:   corev1.ProtocolTCP,
-									TargetPort: intstr.FromInt(10250),
-								}},
-							},
-						}
-
-						if err := mgr.GetClient().Create(ctx, service); client.IgnoreAlreadyExists(err) != nil {
-							return err
-						}
-					}
-
-					return nil
-				})); err != nil {
-					return fmt.Errorf("error adding runnable for machine pod network policy label migration: %w", err)
-				}
 			}
 
 			if err := controllerSwitches.Completed().AddToManager(mgr); err != nil {

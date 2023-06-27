@@ -110,7 +110,7 @@ To contribute its own configuration to the fluent-bit agents data pipelines, an 
 
 > **Note:** Take care to provide the correct data pipeline elements in the corresponding fields and not to mix them.
 
-**Example:** Logging configuration for provider-specific (OpenStack) worker controller deploying a `machine-controller-manager` component into a shoot namespace that reuses the `kube-apiserver-parser` defined in [logging.go](../../pkg/component/kubeapiserver/logging.go) to parse the component logs:
+**Example:** Logging configuration for provider-specific `cloud-controller-manager` deployed into shoot namespaces that reuses the `kube-apiserver-parser` defined in [logging.go](../../pkg/component/kubeapiserver/logging.go) to parse the component logs:
 
 ```yaml
 apiVersion: fluentbit.fluent.io/v1alpha2
@@ -118,14 +118,14 @@ kind: ClusterFilter
 metadata:
   labels:
     fluentbit.gardener/type: "seed"
-  name: machine-controller-manager-openstack
+  name: cloud-controller-manager-aws-cloud-controller-manager
 spec:
   filters:
   - parser:
       keyName: log
       parser: kube-apiserver-parser
       reserveData: true
-  match: kubernetes.*machine-controller-manager*openstack*
+  match: kubernetes.*cloud-controller-manager*aws-cloud-controller-manager*
 ```
 
 Further details how to define parsers and use them with examples can be found in the following [guide](../development/log_parsers.md).
@@ -156,4 +156,5 @@ If the type of logs exposed in the Plutono instances needs to be changed, it is 
 
 * [GitHub Issue Describing the Concept](https://github.com/gardener/gardener/issues/1351)
 * [Exemplary Implementation (Monitoring) for the GCP Provider](https://github.com/gardener/gardener-extension-provider-gcp/blob/master/charts/internal/seed-controlplane/charts/cloud-controller-manager/templates/configmap-observability.yaml)
-* [Exemplary Implementation (Logging) for the OpenStack Provider](https://github.com/gardener/gardener-extension-provider-openstack/blob/master/charts/gardener-extension-provider-openstack/templates/configmap-logging.yaml)
+* [Exemplary Implementation (ClusterFilter) for the AWS Provider](https://github.com/gardener/gardener-extension-provider-aws/blob/master/charts/gardener-extension-provider-aws/templates/clusterfilters-logging.yaml)
+* [Exemplary Implementation (ClusterParser) for the AWS Provider](https://github.com/gardener/gardener-extension-provider-aws/blob/master/charts/gardener-extension-provider-aws/templates/clusterparsers-logging.yaml)

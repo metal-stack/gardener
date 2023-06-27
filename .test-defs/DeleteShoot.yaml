@@ -11,8 +11,8 @@ spec:
   args:
   - >-
     go test -timeout=0 -mod=vendor ./test/testmachinery/system/shoot_deletion
-    --v -ginkgo.v -ginkgo.progress -ginkgo.no-color
+    --v -ginkgo.v -ginkgo.show-node-events -ginkgo.no-color
     --shoot-name=$SHOOT_NAME
     --project-namespace=$PROJECT_NAMESPACE
     --kubecfg="$TM_KUBECONFIG_PATH/gardener.config"
-  image: golang:1.20.4
+  image: golang:1.20.5

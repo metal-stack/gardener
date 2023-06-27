@@ -193,7 +193,10 @@ var _ = Describe("KubeControllerManager", func() {
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, serviceName), gomock.AssignableToTypeOf(&corev1.Service{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Service{}), gomock.Any()),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).Return(fakeErr),
 				)
 
@@ -204,7 +207,10 @@ var _ = Describe("KubeControllerManager", func() {
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, serviceName), gomock.AssignableToTypeOf(&corev1.Service{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Service{}), gomock.Any()),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, v1beta1constants.DeploymentNameKubeControllerManager), gomock.AssignableToTypeOf(&appsv1.Deployment{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&appsv1.Deployment{}), gomock.Any()).Return(fakeErr),
@@ -217,7 +223,10 @@ var _ = Describe("KubeControllerManager", func() {
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, serviceName), gomock.AssignableToTypeOf(&corev1.Service{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Service{}), gomock.Any()),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, v1beta1constants.DeploymentNameKubeControllerManager), gomock.AssignableToTypeOf(&appsv1.Deployment{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&appsv1.Deployment{}), gomock.Any()),
@@ -232,7 +241,10 @@ var _ = Describe("KubeControllerManager", func() {
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, serviceName), gomock.AssignableToTypeOf(&corev1.Service{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Service{}), gomock.Any()),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, v1beta1constants.DeploymentNameKubeControllerManager), gomock.AssignableToTypeOf(&appsv1.Deployment{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&appsv1.Deployment{}), gomock.Any()),
@@ -248,7 +260,10 @@ var _ = Describe("KubeControllerManager", func() {
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, serviceName), gomock.AssignableToTypeOf(&corev1.Service{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Service{}), gomock.Any()),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, v1beta1constants.DeploymentNameKubeControllerManager), gomock.AssignableToTypeOf(&appsv1.Deployment{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&appsv1.Deployment{}), gomock.Any()),
@@ -266,7 +281,10 @@ var _ = Describe("KubeControllerManager", func() {
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, serviceName), gomock.AssignableToTypeOf(&corev1.Service{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Service{}), gomock.Any()),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, v1beta1constants.DeploymentNameKubeControllerManager), gomock.AssignableToTypeOf(&appsv1.Deployment{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&appsv1.Deployment{}), gomock.Any()),
@@ -286,7 +304,10 @@ var _ = Describe("KubeControllerManager", func() {
 				gomock.InOrder(
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, serviceName), gomock.AssignableToTypeOf(&corev1.Service{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Service{}), gomock.Any()),
-					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+						Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+							obj.SetResourceVersion("0")
+						}),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()),
 					c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, v1beta1constants.DeploymentNameKubeControllerManager), gomock.AssignableToTypeOf(&appsv1.Deployment{})),
 					c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&appsv1.Deployment{}), gomock.Any()),
@@ -346,7 +367,9 @@ var _ = Describe("KubeControllerManager", func() {
 						},
 						Labels: map[string]string{
 							"resources.gardener.cloud/purpose": "token-requestor",
+							"resources.gardener.cloud/class":   "shoot",
 						},
+						ResourceVersion: "0",
 					},
 					Type: corev1.SecretTypeOpaque,
 				}
@@ -703,10 +726,8 @@ subjects:
 			)
 
 			DescribeTable("success tests for various kubernetes versions (shoots with workers)",
-				func(version string, config *gardencorev1beta1.KubeControllerManagerConfig, hvpaConfig *HVPAConfig) {
+				func(config *gardencorev1beta1.KubeControllerManagerConfig, hvpaConfig *HVPAConfig) {
 					isWorkerless = false
-					semverVersion, err := semver.NewVersion(version)
-					Expect(err).NotTo(HaveOccurred())
 
 					values = Values{
 						RuntimeVersion:         runtimeKubernetesVersion,
@@ -735,7 +756,10 @@ subjects:
 							Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 								Expect(obj).To(DeepEqual(serviceFor(version)))
 							}),
-						c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+						c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+							Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+								obj.SetResourceVersion("0")
+							}),
 						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 							Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 								Expect(obj).To(DeepEqual(secret))
@@ -788,39 +812,19 @@ subjects:
 					Expect(kubeControllerManager.Deploy(ctx)).To(Succeed())
 				},
 
-				Entry("kubernetes 1.22 w/o config", "1.22.0", emptyConfig, hvpaConfigDisabled),
-				Entry("kubernetes 1.22 with HVPA", "1.22.0", emptyConfig, hvpaConfigEnabled),
-				Entry("kubernetes 1.22 with HVPA and custom scale-down update mode", "1.22.0", emptyConfig, hvpaConfigEnabledScaleDownOff),
-				Entry("kubernetes 1.22 with non-default autoscaler config", "1.22.0", configWithAutoscalerConfig, hvpaConfigDisabled),
-				Entry("kubernetes 1.22 with feature flags", "1.22.0", configWithFeatureFlags, hvpaConfigDisabled),
-				Entry("kubernetes 1.22 with NodeCIDRMaskSize", "1.22.0", configWithNodeCIDRMaskSize, hvpaConfigDisabled),
-				Entry("kubernetes 1.22 with PodEvictionTimeout", "1.22.0", configWithPodEvictionTimeout, hvpaConfigDisabled),
-				Entry("kubernetes 1.22 with NodeMonitorGradePeriod", "1.22.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled),
-
-				Entry("kubernetes 1.21 w/o config", "1.21.0", emptyConfig, hvpaConfigDisabled),
-				Entry("kubernetes 1.21 with HVPA", "1.21.0", emptyConfig, hvpaConfigEnabled),
-				Entry("kubernetes 1.21 with HVPA and custom scale-down update mode", "1.21.0", emptyConfig, hvpaConfigEnabledScaleDownOff),
-				Entry("kubernetes 1.21 with non-default autoscaler config", "1.21.0", configWithAutoscalerConfig, hvpaConfigDisabled),
-				Entry("kubernetes 1.21 with feature flags", "1.21.0", configWithFeatureFlags, hvpaConfigDisabled),
-				Entry("kubernetes 1.21 with NodeCIDRMaskSize", "1.21.0", configWithNodeCIDRMaskSize, hvpaConfigDisabled),
-				Entry("kubernetes 1.21 with PodEvictionTimeout", "1.21.0", configWithPodEvictionTimeout, hvpaConfigDisabled),
-				Entry("kubernetes 1.21 with NodeMonitorGradePeriod", "1.21.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled),
-
-				Entry("kubernetes 1.20 w/o config", "1.20.0", emptyConfig, hvpaConfigDisabled),
-				Entry("kubernetes 1.20 with HVPA", "1.20.0", emptyConfig, hvpaConfigEnabled),
-				Entry("kubernetes 1.20 with HVPA and custom scale-down update mode", "1.20.0", emptyConfig, hvpaConfigEnabledScaleDownOff),
-				Entry("kubernetes 1.20 with non-default autoscaler config", "1.20.0", configWithAutoscalerConfig, hvpaConfigDisabled),
-				Entry("kubernetes 1.20 with feature flags", "1.20.0", configWithFeatureFlags, hvpaConfigDisabled),
-				Entry("kubernetes 1.20 with NodeCIDRMaskSize", "1.20.0", configWithNodeCIDRMaskSize, hvpaConfigDisabled),
-				Entry("kubernetes 1.20 with PodEvictionTimeout", "1.20.0", configWithPodEvictionTimeout, hvpaConfigDisabled),
-				Entry("kubernetes 1.20 with NodeMonitorGradePeriod", "1.20.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled),
+				Entry("w/o config", emptyConfig, hvpaConfigDisabled),
+				Entry("with HVPA", emptyConfig, hvpaConfigEnabled),
+				Entry("with HVPA and custom scale-down update mode", emptyConfig, hvpaConfigEnabledScaleDownOff),
+				Entry("with non-default autoscaler config", configWithAutoscalerConfig, hvpaConfigDisabled),
+				Entry("with feature flags", configWithFeatureFlags, hvpaConfigDisabled),
+				Entry("with NodeCIDRMaskSize", configWithNodeCIDRMaskSize, hvpaConfigDisabled),
+				Entry("with PodEvictionTimeout", configWithPodEvictionTimeout, hvpaConfigDisabled),
+				Entry("with NodeMonitorGradePeriod", configWithNodeMonitorGracePeriod, hvpaConfigDisabled),
 			)
 
 			DescribeTable("success tests for various kubernetes versions (workerless shoot)",
-				func(version string, config *gardencorev1beta1.KubeControllerManagerConfig, hvpaConfig *HVPAConfig, controllerWorkers ControllerWorkers) {
+				func(config *gardencorev1beta1.KubeControllerManagerConfig, hvpaConfig *HVPAConfig, controllerWorkers ControllerWorkers) {
 					isWorkerless = true
-					semverVersion, err := semver.NewVersion(version)
-					Expect(err).NotTo(HaveOccurred())
 
 					values = Values{
 						RuntimeVersion:         runtimeKubernetesVersion,
@@ -849,7 +853,10 @@ subjects:
 							Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 								Expect(obj).To(DeepEqual(serviceFor(version)))
 							}),
-						c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})),
+						c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, secretName), gomock.AssignableToTypeOf(&corev1.Secret{})).
+							Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+								obj.SetResourceVersion("0")
+							}),
 						c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 							Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 								Expect(obj).To(DeepEqual(secret))
@@ -902,35 +909,15 @@ subjects:
 					Expect(kubeControllerManager.Deploy(ctx)).To(Succeed())
 				},
 
-				Entry("kubernetes 1.22 w/o config", "1.22.0", emptyConfig, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.22 with HVPA", "1.22.0", emptyConfig, hvpaConfigEnabled, controllerWorkers),
-				Entry("kubernetes 1.22 with HVPA and custom scale-down update mode", "1.22.0", emptyConfig, hvpaConfigEnabledScaleDownOff, controllerWorkers),
-				Entry("kubernetes 1.22 with non-default autoscaler config", "1.22.0", configWithAutoscalerConfig, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.22 with feature flags", "1.22.0", configWithFeatureFlags, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.22 with NodeCIDRMaskSize", "1.22.0", configWithNodeCIDRMaskSize, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.22 with PodEvictionTimeout", "1.22.0", configWithPodEvictionTimeout, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.22 with NodeMonitorGradePeriod", "1.22.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.22 with disabled controllers", "1.22.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkersWithDisabledControllers),
-
-				Entry("kubernetes 1.21 w/o config", "1.21.0", emptyConfig, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.21 with HVPA", "1.21.0", emptyConfig, hvpaConfigEnabled, controllerWorkers),
-				Entry("kubernetes 1.21 with HVPA and custom scale-down update mode", "1.21.0", emptyConfig, hvpaConfigEnabledScaleDownOff, controllerWorkers),
-				Entry("kubernetes 1.21 with non-default autoscaler config", "1.21.0", configWithAutoscalerConfig, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.21 with feature flags", "1.21.0", configWithFeatureFlags, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.21 with NodeCIDRMaskSize", "1.21.0", configWithNodeCIDRMaskSize, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.21 with PodEvictionTimeout", "1.21.0", configWithPodEvictionTimeout, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.21 with NodeMonitorGradePeriod", "1.21.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.21 with disabled controllers", "1.21.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkersWithDisabledControllers),
-
-				Entry("kubernetes 1.20 w/o config", "1.20.0", emptyConfig, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.20 with HVPA", "1.20.0", emptyConfig, hvpaConfigEnabled, controllerWorkers),
-				Entry("kubernetes 1.20 with HVPA and custom scale-down update mode", "1.20.0", emptyConfig, hvpaConfigEnabledScaleDownOff, controllerWorkers),
-				Entry("kubernetes 1.20 with non-default autoscaler config", "1.20.0", configWithAutoscalerConfig, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.20 with feature flags", "1.20.0", configWithFeatureFlags, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.20 with NodeCIDRMaskSize", "1.20.0", configWithNodeCIDRMaskSize, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.20 with PodEvictionTimeout", "1.20.0", configWithPodEvictionTimeout, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.20 with NodeMonitorGradePeriod", "1.20.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkers),
-				Entry("kubernetes 1.20 with disabled controllers", "1.20.0", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkersWithDisabledControllers),
+				Entry("w/o config", emptyConfig, hvpaConfigDisabled, controllerWorkers),
+				Entry("with HVPA", emptyConfig, hvpaConfigEnabled, controllerWorkers),
+				Entry("with HVPA and custom scale-down update mode", emptyConfig, hvpaConfigEnabledScaleDownOff, controllerWorkers),
+				Entry("with non-default autoscaler config", configWithAutoscalerConfig, hvpaConfigDisabled, controllerWorkers),
+				Entry("with feature flags", configWithFeatureFlags, hvpaConfigDisabled, controllerWorkers),
+				Entry("with NodeCIDRMaskSize", configWithNodeCIDRMaskSize, hvpaConfigDisabled, controllerWorkers),
+				Entry("with PodEvictionTimeout", configWithPodEvictionTimeout, hvpaConfigDisabled, controllerWorkers),
+				Entry("with NodeMonitorGradePeriod", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkers),
+				Entry("with disabled controllers", configWithNodeMonitorGracePeriod, hvpaConfigDisabled, controllerWorkersWithDisabledControllers),
 			)
 		})
 	})
@@ -1224,11 +1211,7 @@ func commandForKubernetesVersion(
 		"--tls-private-key-file=/var/lib/kube-controller-manager-server/tls.key",
 	)
 
-	if k8sVersionGreaterEqual122, _ := versionutils.CompareVersions(version, ">=", "1.22"); k8sVersionGreaterEqual122 {
-		command = append(command, "--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384")
-	} else {
-		command = append(command, "--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,TLS_RSA_WITH_AES_128_CBC_SHA,TLS_RSA_WITH_AES_256_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA")
-	}
+	command = append(command, "--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384")
 
 	command = append(command,
 		"--use-service-account-credentials=true",

@@ -44,7 +44,7 @@ make kind-up
 This command sets up a new KinD cluster named `gardener-local` and stores the kubeconfig in the `./example/gardener-local/kind/local/kubeconfig` file.
 
 > It might be helpful to copy this file to `$HOME/.kube/config`, since you will need to target this KinD cluster multiple times.
-Alternatively, make sure to set your `KUBECONFIG` environment variable to `./example/gardener-local/kind/local/kubeconfig` for all future steps via `export KUBECONFIG=example/gardener-local/kind/local/kubeconfig`.
+Alternatively, make sure to set your `KUBECONFIG` environment variable to `./example/gardener-local/kind/local/kubeconfig` for all future steps via `export KUBECONFIG=$PWD/example/gardener-local/kind/local/kubeconfig`.
 
 All of the following steps assume that you are using this kubeconfig.
 
@@ -154,7 +154,7 @@ Alternatively, you can run `kubectl get seed local` and wait for the `STATUS` to
 
 ```bash
 NAME    STATUS   PROVIDER   REGION   AGE     VERSION       K8S VERSION
-local   Ready    local      local    4m42s   vX.Y.Z-dev    v1.21.1
+local   Ready    local      local    4m42s   vX.Y.Z-dev    v1.25.1
 ```
 
 In order to create a first shoot cluster, just run:
@@ -173,7 +173,7 @@ Alternatively, you can run `kubectl -n garden-local get shoot local` and wait fo
 
 ```bash
 NAME    CLOUDPROFILE   PROVIDER   REGION   K8S VERSION   HIBERNATION   LAST OPERATION            STATUS    AGE
-local   local          local      local    1.21.0        Awake         Create Processing (43%)   healthy   94s
+local   local          local      local    1.25.1        Awake         Create Processing (43%)   healthy   94s
 ```
 
 If you don't need any worker pools, you can create a workerless `Shoot` by running:
@@ -204,12 +204,12 @@ cat <<EOF | sudo tee -a /etc/hosts
 
 127.0.0.1 api.e2e-managedseed.garden.external.local.gardener.cloud
 127.0.0.1 api.e2e-managedseed.garden.internal.local.gardener.cloud
-127.0.0.1 api.e2e-hibernated.local.external.local.gardener.cloud
-127.0.0.1 api.e2e-hibernated.local.internal.local.gardener.cloud
+127.0.0.1 api.e2e-hib.local.external.local.gardener.cloud
+127.0.0.1 api.e2e-hib.local.internal.local.gardener.cloud
+127.0.0.1 api.e2e-hib-wl.local.external.local.gardener.cloud
+127.0.0.1 api.e2e-hib-wl.local.internal.local.gardener.cloud
 127.0.0.1 api.e2e-unpriv.local.external.local.gardener.cloud
 127.0.0.1 api.e2e-unpriv.local.internal.local.gardener.cloud
-127.0.0.1 api.e2e-unpriv-wl.local.external.local.gardener.cloud
-127.0.0.1 api.e2e-unpriv-wl.local.internal.local.gardener.cloud
 127.0.0.1 api.e2e-wake-up.local.external.local.gardener.cloud
 127.0.0.1 api.e2e-wake-up.local.internal.local.gardener.cloud
 127.0.0.1 api.e2e-wake-up-wl.local.external.local.gardener.cloud
@@ -226,12 +226,18 @@ cat <<EOF | sudo tee -a /etc/hosts
 127.0.0.1 api.e2e-default.local.internal.local.gardener.cloud
 127.0.0.1 api.e2e-default-wl.local.external.local.gardener.cloud
 127.0.0.1 api.e2e-default-wl.local.internal.local.gardener.cloud
-127.0.0.1 api.e2e-update-node.local.external.local.gardener.cloud
-127.0.0.1 api.e2e-update-node.local.internal.local.gardener.cloud
-127.0.0.1 api.e2e-update-node-wl.local.external.local.gardener.cloud
-127.0.0.1 api.e2e-update-node-wl.local.internal.local.gardener.cloud
+127.0.0.1 api.e2e-upd-node.local.external.local.gardener.cloud
+127.0.0.1 api.e2e-upd-node.local.internal.local.gardener.cloud
+127.0.0.1 api.e2e-upd-node-wl.local.external.local.gardener.cloud
+127.0.0.1 api.e2e-upd-node-wl.local.internal.local.gardener.cloud
 127.0.0.1 api.e2e-upgrade.local.external.local.gardener.cloud
 127.0.0.1 api.e2e-upgrade.local.internal.local.gardener.cloud
+127.0.0.1 api.e2e-upgrade-wl.local.external.local.gardener.cloud
+127.0.0.1 api.e2e-upgrade-wl.local.internal.local.gardener.cloud
+127.0.0.1 api.e2e-upg-hib.local.external.local.gardener.cloud
+127.0.0.1 api.e2e-upg-hib.local.internal.local.gardener.cloud
+127.0.0.1 api.e2e-upg-hib-wl.local.external.local.gardener.cloud
+127.0.0.1 api.e2e-upg-hib-wl.local.internal.local.gardener.cloud
 EOF
 ```
 
@@ -261,7 +267,7 @@ In order to deploy required resources in the KinD cluster that you just created,
 make gardenlet-kind2-up
 ```
 
-The following steps assume that you are using the kubeconfig that points to the `gardener-local` cluster (first KinD cluster): `export KUBECONFIG=example/gardener-local/kind/local/kubeconfig`.
+The following steps assume that you are using the kubeconfig that points to the `gardener-local` cluster (first KinD cluster): `export KUBECONFIG=$PWD/example/gardener-local/kind/local/kubeconfig`.
 
 You can wait for the `local2` `Seed` to be ready by running:
 
@@ -273,7 +279,7 @@ Alternatively, you can run `kubectl get seed local2` and wait for the `STATUS` t
 
 ```bash
 NAME    STATUS   PROVIDER   REGION   AGE     VERSION       K8S VERSION
-local2  Ready    local      local    4m42s   vX.Y.Z-dev    v1.21.1
+local2  Ready    local      local    4m42s   vX.Y.Z-dev    v1.25.1
 ```
 
 If you want to perform control plane migration, you can follow the steps outlined in [Control Plane Migration](../usage/control_plane_migration.md) to migrate the shoot cluster to the second seed you just created.

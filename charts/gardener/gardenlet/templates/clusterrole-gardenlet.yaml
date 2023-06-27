@@ -148,6 +148,8 @@ rules:
   resources:
   - customresourcedefinitions
   resourceNames:
+  - etcds.druid.gardener.cloud
+  - etcdcopybackupstasks.druid.gardener.cloud
   - hvpas.autoscaling.k8s.io
   - destinationrules.networking.istio.io
   - envoyfilters.networking.istio.io
@@ -182,8 +184,6 @@ rules:
   resources:
   - deployments
   - deployments/scale
-  # TODO(Kristian-ZH): remove this when the old fluent-bit deletion logic is removed
-  - daemonsets
   - statefulsets
   - statefulsets/scale
   - replicasets
@@ -289,6 +289,7 @@ rules:
   - backupentries/status
   - containerruntimes/status
   - controlplanes/status
+  - dnsrecords/status
   - extensions/status
   - infrastructures/status
   - networks/status
@@ -433,3 +434,12 @@ rules:
   - envoyfilters
   verbs:
   - delete
+- apiGroups:
+  - machine.sapcloud.io
+  resources:
+  - machinedeployments
+  - machines
+  verbs:
+  - list
+  - watch
+  - get

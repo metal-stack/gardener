@@ -49,7 +49,7 @@ func (b *Botanist) InitializeSecretsManagement(ctx context.Context) error {
 	// create corresponding secrets in the shoot namespace in the seed before initializing it. Note that this is
 	// explicitly only done in case of restoration to prevent split-brain situations as described in
 	// https://github.com/gardener/gardener/issues/5377.
-	if b.isRestorePhase() {
+	if b.IsRestorePhase() {
 		if err := b.restoreSecretsFromShootStateForSecretsManagerAdoption(ctx); err != nil {
 			return err
 		}
@@ -111,7 +111,7 @@ func (b *Botanist) lastSecretRotationStartTimes() map[string]time.Time {
 func (b *Botanist) restoreSecretsFromShootStateForSecretsManagerAdoption(ctx context.Context) error {
 	var fns []flow.TaskFn
 
-	for _, v := range b.GetShootState().Spec.Gardener {
+	for _, v := range b.Shoot.GetShootState().Spec.Gardener {
 		entry := v
 
 		if entry.Labels[secretsmanager.LabelKeyManagedBy] != secretsmanager.LabelValueSecretsManager ||
@@ -193,9 +193,15 @@ func (b *Botanist) caCertGenerateOptionsFor(configName string) []secretsmanager.
 }
 
 func (b *Botanist) generateCertificateAuthorities(ctx context.Context) error {
+	var caClientSecret *corev1.Secret
+
 	for _, config := range caCertConfigurations(b.Shoot.IsWorkerless) {
-		if _, err := b.SecretsManager.Generate(ctx, config, b.caCertGenerateOptionsFor(config.GetName())...); err != nil {
+		caSecret, err := b.SecretsManager.Generate(ctx, config, b.caCertGenerateOptionsFor(config.GetName())...)
+		if err != nil {
 			return err
+		}
+		if config.GetName() == v1beta1constants.SecretNameCAClient {
+			caClientSecret = caSecret.DeepCopy()
 		}
 	}
 
@@ -204,12 +210,22 @@ func (b *Botanist) generateCertificateAuthorities(ctx context.Context) error {
 		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameCACluster)
 	}
 
-	return b.syncShootCredentialToGarden(
+	if err := b.syncShootCredentialToGarden(
 		ctx,
 		gardenerutils.ShootProjectSecretSuffixCACluster,
 		map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleCACluster},
 		nil,
 		map[string][]byte{secretsutils.DataKeyCertificateCA: caBundleSecret.Data[secretsutils.DataKeyCertificateBundle]},
+	); err != nil {
+		return err
+	}
+
+	return b.syncInternalSecretToGarden(
+		ctx,
+		gardenerutils.ShootProjectSecretSuffixCAClient,
+		map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleCAClient},
+		nil,
+		caClientSecret.Data,
 	)
 }
 
@@ -294,12 +310,36 @@ func (b *Botanist) syncShootCredentialToGarden(
 	return err
 }
 
-func (b *Botanist) deleteSSHKeypair(ctx context.Context) error {
-	if err := b.deleteShootCredentialFromGarden(ctx, gardenerutils.ShootProjectSecretSuffixSSHKeypair, gardenerutils.ShootProjectSecretSuffixOldSSHKeypair); err != nil {
-		return err
+func (b *Botanist) syncInternalSecretToGarden(
+	ctx context.Context,
+	nameSuffix string,
+	labels map[string]string,
+	annotations map[string]string,
+	data map[string][]byte,
+) error {
+	gardenSecret := &gardencorev1beta1.InternalSecret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gardenerutils.ComputeShootProjectSecretName(b.Shoot.GetInfo().Name, nameSuffix),
+			Namespace: b.Shoot.GetInfo().Namespace,
+		},
 	}
 
-	return nil
+	_, err := controllerutils.GetAndCreateOrStrategicMergePatch(ctx, b.GardenClient, gardenSecret, func() error {
+		gardenSecret.OwnerReferences = []metav1.OwnerReference{
+			*metav1.NewControllerRef(b.Shoot.GetInfo(), gardencorev1beta1.SchemeGroupVersion.WithKind("Shoot")),
+		}
+		gardenSecret.Annotations = annotations
+		gardenSecret.Labels = labels
+		gardenSecret.Type = corev1.SecretTypeOpaque
+		gardenSecret.Data = data
+		return nil
+	})
+
+	return err
+}
+
+func (b *Botanist) deleteSSHKeypair(ctx context.Context) error {
+	return b.deleteShootCredentialFromGarden(ctx, gardenerutils.ShootProjectSecretSuffixSSHKeypair, gardenerutils.ShootProjectSecretSuffixOldSSHKeypair)
 }
 
 func (b *Botanist) deleteShootCredentialFromGarden(ctx context.Context, nameSuffixes ...string) error {

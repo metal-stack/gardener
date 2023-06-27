@@ -274,6 +274,8 @@ type ETCDEncryptionConfig struct {
 	// false and if there are two keys then the old key will be used for encryption while the current/new key will only
 	// be used for decryption.
 	EncryptWithCurrentKey bool
+	// Resources are the resources which should be encrypted.
+	Resources []string
 }
 
 // Images is a set of container images used for the containers of the kube-apiserver pods.
@@ -373,7 +375,7 @@ type kubeAPIServer struct {
 func (k *kubeAPIServer) Deploy(ctx context.Context) error {
 	var (
 		deployment                            = k.emptyDeployment()
-		podDisruptionBudget                   client.Object
+		podDisruptionBudget                   = k.emptyPodDisruptionBudget()
 		horizontalPodAutoscaler               client.Object
 		verticalPodAutoscaler                 = k.emptyVerticalPodAutoscaler()
 		hvpa                                  = k.emptyHVPA()
@@ -389,7 +391,6 @@ func (k *kubeAPIServer) Deploy(ctx context.Context) error {
 		configMapTerminationHandler           = k.emptyConfigMap(watchdogConfigMapNamePrefix)
 	)
 
-	podDisruptionBudget = k.emptyPodDisruptionBudget()
 	horizontalPodAutoscaler = k.emptyHorizontalPodAutoscaler()
 
 	if err := k.reconcilePodDisruptionBudget(ctx, podDisruptionBudget); err != nil {
@@ -405,14 +406,6 @@ func (k *kubeAPIServer) Deploy(ctx context.Context) error {
 	}
 
 	if err := k.reconcileHVPA(ctx, hvpa, deployment); err != nil {
-		return err
-	}
-
-	// TODO(rfranzke): Remove this in a future release.
-	if err := kubernetesutils.DeleteObjects(ctx, k.client.Client(),
-		&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "allow-from-shoot-apiserver", Namespace: k.namespace}},
-		&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "allow-to-shoot-apiserver", Namespace: k.namespace}},
-	); err != nil {
 		return err
 	}
 

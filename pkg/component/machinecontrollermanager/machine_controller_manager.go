@@ -25,7 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -50,7 +49,6 @@ import (
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/gardener/gardener/pkg/utils/retry"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
-	versionutils "github.com/gardener/gardener/pkg/utils/version"
 )
 
 const (
@@ -59,6 +57,8 @@ const (
 	containerName             = "machine-controller-manager"
 	serviceName               = "machine-controller-manager"
 	managedResourceTargetName = "shoot-core-machine-controller-manager"
+	// VPAName is the name of the vertical pod autoscaler for the machine-controller-manager.
+	VPAName = "machine-controller-manager-vpa"
 )
 
 // Interface contains functions for a machine-controller-manager deployer.
@@ -77,11 +77,10 @@ func New(
 	values Values,
 ) Interface {
 	return &machineControllerManager{
-		client:                        client,
-		namespace:                     namespace,
-		secretsManager:                secretsManager,
-		values:                        values,
-		runtimeVersionGreaterEqual121: versionutils.ConstraintK8sGreaterEqual121.Check(values.RuntimeKubernetesVersion),
+		client:         client,
+		namespace:      namespace,
+		secretsManager: secretsManager,
+		values:         values,
 	}
 }
 
@@ -90,8 +89,6 @@ type machineControllerManager struct {
 	namespace      string
 	secretsManager secretsmanager.Interface
 	values         Values
-
-	runtimeVersionGreaterEqual121 bool
 }
 
 // Values is a set of configuration values for the machine-controller-manager component.
@@ -184,6 +181,7 @@ func (m *machineControllerManager) Deploy(ctx context.Context) error {
 
 	if _, err := controllerutils.GetAndCreateOrMergePatch(ctx, m.client, deployment, func() error {
 		deployment.Labels = utils.MergeStringMaps(deployment.Labels, getLabels(), map[string]string{
+			v1beta1constants.GardenRole:                  v1beta1constants.GardenRoleControlPlane,
 			resourcesv1alpha1.HighAvailabilityConfigType: resourcesv1alpha1.HighAvailabilityConfigTypeController,
 		})
 		deployment.Spec.Replicas = &m.values.Replicas
@@ -259,19 +257,10 @@ func (m *machineControllerManager) Deploy(ctx context.Context) error {
 	}
 
 	if _, err := controllerutils.GetAndCreateOrMergePatch(ctx, m.client, podDisruptionBudget, func() error {
-		switch pdb := podDisruptionBudget.(type) {
-		case *policyv1.PodDisruptionBudget:
-			pdb.Labels = utils.MergeStringMaps(pdb.Labels, getLabels())
-			pdb.Spec = policyv1.PodDisruptionBudgetSpec{
-				MaxUnavailable: utils.IntStrPtrFromInt(1),
-				Selector:       deployment.Spec.Selector,
-			}
-		case *policyv1beta1.PodDisruptionBudget:
-			pdb.Labels = utils.MergeStringMaps(pdb.Labels, getLabels())
-			pdb.Spec = policyv1beta1.PodDisruptionBudgetSpec{
-				MaxUnavailable: utils.IntStrPtrFromInt(1),
-				Selector:       deployment.Spec.Selector,
-			}
+		podDisruptionBudget.Labels = utils.MergeStringMaps(podDisruptionBudget.Labels, getLabels())
+		podDisruptionBudget.Spec = policyv1.PodDisruptionBudgetSpec{
+			MaxUnavailable: utils.IntStrPtrFromInt(1),
+			Selector:       deployment.Spec.Selector,
 		}
 		return nil
 	}); err != nil {
@@ -479,17 +468,12 @@ func (m *machineControllerManager) emptyDeployment() *appsv1.Deployment {
 	return &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: v1beta1constants.DeploymentNameMachineControllerManager, Namespace: m.namespace}}
 }
 
-func (m *machineControllerManager) emptyPodDisruptionBudget() client.Object {
-	objectMeta := metav1.ObjectMeta{Name: v1beta1constants.DeploymentNameMachineControllerManager, Namespace: m.namespace}
-
-	if m.runtimeVersionGreaterEqual121 {
-		return &policyv1.PodDisruptionBudget{ObjectMeta: objectMeta}
-	}
-	return &policyv1beta1.PodDisruptionBudget{ObjectMeta: objectMeta}
+func (m *machineControllerManager) emptyPodDisruptionBudget() *policyv1.PodDisruptionBudget {
+	return &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: v1beta1constants.DeploymentNameMachineControllerManager, Namespace: m.namespace}}
 }
 
 func (m *machineControllerManager) emptyVPA() *vpaautoscalingv1.VerticalPodAutoscaler {
-	return &vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "machine-controller-manager-vpa", Namespace: m.namespace}}
+	return &vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: VPAName, Namespace: m.namespace}}
 }
 
 func (m *machineControllerManager) emptyManagedResource() *resourcesv1alpha1.ManagedResource {

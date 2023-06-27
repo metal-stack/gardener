@@ -1304,7 +1304,9 @@ BkEao/FEz4eQuV5atSD0S78+aF4BriEtWKKjXECTCxMuqcA24vGOgHIrEbKd7zSC
 					}
 
 					Describe("kubeconfig suffix", func() { testSuite(".kubeconfig") })
+					Describe("ca-cluster suffix", func() { testSuite(".ca-cluster") })
 					Describe("ssh-keypair suffix", func() { testSuite(".ssh-keypair") })
+					Describe("ssh-keypair.old suffix", func() { testSuite(".ssh-keypair.old") })
 					Describe("monitoring suffix", func() { testSuite(".monitoring") })
 				})
 
@@ -1853,6 +1855,123 @@ BkEao/FEz4eQuV5atSD0S78+aF4BriEtWKKjXECTCxMuqcA24vGOgHIrEbKd7zSC
 			})
 		})
 
+		Context("when requested for InternalSecrets", func() {
+			var name, namespace string
+
+			BeforeEach(func() {
+				name, namespace = "foo", "bar"
+
+				request.Name = name
+				request.Namespace = namespace
+				request.UserInfo = seedUser
+				request.Resource = metav1.GroupVersionResource{
+					Group:    gardencorev1beta1.SchemeGroupVersion.Group,
+					Resource: "internalsecrets",
+				}
+			})
+
+			DescribeTable("should not allow the request because no allowed verb",
+				func(operation admissionv1.Operation) {
+					request.Operation = operation
+
+					Expect(handler.Handle(ctx, request)).To(Equal(admission.Response{
+						AdmissionResponse: admissionv1.AdmissionResponse{
+							Allowed: false,
+							Result: &metav1.Status{
+								Code:    int32(http.StatusBadRequest),
+								Message: fmt.Sprintf("unexpected operation: %q", operation),
+							},
+						},
+					}))
+				},
+
+				Entry("update", admissionv1.Update),
+				Entry("delete", admissionv1.Delete),
+			)
+
+			Context("when operation is create", func() {
+				BeforeEach(func() {
+					request.Operation = admissionv1.Create
+				})
+
+				It("should forbid the request because it's no expected internal secret", func() {
+					Expect(handler.Handle(ctx, request)).To(Equal(admission.Response{
+						AdmissionResponse: admissionv1.AdmissionResponse{
+							Allowed: false,
+							Result: &metav1.Status{
+								Code:    int32(http.StatusForbidden),
+								Message: fmt.Sprintf("object does not belong to seed %q", seedName),
+							},
+						},
+					}))
+				})
+
+				Context("shoot-related project secret", func() {
+					testSuite := func(suffix string) {
+						BeforeEach(func() {
+							request.Name = name + suffix
+						})
+
+						It("should return an error because the related shoot was not found", func() {
+							mockCache.EXPECT().Get(ctx, kubernetesutils.Key(namespace, name), gomock.AssignableToTypeOf(&gardencorev1beta1.Shoot{})).Return(apierrors.NewNotFound(schema.GroupResource{}, name))
+
+							Expect(handler.Handle(ctx, request)).To(Equal(admission.Response{
+								AdmissionResponse: admissionv1.AdmissionResponse{
+									Allowed: false,
+									Result: &metav1.Status{
+										Code:    int32(http.StatusForbidden),
+										Message: fmt.Sprintf(" %q not found", name),
+									},
+								},
+							}))
+						})
+
+						It("should return an error because the related shoot could not be read", func() {
+							mockCache.EXPECT().Get(ctx, kubernetesutils.Key(namespace, name), gomock.AssignableToTypeOf(&gardencorev1beta1.Shoot{})).Return(fakeErr)
+
+							Expect(handler.Handle(ctx, request)).To(Equal(admission.Response{
+								AdmissionResponse: admissionv1.AdmissionResponse{
+									Allowed: false,
+									Result: &metav1.Status{
+										Code:    int32(http.StatusInternalServerError),
+										Message: fakeErr.Error(),
+									},
+								},
+							}))
+						})
+
+						It("should forbid because the related shoot does not belong to gardenlet's seed", func() {
+							mockCache.EXPECT().Get(ctx, kubernetesutils.Key(namespace, name), gomock.AssignableToTypeOf(&gardencorev1beta1.Shoot{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.Shoot, _ ...client.GetOption) error {
+								(&gardencorev1beta1.Shoot{Spec: gardencorev1beta1.ShootSpec{SeedName: pointer.String("some-different-seed")}}).DeepCopyInto(obj)
+								return nil
+							})
+
+							Expect(handler.Handle(ctx, request)).To(Equal(admission.Response{
+								AdmissionResponse: admissionv1.AdmissionResponse{
+									Allowed: false,
+									Result: &metav1.Status{
+										Code:    int32(http.StatusForbidden),
+										Message: fmt.Sprintf("object does not belong to seed %q", seedName),
+									},
+								},
+							}))
+						})
+
+						It("should allow because the related shoot does belong to gardenlet's seed", func() {
+							mockCache.EXPECT().Get(ctx, kubernetesutils.Key(namespace, name), gomock.AssignableToTypeOf(&gardencorev1beta1.Shoot{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.Shoot, _ ...client.GetOption) error {
+								(&gardencorev1beta1.Shoot{Spec: gardencorev1beta1.ShootSpec{SeedName: &seedName}}).DeepCopyInto(obj)
+								return nil
+							})
+
+							Expect(handler.Handle(ctx, request)).To(Equal(responseAllowed))
+						})
+					}
+
+					Describe("ca-client suffix", func() { testSuite(".ca-client") })
+				})
+			})
+		})
+
 		Context("when requested for ClusterRoleBindings", func() {
 			var name string
 
@@ -2166,6 +2285,11 @@ BkEao/FEz4eQuV5atSD0S78+aF4BriEtWKKjXECTCxMuqcA24vGOgHIrEbKd7zSC
 			Context("when operation is create", func() {
 				BeforeEach(func() {
 					request.Operation = admissionv1.Create
+				})
+
+				It("should allow the request because namespace is seed namespace", func() {
+					request.Namespace = "seed-" + seedName
+					Expect(handler.Handle(ctx, request)).To(Equal(responseAllowed))
 				})
 
 				It("should forbid the request because name pattern does not match", func() {

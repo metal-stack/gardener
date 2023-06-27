@@ -54,6 +54,7 @@ build:
         - pkg/apis/seedmanagement/helper
         - pkg/apis/seedmanagement/install
         - pkg/apis/seedmanagement/v1alpha1
+        - pkg/apis/seedmanagement/v1alpha1/constants
         - pkg/apis/seedmanagement/v1alpha1/helper
         - pkg/apis/seedmanagement/validation
         - pkg/apis/settings
@@ -121,6 +122,8 @@ build:
         - pkg/registry/core/controllerregistration/storage
         - pkg/registry/core/exposureclass
         - pkg/registry/core/exposureclass/storage
+        - pkg/registry/core/internalsecret
+        - pkg/registry/core/internalsecret/storage
         - pkg/registry/core/project
         - pkg/registry/core/project/storage
         - pkg/registry/core/quota
@@ -409,6 +412,7 @@ build:
         - pkg/apis/seedmanagement/encoding
         - pkg/apis/seedmanagement/install
         - pkg/apis/seedmanagement/v1alpha1
+        - pkg/apis/seedmanagement/v1alpha1/constants
         - pkg/apis/seedmanagement/v1alpha1/helper
         - pkg/apis/settings
         - pkg/apis/settings/install
@@ -595,6 +599,7 @@ build:
         - pkg/component/extensions/operatingsystemconfig/utils
         - pkg/component/kubeapiserver/constants
         - pkg/component/kubeproxy
+        - pkg/component/machinecontrollermanager
         - pkg/controller/service
         - pkg/controllerutils
         - pkg/controllerutils/mapper
@@ -626,8 +631,8 @@ build:
         - pkg/provider-local/imagevector
         - pkg/provider-local/local
         - pkg/provider-local/webhook/controlplane
-        - pkg/provider-local/webhook/controlplaneexposure
         - pkg/provider-local/webhook/dnsconfig
+        - pkg/provider-local/webhook/machinecontrollermanager
         - pkg/provider-local/webhook/networkpolicy
         - pkg/provider-local/webhook/node
         - pkg/provider-local/webhook/shoot
@@ -773,6 +778,7 @@ build:
         - pkg/apis/seedmanagement/encoding
         - pkg/apis/seedmanagement/install
         - pkg/apis/seedmanagement/v1alpha1
+        - pkg/apis/seedmanagement/v1alpha1/constants
         - pkg/apis/seedmanagement/v1alpha1/helper
         - pkg/apis/settings
         - pkg/apis/settings/install
@@ -787,6 +793,7 @@ build:
         - pkg/controller/networkpolicy
         - pkg/controller/networkpolicy/helper
         - pkg/controller/networkpolicy/hostnameresolver
+        - pkg/controller/tokenrequestor
         - pkg/controllerutils
         - pkg/controllerutils/mapper
         - pkg/controllerutils/predicate
@@ -820,16 +827,13 @@ build:
         - pkg/gardenlet/controller/shoot/care
         - pkg/gardenlet/controller/shoot/shoot
         - pkg/gardenlet/controller/shoot/shoot/helper
-        - pkg/gardenlet/controller/shootstate
-        - pkg/gardenlet/controller/shootstate/secret
-        - pkg/gardenlet/controller/shootstate/extensions
+        - pkg/gardenlet/controller/shoot/state
         - pkg/gardenlet/features
         - pkg/healthz
         - pkg/logger
         - pkg/operation
         - pkg/operation/botanist
         - pkg/component/apiserverproxy
-        - pkg/component/nginxingressshoot
         - pkg/component
         - pkg/component/backupentry
         - pkg/component/blackboxexporter
@@ -885,6 +889,7 @@ build:
         - pkg/component/logging/fluentoperator
         - pkg/component/logging/fluentoperator/customresources
         - pkg/component/logging/vali
+        - pkg/component/machinecontrollermanager
         - pkg/component/metricsserver
         - pkg/component/monitoring
         - pkg/component/namespaces
@@ -930,6 +935,7 @@ build:
         - pkg/utils/flow
         - pkg/utils/gardener
         - pkg/utils/gardener/secretsrotation
+        - pkg/utils/gardener/shootstate
         - pkg/utils/gardener/tokenrequest
         - pkg/utils/images
         - pkg/utils/imagevector
@@ -993,6 +999,7 @@ build:
         - pkg/chartrenderer
         - pkg/client/kubernetes
         - pkg/client/kubernetes/cache
+        - pkg/controller/tokenrequestor
         - pkg/controllerutils
         - pkg/controllerutils/mapper
         - pkg/controllerutils/predicate
@@ -1021,7 +1028,6 @@ build:
         - pkg/resourcemanager/controller/networkpolicy
         - pkg/resourcemanager/controller/secret
         - pkg/resourcemanager/controller/tokeninvalidator
-        - pkg/resourcemanager/controller/tokenrequestor
         - pkg/resourcemanager/predicate
         - pkg/resourcemanager/webhook
         - pkg/resourcemanager/webhook/crddeletionprotection

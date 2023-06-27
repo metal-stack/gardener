@@ -22,15 +22,28 @@ Gardener does not evaluate or understand this config, but extension controllers 
 
 Please see [this](../../example/30-cloudprofile.yaml) example manifest and consult the documentation of your provider extension controller to get information about its `providerConfig`.
 
+## `InternalSecret`s
+
+End-users can read and/or write `Secret`s in their project namespaces in the garden cluster. This prevents Gardener components from storing such "Gardener-internal" secrets in the respective project namespace.
+`InternalSecret`s are resources that contain shoot or project-related secrets that are "Gardener-internal", i.e., secrets used and managed by the system that end-users don't have access to.
+`InternalSecret`s are defined like plain Kubernetes `Secret`s, behave exactly like them, and can be used in the same manners. The only difference is, that the `InternalSecret` resource is a dedicated API resource (exposed by gardener-apiserver).
+This allows separating access to "normal" secrets and internal secrets by the usual RBAC means.
+
+Gardener uses an `InternalSecret` per Shoot for syncing the client CA to the project namespace in the garden cluster (named `<shoot-name>.ca-client`). The [`shoots/adminkubeconfig` subresource](../usage/shoot_access.md#shootsadminkubeconfig-subresource) signs short-lived client certificates by retrieving the CA from the `InternalSecret`.
+
+Operators should configure `gardener-apiserver` to encrypt the `internalsecrets.core.gardener.cloud` resource in etcd.
+
+Please see [this](../../example/11-internal-secret.yaml) example manifest.
+
 ## `Seed`s
 
 `Seed`s are resources that represent seed clusters.
-Gardener does not care about how a seed cluster got created - the only requirement is that it is of at least Kubernetes v1.20 and passes the Kubernetes conformance tests.
+Gardener does not care about how a seed cluster got created - the only requirement is that it is of at least Kubernetes v1.22 and passes the Kubernetes conformance tests.
 The Gardener operator has to either deploy the gardenlet into the cluster they want to use as seed (recommended, then the gardenlet will create the `Seed` object itself after bootstrapping) or provide the kubeconfig to the cluster inside a secret (that is referenced by the `Seed` resource) and create the `Seed` resource themselves.
 
 Please see [this](../../example/45-secret-seed-backup.yaml), [this](../../example/50-seed.yaml), and optionally [this](../../example/40-secret-seed.yaml) example manifests.
 
-## Shoot`Quota`s
+## Shoot `Quota`s
 
 To allow end-users not having their dedicated infrastructure account to try out Gardener, the operator can register an account owned by them that they allow to be used for trial clusters.
 Trial clusters can be put under quota so that they don't consume too many resources (resulting in costs) and that one user cannot consume all resources on their own.

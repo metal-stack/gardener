@@ -29,6 +29,7 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/component/etcd"
 	"github.com/gardener/gardener/pkg/component/logging/kuberbacproxy"
+	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/operation"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
@@ -89,10 +90,7 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 	o.Shoot.Components.Extensions.ExternalDNSRecord = b.DefaultExternalDNSRecord()
 	o.Shoot.Components.Extensions.InternalDNSRecord = b.DefaultInternalDNSRecord()
 	o.Shoot.Components.Extensions.IngressDNSRecord = b.DefaultIngressDNSRecord()
-	o.Shoot.Components.Extensions.OwnerDNSRecord = b.DefaultOwnerDNSRecord()
-	if err != nil {
-		return nil, err
-	}
+
 	o.Shoot.Components.Extensions.Extension, err = b.DefaultExtension(ctx)
 	if err != nil {
 		return nil, err
@@ -110,13 +108,7 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 		o.Shoot.Components.Extensions.Worker = b.DefaultWorker()
 	}
 
-	sniPhase, err := b.SNIPhase(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// control plane components
-
 	o.Shoot.Components.ControlPlane.EtcdCopyBackupsTask = b.DefaultEtcdCopyBackupsTask()
 	o.Shoot.Components.ControlPlane.EtcdMain, err = b.DefaultEtcd(v1beta1constants.ETCDRoleMain, etcd.ClassImportant)
 	if err != nil {
@@ -126,13 +118,9 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 	if err != nil {
 		return nil, err
 	}
-	o.Shoot.Components.ControlPlane.KubeAPIServerIngress, err = b.DefaultKubeAPIServerIngress()
-	if err != nil {
-		return nil, err
-	}
-	o.Shoot.Components.ControlPlane.KubeAPIServerService = b.DefaultKubeAPIServerService(sniPhase)
+	o.Shoot.Components.ControlPlane.KubeAPIServerIngress = b.DefaultKubeAPIServerIngress()
+	o.Shoot.Components.ControlPlane.KubeAPIServerService = b.DefaultKubeAPIServerService()
 	o.Shoot.Components.ControlPlane.KubeAPIServerSNI = b.DefaultKubeAPIServerSNI()
-	o.Shoot.Components.ControlPlane.KubeAPIServerSNIPhase = sniPhase
 	o.Shoot.Components.ControlPlane.KubeAPIServer, err = b.DefaultKubeAPIServer(ctx)
 	if err != nil {
 		return nil, err
@@ -165,6 +153,12 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 		o.Shoot.Components.ControlPlane.VPNSeedServer, err = b.DefaultVPNSeedServer()
 		if err != nil {
 			return nil, err
+		}
+		if features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment) {
+			o.Shoot.Components.ControlPlane.MachineControllerManager, err = b.DefaultMachineControllerManager(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -226,6 +220,10 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 		return nil, err
 	}
 	o.Shoot.Components.Logging.ShootEventLogger, err = b.DefaultEventLogger()
+	if err != nil {
+		return nil, err
+	}
+	o.Shoot.Components.Logging.Vali, err = b.DefaultVali()
 	if err != nil {
 		return nil, err
 	}

@@ -25,7 +25,6 @@
 
 ## Usage
 
-* [APIServerSNI environment variable injection](usage/apiserver-sni-injection.md)
 * [Audit a Kubernetes cluster](usage/shoot_auditpolicy.md)
 * [Auto-Scaling for shoot clusters](usage/shoot_autoscaling.md)
 * [Cleanup of Shoot clusters in deletion](usage/shoot_cleanup.md)
@@ -56,6 +55,7 @@
 * [Shoot Scheduling Profiles](usage/shoot_scheduling_profiles.md)
 * [Shoot Credentials Rotation](usage/shoot_credentials_rotation.md)
 * [Shoot Kubernetes and Operating System Versioning](usage/shoot_versions.md)
+* [Shoot `KUBERNETES_SERVICE_HOST` Environment Variable Injection](usage/shoot_kubernetes_service_host_injection.md)
 * [Shoot Networking](usage/shoot_networking.md)
 * [Shoot Maintenance](usage/shoot_maintenance.md)
 * [Shoot `ServiceAccount` Configurations](usage/shoot_serviceaccounts.md)
@@ -112,6 +112,7 @@
 * [GEP-19: Observability Stack - Migrating to the prometheus-operator and fluent-bit operator](proposals/19-migrating-observability-stack-to-operators.md)
 * [GEP-20: Highly Available Shoot Control Planes](proposals/20-ha-control-planes.md)
 * [GEP-21: IPv6 Single-Stack Support in Local Gardener](proposals/21-ipv6-singlestack-local.md)
+* [GEP-22: Improved Usage of the `ShootState` API](proposals/22-improved-usage-of-shootstate-api.md)
 
 ## Development
 
@@ -170,9 +171,10 @@
   * [Extension Admission](extensions/admission.md)
   * [Heartbeat controller](extensions/heartbeat.md)
 * [Provider Local](extensions/provider-local.md)
+* [Access to the Garden Cluster](extensions/garden-api-access.md)
+* [Control plane migration](extensions/migration.md)
 * [Extending project roles](extensions/project-roles.md)
 * [Referenced resources](extensions/referenced-resources.md)
-* [Control plane migration](extensions/migration.md)
 
 ## Deployment
 

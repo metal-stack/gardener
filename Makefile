@@ -42,7 +42,6 @@ ACTIVATE_SEEDAUTHORIZER                    := false
 SEED_NAME                                  := provider-extensions
 SEED_KUBECONFIG                            := $(REPO_ROOT)/example/provider-extensions/seed/kubeconfig
 DEV_SETUP_WITH_WEBHOOKS                    := false
-KIND_ENV                                   := "skaffold"
 IPFAMILY                                   := ipv4
 PARALLEL_E2E_TESTS                         := 15
 GARDENER_RELEASE_DOWNLOAD_PATH             := $(REPO_ROOT)/dev
@@ -75,69 +74,13 @@ GOMEGACHECK_DIR := $(TOOLS_DIR)/gomegacheck
 # Rules for local development scenarios #
 #########################################
 
-dev-setup register-local-env start-extension-provider-local: export IPFAMILY := $(IPFAMILY)
-
-.PHONY: dev-setup
-dev-setup:
-	@if [ "$(DEV_SETUP_WITH_WEBHOOKS)" = "true" ]; then ./hack/local-development/dev-setup --with-webhooks; else ./hack/local-development/dev-setup; fi
-
-.PHONY: dev-setup-register-gardener
-dev-setup-register-gardener:
-	@./hack/local-development/dev-setup-register-gardener
-
-.PHONY: local-garden-up
-local-garden-up: $(HELM)
-	@./hack/local-development/local-garden/start.sh $(LOCAL_GARDEN_LABEL) $(ACTIVATE_SEEDAUTHORIZER)
-
-.PHONY: local-garden-down
-local-garden-down:
-	@./hack/local-development/local-garden/stop.sh $(LOCAL_GARDEN_LABEL)
+register-local-env: export IPFAMILY := $(IPFAMILY)
 
 ENVTEST_TYPE ?= kubernetes
 
 .PHONY: start-envtest
 start-envtest: $(SETUP_ENVTEST)
 	@./hack/start-envtest.sh --environment-type=$(ENVTEST_TYPE)
-
-.PHONY: remote-garden-up
-remote-garden-up: $(HELM)
-	@./hack/local-development/remote-garden/start.sh $(REMOTE_GARDEN_LABEL)
-
-.PHONY: remote-garden-down
-remote-garden-down:
-	@./hack/local-development/remote-garden/stop.sh $(REMOTE_GARDEN_LABEL)
-
-.PHONY: start-apiserver
-start-apiserver:
-	@./hack/local-development/start-apiserver
-
-.PHONY: start-controller-manager
-start-controller-manager:
-	@./hack/local-development/start-controller-manager
-
-.PHONY: start-scheduler
-start-scheduler:
-	@./hack/local-development/start-scheduler
-
-.PHONY: start-admission-controller
-start-admission-controller:
-	@./hack/local-development/start-admission-controller
-
-.PHONY: start-resource-manager
-start-resource-manager:
-	@./hack/local-development/start-resource-manager
-
-.PHONY: start-operator
-start-operator: $(YQ)
-	@./hack/local-development/start-operator
-
-.PHONY: start-gardenlet
-start-gardenlet: $(HELM) $(YAML2JSON) $(YQ)
-	@./hack/local-development/start-gardenlet
-
-.PHONY: start-extension-provider-local
-start-extension-provider-local:
-	@./hack/local-development/start-extension-provider-local
 
 #################################################################
 # Rules related to binary build, Docker image build and release #
@@ -335,19 +278,19 @@ kind2-down: export ADDITIONAL_PARAMETERS = --keep-backupbuckets-dir
 kind-ha-multi-zone-up: export ADDITIONAL_PARAMETERS = --multi-zonal
 
 kind-up kind2-up kind-ha-single-zone-up kind2-ha-single-zone-up kind-ha-multi-zone-up: $(KIND) $(KUBECTL) $(HELM) $(YQ)
-	./hack/kind-up.sh --cluster-name $(CLUSTER_NAME) --environment $(KIND_ENV) --path-kubeconfig $(KIND_KUBECONFIG) --path-cluster-values $(CLUSTER_VALUES) $(ADDITIONAL_PARAMETERS)
+	./hack/kind-up.sh --cluster-name $(CLUSTER_NAME) --path-kubeconfig $(KIND_KUBECONFIG) --path-cluster-values $(CLUSTER_VALUES) $(ADDITIONAL_PARAMETERS)
 kind-down kind2-down kind-ha-single-zone-down kind2-ha-single-zone-down kind-ha-multi-zone-down: $(KIND)
 	./hack/kind-down.sh --cluster-name $(CLUSTER_NAME) --path-kubeconfig $(KIND_KUBECONFIG) $(ADDITIONAL_PARAMETERS)
 
 kind-extensions-up: $(KIND) $(KUBECTL)
-	KIND_ENV=$(KIND_ENV) REPO_ROOT=$(REPO_ROOT) ./hack/kind-extensions-up.sh
+	REPO_ROOT=$(REPO_ROOT) ./hack/kind-extensions-up.sh
 kind-extensions-down: $(KIND)
 	docker stop gardener-extensions-control-plane
 kind-extensions-clean:
 	./hack/kind-down.sh --cluster-name gardener-extensions --path-kubeconfig $(REPO_ROOT)/example/provider-extensions/garden/kubeconfig
 
 kind-operator-up: $(KIND) $(KUBECTL) $(HELM) $(YQ)
-	./hack/kind-up.sh --cluster-name gardener-operator-local --environment $(KIND_ENV) --path-kubeconfig $(REPO_ROOT)/example/gardener-local/kind/operator/kubeconfig --path-cluster-values $(REPO_ROOT)/example/gardener-local/kind/operator/values.yaml
+	./hack/kind-up.sh --cluster-name gardener-operator-local --path-kubeconfig $(REPO_ROOT)/example/gardener-local/kind/operator/kubeconfig --path-cluster-values $(REPO_ROOT)/example/gardener-local/kind/operator/values.yaml
 	mkdir -p $(REPO_ROOT)/dev/local-backupbuckets/gardener-operator
 kind-operator-down: $(KIND)
 	./hack/kind-down.sh --cluster-name gardener-operator-local --path-kubeconfig $(REPO_ROOT)/example/gardener-local/kind/operator/kubeconfig

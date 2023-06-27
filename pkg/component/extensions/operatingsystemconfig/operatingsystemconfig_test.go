@@ -329,6 +329,7 @@ var _ = Describe("OperatingSystemConfig", func() {
 				Expect(c.Get(ctx, client.ObjectKey{Name: "shoot-access-cloud-config-downloader", Namespace: namespace}, secret)).To(Succeed())
 				Expect(secret.Labels).To(Equal(map[string]string{
 					"resources.gardener.cloud/purpose": "token-requestor",
+					"resources.gardener.cloud/class":   "shoot",
 				}))
 				Expect(secret.Annotations).To(Equal(map[string]string{
 					"serviceaccount.resources.gardener.cloud/name":                      "cloud-config-downloader",
@@ -366,8 +367,8 @@ var _ = Describe("OperatingSystemConfig", func() {
 			It("should exclude the bootstrap token file if purpose is not provision", func() {
 				bootstrapTokenFile := extensionsv1alpha1.File{Path: "/var/lib/cloud-config-downloader/credentials/bootstrap-token"}
 				downloaderConfigFnWithBootstrapToken := func(cloudConfigUserDataSecretName, apiServerURL, clusterCASecretName string) ([]extensionsv1alpha1.Unit, []extensionsv1alpha1.File, error) {
-					units, files, error := downloaderConfigFn(cloudConfigUserDataSecretName, apiServerURL, clusterCASecretName)
-					return units, append(files, bootstrapTokenFile), error
+					units, files, err := downloaderConfigFn(cloudConfigUserDataSecretName, apiServerURL, clusterCASecretName)
+					return units, append(files, bootstrapTokenFile), err
 				}
 
 				defer test.WithVars(
@@ -465,6 +466,7 @@ var _ = Describe("OperatingSystemConfig", func() {
 						},
 						Labels: map[string]string{
 							"resources.gardener.cloud/purpose": "token-requestor",
+							"resources.gardener.cloud/class":   "shoot",
 						},
 					},
 					Type: corev1.SecretTypeOpaque,

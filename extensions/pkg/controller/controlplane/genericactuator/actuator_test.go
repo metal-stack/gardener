@@ -75,8 +75,8 @@ const (
 	caNameControlPlane         = "ca-" + providerName + "-controlplane"
 	caNameControlPlaneExposure = caNameControlPlane + "-exposure"
 
-	seedVersion  = "1.20.0"
-	shootVersion = "1.20.0"
+	seedVersion  = "1.25.0"
+	shootVersion = "1.25.0"
 )
 
 var (
@@ -413,7 +413,11 @@ webhooks:
 			vp.EXPECT().GetStorageClassesChartValues(ctx, cp, cluster).Return(storageClassesChartValues, nil)
 
 			// Handle shoot access secrets and legacy secret cleanup
-			c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, shootAccessSecretsFunc(namespace)[0].Secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{}))
+			c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, shootAccessSecretsFunc(namespace)[0].Secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+				Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+					obj.SetResourceVersion("0")
+				})
+
 			c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 				Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 					Expect(obj).To(DeepEqual(&corev1.Secret{
@@ -426,7 +430,9 @@ webhooks:
 							},
 							Labels: map[string]string{
 								"resources.gardener.cloud/purpose": "token-requestor",
+								"resources.gardener.cloud/class":   "shoot",
 							},
+							ResourceVersion: "0",
 						},
 						Type: corev1.SecretTypeOpaque,
 					}))
@@ -464,6 +470,12 @@ webhooks:
 				atomicWebhookConfig.Store(webhookConfig)
 			}
 
+			// Create mock values provider
+			vp := extensionsmockgenericactuator.NewMockValuesProvider(ctrl)
+
+			// Create mock chart applier
+			chartApplier := kubernetesmock.NewMockChartApplier(ctrl)
+
 			// Create mock clients
 			client := mockclient.NewMockClient(ctrl)
 
@@ -488,6 +500,8 @@ webhooks:
 			var configChart chart.Interface
 			if configName != "" {
 				configChartMock := mockchartutil.NewMockInterface(ctrl)
+				vp.EXPECT().GetConfigChartValues(ctx, cp, cluster).Return(configChartValues, nil)
+				configChartMock.EXPECT().Apply(ctx, chartApplier, namespace, nil, "", "", configChartValues).Return(nil)
 				configChartMock.EXPECT().Delete(ctx, client, namespace).Return(nil)
 				configChart = configChartMock
 			}
@@ -505,9 +519,10 @@ webhooks:
 			client.EXPECT().Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: shootAccessSecretsFunc(namespace)[0].Secret.Name, Namespace: namespace}})
 
 			// Create actuator
-			a := NewActuator(providerName, getSecretsConfigs, shootAccessSecretsFunc, nil, nil, configChart, ccmChart, nil, cpShootCRDsChart, nil, nil, nil, nil, nil, configName, atomicWebhookConfig, webhookServerNamespace, webhookServerPort)
+			a := NewActuator(providerName, getSecretsConfigs, shootAccessSecretsFunc, nil, nil, configChart, ccmChart, nil, cpShootCRDsChart, nil, nil, vp, nil, nil, configName, atomicWebhookConfig, webhookServerNamespace, webhookServerPort)
 			Expect(a.(inject.Client).InjectClient(client)).To(Succeed())
 			a.(*actuator).newSecretsManager = newSecretsManager
+			a.(*actuator).chartApplier = chartApplier
 
 			// Call Delete method and check the result
 			Expect(a.Delete(ctx, logger, cp, cluster)).To(Succeed())
@@ -539,7 +554,10 @@ webhooks:
 			vp.EXPECT().GetControlPlaneExposureChartValues(ctx, cpExposure, cluster, gomock.Any(), exposureChecksums).Return(controlPlaneExposureChartValues, nil)
 
 			// Handle shoot access secrets and legacy secret cleanup
-			c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, exposureShootAccessSecretsFunc(namespace)[0].Secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{}))
+			c.EXPECT().Get(ctx, kubernetesutils.Key(namespace, exposureShootAccessSecretsFunc(namespace)[0].Secret.Name), gomock.AssignableToTypeOf(&corev1.Secret{})).
+				Do(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+					obj.SetResourceVersion("0")
+				})
 			c.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&corev1.Secret{}), gomock.Any()).
 				Do(func(ctx context.Context, obj client.Object, _ client.Patch, _ ...client.PatchOption) {
 					Expect(obj).To(DeepEqual(&corev1.Secret{
@@ -552,7 +570,9 @@ webhooks:
 							},
 							Labels: map[string]string{
 								"resources.gardener.cloud/purpose": "token-requestor",
+								"resources.gardener.cloud/class":   "shoot",
 							},
+							ResourceVersion: "0",
 						},
 						Type: corev1.SecretTypeOpaque,
 					}))

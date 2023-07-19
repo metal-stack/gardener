@@ -59,6 +59,8 @@ const (
 	ImageNameGardenerControllerManager = "gardener-controller-manager"
 	// ImageNameGardenerMetricsExporter is a constant for an image in the image vector with name 'gardener-metrics-exporter'.
 	ImageNameGardenerMetricsExporter = "gardener-metrics-exporter"
+	// ImageNameGardenerNodeAgent is a constant for an image in the image vector with name 'gardener-node-agent'.
+	ImageNameGardenerNodeAgent = "gardener-node-agent"
 	// ImageNameGardenerResourceManager is a constant for an image in the image vector with name 'gardener-resource-manager'.
 	ImageNameGardenerResourceManager = "gardener-resource-manager"
 	// ImageNameGardenerScheduler is a constant for an image in the image vector with name 'gardener-scheduler'.
@@ -97,6 +99,8 @@ const (
 	ImageNameMetricsServer = "metrics-server"
 	// ImageNameNginxIngressController is a constant for an image in the image vector with name 'nginx-ingress-controller'.
 	ImageNameNginxIngressController = "nginx-ingress-controller"
+	// ImageNameNginxIngressControllerSeed is a constant for an image in the image vector with name 'nginx-ingress-controller-seed'.
+	ImageNameNginxIngressControllerSeed = "nginx-ingress-controller-seed"
 	// ImageNameNodeExporter is a constant for an image in the image vector with name 'node-exporter'.
 	ImageNameNodeExporter = "node-exporter"
 	// ImageNameNodeLocalDns is a constant for an image in the image vector with name 'node-local-dns'.

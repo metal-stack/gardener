@@ -496,7 +496,6 @@ if [[ $# -gt 0 && "$1" == "--parallel" ]]; then
     resourcemanager_groups \
     nodeagent_groups
 else
-  nodeagent_groups
   authentication_groups
   core_groups
   extensions_groups
@@ -510,11 +509,12 @@ else
   admissioncontroller_groups
   scheduler_groups
   gardenlet_groups
-  resourcemanager_groups
   shoottolerationrestriction_groups
   shootdnsrewriting_groups
   provider_local_groups
   extensions_config_groups
+  resourcemanager_groups
+  nodeagent_groups
 fi
 
 openapi_definitions "$@"

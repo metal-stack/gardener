@@ -16,6 +16,7 @@ package original
 
 import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/downloader"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/containerd"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/docker"
@@ -49,6 +50,8 @@ func Config(ctx components.Context) ([]extensionsv1alpha1.Unit, []extensionsv1al
 		units = append(units, u...)
 		files = append(files, f...)
 	}
+
+	units = append(units, downloader.GetNodeAgentInitUnit())
 
 	return units, files, nil
 }

@@ -26,12 +26,14 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	bootstraptokenapi "k8s.io/cluster-bootstrap/token/api"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/docker"
 	"github.com/gardener/gardener/pkg/component/logging/vali"
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/gardener/gardener/pkg/utils/secrets"
@@ -223,7 +225,7 @@ func GenerateRBACResourcesData(secretNames []string) (map[string][]byte, error) 
 				{
 					APIGroups:     []string{""},
 					Resources:     []string{"secrets"},
-					ResourceNames: append(secretNames, Name, vali.ValitailTokenSecretName),
+					ResourceNames: append(secretNames, Name, vali.ValitailTokenSecretName, nodeagentv1alpha1.NodeAgentTokenSecretName),
 					Verbs:         []string{"get"},
 				},
 			},
@@ -301,13 +303,17 @@ func GenerateRBACResourcesData(secretNames []string) (map[string][]byte, error) 
 		}
 	)
 
+	objects := []client.Object{
+		role,
+		roleBinding,
+		clusterRoleBindingNodeBootstrapper,
+		clusterRoleBindingNodeClient,
+		clusterRoleBindingSelfNodeClient,
+	}
+
+	objects = append(objects, nodeAgentRBACResources()...)
+
 	return managedresources.
 		NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer).
-		AddAllAndSerialize(
-			role,
-			roleBinding,
-			clusterRoleBindingNodeBootstrapper,
-			clusterRoleBindingNodeClient,
-			clusterRoleBindingSelfNodeClient,
-		)
+		AddAllAndSerialize(objects...)
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/component"
@@ -103,7 +104,8 @@ type Shoot struct {
 	TopologyAwareRoutingEnabled             bool
 	Networks                                *Networks
 	BackupEntryName                         string
-	CloudConfigExecutionMaxDelaySeconds     int
+	CloudConfigExecutionMaxDelaySeconds     int // TODO(rfranzke): Remove this field when CCD gets removed.
+	OSCSyncJitterPeriod                     *metav1.Duration
 
 	Components *Components
 }

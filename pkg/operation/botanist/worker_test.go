@@ -204,11 +204,11 @@ var _ = Describe("Worker", func() {
 		})
 	})
 
-	Describe("#WorkerPoolToCloudConfigSecretMetaMap", func() {
+	Describe("#WorkerPoolToOperatingSystemConfigSecretMetaMap", func() {
 		It("should return an error when the list fails", func() {
 			c.EXPECT().List(ctx, gomock.AssignableToTypeOf(&corev1.SecretList{}), cloudConfigSecretListOptions).Return(fakeErr)
 
-			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToCloudConfigSecretMetaMap(ctx, c)
+			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToOperatingSystemConfigSecretMetaMap(ctx, c)
 			Expect(workerPoolToCloudConfigSecretMeta).To(BeNil())
 			Expect(err).To(MatchError(fakeErr))
 		})
@@ -216,7 +216,7 @@ var _ = Describe("Worker", func() {
 		It("should return an empty map when there are no secrets", func() {
 			c.EXPECT().List(ctx, gomock.AssignableToTypeOf(&corev1.SecretList{}), cloudConfigSecretListOptions)
 
-			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToCloudConfigSecretMetaMap(ctx, c)
+			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToOperatingSystemConfigSecretMetaMap(ctx, c)
 			Expect(workerPoolToCloudConfigSecretMeta).To(BeEmpty())
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -257,7 +257,7 @@ var _ = Describe("Worker", func() {
 				return nil
 			})
 
-			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToCloudConfigSecretMetaMap(ctx, c)
+			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToOperatingSystemConfigSecretMetaMap(ctx, c)
 			Expect(workerPoolToCloudConfigSecretMeta).To(Equal(map[string]metav1.ObjectMeta{
 				pool1: {
 					Labels:      map[string]string{"worker.gardener.cloud/pool": pool1},
@@ -272,9 +272,9 @@ var _ = Describe("Worker", func() {
 		})
 	})
 
-	DescribeTable("#CloudConfigUpdatedForAllWorkerPools",
+	DescribeTable("#OperatingSystemConfigUpdatedForAllWorkerPools",
 		func(workers []gardencorev1beta1.Worker, workerPoolToNodes map[string][]corev1.Node, workerPoolToCloudConfigSecretMeta map[string]metav1.ObjectMeta, matcher gomegatypes.GomegaMatcher) {
-			Expect(CloudConfigUpdatedForAllWorkerPools(workers, workerPoolToNodes, workerPoolToCloudConfigSecretMeta)).To(matcher)
+			Expect(OperatingSystemConfigUpdatedForAllWorkerPools(workers, workerPoolToNodes, workerPoolToCloudConfigSecretMeta)).To(matcher)
 		},
 
 		Entry("secret meta missing",
@@ -359,7 +359,7 @@ var _ = Describe("Worker", func() {
 		),
 	)
 
-	Describe("#WaitUntilCloudConfigUpdatedForAllWorkerPools", func() {
+	Describe("#WaitUntilOperatingSystemConfigUpdatedForAllWorkerPools", func() {
 		var (
 			seedInterface  *kubernetesmock.MockInterface
 			seedClient     *mockclient.MockClient
@@ -400,7 +400,7 @@ var _ = Describe("Worker", func() {
 				})).AnyTimes(),
 			)
 
-			Expect(botanist.WaitUntilCloudConfigUpdatedForAllWorkerPools(ctx)).To(MatchError(ContainSubstring("the cloud-config user data scripts for the worker nodes were not populated yet")))
+			Expect(botanist.WaitUntilOperatingSystemConfigUpdatedForAllWorkerPools(ctx)).To(MatchError(ContainSubstring("the cloud-config user data scripts for the worker nodes were not populated yet")))
 		})
 
 		It("should fail when the cloud-config was not updated for all worker pools", func() {
@@ -465,7 +465,7 @@ var _ = Describe("Worker", func() {
 				}).AnyTimes(),
 			)
 
-			Expect(botanist.WaitUntilCloudConfigUpdatedForAllWorkerPools(ctx)).To(MatchError(ContainSubstring("is outdated")))
+			Expect(botanist.WaitUntilOperatingSystemConfigUpdatedForAllWorkerPools(ctx)).To(MatchError(ContainSubstring("is outdated")))
 		})
 
 		It("should succeed when the cloud-config was updated for all worker pools", func() {
@@ -530,7 +530,7 @@ var _ = Describe("Worker", func() {
 				}).AnyTimes(),
 			)
 
-			Expect(botanist.WaitUntilCloudConfigUpdatedForAllWorkerPools(ctx)).To(Succeed())
+			Expect(botanist.WaitUntilOperatingSystemConfigUpdatedForAllWorkerPools(ctx)).To(Succeed())
 		})
 	})
 })

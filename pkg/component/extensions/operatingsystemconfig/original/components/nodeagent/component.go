@@ -71,20 +71,25 @@ func (component) Config(ctx components.Context) ([]extensionsv1alpha1.Unit, []ex
 	}
 
 	return []extensionsv1alpha1.Unit{{
-		Name:    nodeagentv1alpha1.UnitName,
-		Enable:  pointer.Bool(true),
-		Content: pointer.String(UnitContent()),
-		Files: append(files, extensionsv1alpha1.File{
-			Path:        v1beta1constants.OperatingSystemConfigFilePathBinaries + "/gardener-node-agent",
-			Permissions: pointer.Int32(0755),
-			Content: extensionsv1alpha1.FileContent{
-				ImageRef: &extensionsv1alpha1.FileContentImageRef{
-					Image:           ctx.Images[imagevector.ImageNameGardenerNodeAgent].String(),
-					FilePathInImage: "/gardener-node-agent",
+			Name:    nodeagentv1alpha1.UnitName,
+			Enable:  pointer.Bool(true),
+			Content: pointer.String(UnitContent()),
+			Files: append(files, extensionsv1alpha1.File{
+				Path:        v1beta1constants.OperatingSystemConfigFilePathBinaries + "/gardener-node-agent",
+				Permissions: pointer.Int32(0755),
+				Content: extensionsv1alpha1.FileContent{
+					ImageRef: &extensionsv1alpha1.FileContentImageRef{
+						Image:           ctx.Images[imagevector.ImageNameGardenerNodeAgent].String(),
+						FilePathInImage: "/ko-app/gardener-node-agent",
+					},
 				},
-			},
-		}),
-	}}, nil, nil
+			}),
+		}},
+		// Return unit files also as regular files to make migration from cloud-config-downloader to gardener-node-agent
+		// work (CCD does not understand unit files).
+		// TODO(rfranzke): Return nil once UseGardenerNodeAgent feature gate gets removed.
+		files,
+		nil
 }
 
 // UnitContent returns the systemd unit content for the gardener-node-agent unit.

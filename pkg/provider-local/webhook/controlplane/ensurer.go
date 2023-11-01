@@ -40,15 +40,17 @@ import (
 )
 
 // NewEnsurer creates a new controlplane ensurer.
-func NewEnsurer(logger logr.Logger) genericmutator.Ensurer {
+func NewEnsurer(logger logr.Logger, useGardenerNodeAgent bool) genericmutator.Ensurer {
 	return &ensurer{
-		logger: logger.WithName("local-controlplane-ensurer"),
+		logger:               logger.WithName("local-controlplane-ensurer"),
+		useGardenerNodeAgent: useGardenerNodeAgent,
 	}
 }
 
 type ensurer struct {
 	genericmutator.NoopEnsurer
-	logger logr.Logger
+	logger               logr.Logger
+	useGardenerNodeAgent bool
 }
 
 // EnsureMachineControllerManagerDeployment ensures that the machine-controller-manager deployment conforms to the provider requirements.
@@ -95,7 +97,16 @@ func (e *ensurer) EnsureKubeletConfiguration(_ context.Context, _ extensionscont
 	return nil
 }
 
-func (e *ensurer) EnsureAdditionalFiles(_ context.Context, _ extensionscontextwebhook.GardenContext, new, _ *[]extensionsv1alpha1.File) error {
+func (e *ensurer) EnsureAdditionalFiles(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *[]extensionsv1alpha1.File) error {
+	// TODO(rfranzke): Remove this function when UseGardenerNodeAgent feature gate gets promoted to GA.
+	return e.EnsureAdditionalProvisionFiles(ctx, gctx, new, old)
+}
+
+func (e *ensurer) EnsureAdditionalProvisionFiles(_ context.Context, _ extensionscontextwebhook.GardenContext, new, _ *[]extensionsv1alpha1.File) error {
+	if !e.useGardenerNodeAgent {
+		return nil
+	}
+
 	mirrors := []RegistryMirror{
 		{UpstreamHost: "localhost:5001", UpstreamServer: "http://localhost:5001", MirrorHost: "http://garden.local.gardener.cloud:5001"},
 		{UpstreamHost: "gcr.io", UpstreamServer: "https://gcr.io", MirrorHost: "http://garden.local.gardener.cloud:5003"},

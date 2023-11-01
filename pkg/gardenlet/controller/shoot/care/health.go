@@ -43,6 +43,7 @@ import (
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/extensions"
+	"github.com/gardener/gardener/pkg/features"
 	gardenletconfig "github.com/gardener/gardener/pkg/gardenlet/apis/config"
 	gardenlethelper "github.com/gardener/gardener/pkg/gardenlet/apis/config/helper"
 	"github.com/gardener/gardener/pkg/operation/botanist"
@@ -552,7 +553,18 @@ func (h *Health) CheckClusterNodes(
 		return nil, err
 	}
 
-	workerPoolToCloudConfigSecretMeta, err := botanist.WorkerPoolToCloudConfigSecretMetaMap(ctx, shootClient.Client())
+	roleValue := v1beta1constants.GardenRoleCloudConfig
+	if features.DefaultFeatureGate.Enabled(features.UseGardenerNodeAgent) {
+		secretList := &corev1.SecretList{}
+		if err := shootClient.Client().List(ctx, secretList, client.InNamespace(metav1.NamespaceSystem), client.MatchingLabels{v1beta1constants.GardenRole: v1beta1constants.GardenRoleOperatingSystemConfig}); err != nil {
+			return nil, err
+		}
+		if len(secretList.Items) > 0 {
+			roleValue = v1beta1constants.GardenRoleOperatingSystemConfig
+		}
+	}
+
+	workerPoolToCloudConfigSecretMeta, err := botanist.WorkerPoolToOperatingSystemConfigSecretMetaMap(ctx, shootClient.Client(), roleValue)
 	if err != nil {
 		return nil, err
 	}
@@ -575,7 +587,7 @@ func (h *Health) CheckClusterNodes(
 		}
 	}
 
-	if err := botanist.CloudConfigUpdatedForAllWorkerPools(h.shoot.GetInfo().Spec.Provider.Workers, workerPoolToNodes, workerPoolToCloudConfigSecretMeta); err != nil {
+	if err := botanist.OperatingSystemConfigUpdatedForAllWorkerPools(h.shoot.GetInfo().Spec.Provider.Workers, workerPoolToNodes, workerPoolToCloudConfigSecretMeta); err != nil {
 		c := v1beta1helper.FailedCondition(h.clock, h.shoot.GetInfo().Status.LastOperation, h.conditionThresholds, condition, "CloudConfigOutdated", err.Error())
 		return &c, nil
 	}

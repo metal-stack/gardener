@@ -29,20 +29,24 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/gardener/gardener/imagevector"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/downloader"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/nodeinit"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/nodeagent"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/extensions"
+	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
-	"github.com/gardener/gardener/pkg/utils/imagevector"
+	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
@@ -96,6 +100,7 @@ type Values struct {
 }
 
 // DownloaderValues are configuration values required for the 'provision' OperatingSystemConfigPurpose.
+// TODO(rfranzke): Rename this to InitValues.
 type DownloaderValues struct {
 	// APIServerURL is the address (including https:// protocol prefix) to the kube-apiserver (from which the original
 	// cloud-config user data will be downloaded).
@@ -111,7 +116,7 @@ type OriginalValues struct {
 	// ClusterDomain is the Kubernetes cluster domain.
 	ClusterDomain string
 	// Images is a map containing the necessary container images for the systemd units (hyperkube and pause-container).
-	Images map[string]*imagevector.Image
+	Images map[string]*imagevectorutils.Image
 	// KubeletConfig is the default kubelet configuration for all worker pools. Individual worker pools might overwrite
 	// this configuration.
 	KubeletConfig *gardencorev1beta1.KubeletConfig
@@ -127,6 +132,8 @@ type OriginalValues struct {
 	ValiIngressHostName string
 	// NodeLocalDNSEnabled indicates whether node local dns is enabled or not.
 	NodeLocalDNSEnabled bool
+	// SyncJitterPeriod is the duration of how the operating system config sync will be jittered on updates.
+	SyncJitterPeriod *metav1.Duration
 }
 
 // New creates a new instance of Interface.
@@ -184,6 +191,8 @@ type OperatingSystemConfigs struct {
 
 // Data contains the actual content, a command to load it and all units that shall be considered for restart on change.
 type Data struct {
+	// Object is the plain OperatingSystemConfig object.
+	Object *extensionsv1alpha1.OperatingSystemConfig
 	// Content is the actual cloud-config user data.
 	Content string
 	// Command is the command for reloading the cloud-config (in case a new version was downloaded).
@@ -217,6 +226,19 @@ func (o *operatingSystemConfig) reconcile(ctx context.Context, reconcileFn func(
 		WithTokenExpirationDuration("720h").
 		Reconcile(ctx, o.client); err != nil {
 		return err
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.UseGardenerNodeAgent) {
+		if err := gardenerutils.
+			NewShootAccessSecret(nodeagent.AccessSecretName, o.values.Namespace).
+			WithTargetSecret(nodeagent.AccessSecretName, metav1.NamespaceSystem).
+			WithTokenExpirationDuration("720h").
+			Reconcile(ctx, o.client); err != nil {
+			return err
+		}
+
+		// TODO(rfranzke): When the UseGardenerNodeAgent feature gate gets removed, the legacy downloader.SecretName
+		//  should be cleaned up.
 	}
 
 	fns := o.forEachWorkerPoolAndPurposeTaskFn(func(ctx context.Context, osc *extensionsv1alpha1.OperatingSystemConfig, worker gardencorev1beta1.Worker, purpose extensionsv1alpha1.OperatingSystemConfigPurpose) error {
@@ -255,6 +277,7 @@ func (o *operatingSystemConfig) Wait(ctx context.Context) error {
 				}
 
 				data := Data{
+					Object:  osc,
 					Content: string(secret.Data[extensionsv1alpha1.OperatingSystemConfigSecretDataKey]),
 					Command: osc.Status.Command,
 					Units:   osc.Status.Units,
@@ -496,15 +519,21 @@ func (o *operatingSystemConfig) newDeployer(osc *extensionsv1alpha1.OperatingSys
 		return deployer{}, err
 	}
 
+	keyFunc := Key
+	if features.DefaultFeatureGate.Enabled(features.UseGardenerNodeAgent) {
+		keyFunc = GardenerNodeAgentKey
+	}
+
 	return deployer{
 		client:                  o.client,
 		osc:                     osc,
 		worker:                  worker,
 		purpose:                 purpose,
-		key:                     Key(worker.Name, kubernetesVersion, worker.CRI),
+		key:                     keyFunc(worker.Name, kubernetesVersion, worker.CRI),
 		apiServerURL:            o.values.APIServerURL,
 		caBundle:                caBundle,
 		clusterCASecretName:     clusterCASecret.Name,
+		clusterCABundle:         clusterCASecret.Data[secretsutils.DataKeyCertificateBundle],
 		clusterDNSAddress:       o.values.ClusterDNSAddress,
 		clusterDomain:           o.values.ClusterDomain,
 		criName:                 criName,
@@ -519,6 +548,7 @@ func (o *operatingSystemConfig) newDeployer(osc *extensionsv1alpha1.OperatingSys
 		valiIngressHostName:     o.values.ValiIngressHostName,
 		valitailEnabled:         o.values.ValitailEnabled,
 		nodeLocalDNSEnabled:     o.values.NodeLocalDNSEnabled,
+		oscSyncJitterPeriod:     o.values.SyncJitterPeriod,
 	}, nil
 }
 
@@ -560,16 +590,17 @@ type deployer struct {
 	worker  gardencorev1beta1.Worker
 	purpose extensionsv1alpha1.OperatingSystemConfigPurpose
 
-	// downloader values
+	// downloader/init values
 	apiServerURL string
 
 	// original values
 	caBundle                *string
 	clusterCASecretName     string
+	clusterCABundle         []byte
 	clusterDNSAddress       string
 	clusterDomain           string
 	criName                 extensionsv1alpha1.CRIName
-	images                  map[string]*imagevector.Image
+	images                  map[string]*imagevectorutils.Image
 	kubeletCABundle         []byte
 	kubeletConfigParameters components.ConfigurableKubeletConfigParameters
 	kubeletCLIFlags         components.ConfigurableKubeletCLIFlags
@@ -580,6 +611,7 @@ type deployer struct {
 	valiIngressHostName     string
 	valitailEnabled         bool
 	nodeLocalDNSEnabled     bool
+	oscSyncJitterPeriod     *metav1.Duration
 }
 
 // exposed for testing
@@ -592,10 +624,15 @@ var (
 
 func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1alpha1.Object, error) {
 	var (
-		units []extensionsv1alpha1.Unit
-		files []extensionsv1alpha1.File
-		err   error
+		units           []extensionsv1alpha1.Unit
+		files           []extensionsv1alpha1.File
+		nodeAgentConfig = nodeagent.ComponentConfig(d.key, d.kubernetesVersion, d.apiServerURL, d.clusterCABundle, d.oscSyncJitterPeriod)
 	)
+
+	initUnits, initFiles, err := nodeinit.Config(d.worker, d.images[imagevector.ImageNameGardenerNodeAgent].String(), nodeAgentConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// The cloud-config-downloader unit is added regardless of the purpose of the OperatingSystemConfig:
 	// If the purpose is 'provision' then it is anyways the only unit that is being installed in this provisioning phase
@@ -610,7 +647,11 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 
 	switch d.purpose {
 	case extensionsv1alpha1.OperatingSystemConfigPurposeProvision:
-		units, files = downloaderUnits, downloaderFiles
+		if features.DefaultFeatureGate.Enabled(features.UseGardenerNodeAgent) {
+			units, files = initUnits, initFiles
+		} else {
+			units, files = downloaderUnits, downloaderFiles
+		}
 
 	case extensionsv1alpha1.OperatingSystemConfigPurposeReconcile:
 		units, files, err = OriginalConfigFn(components.Context{
@@ -632,43 +673,67 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 			ValiIngress:             d.valiIngressHostName,
 			APIServerURL:            d.apiServerURL,
 			Sysctls:                 d.worker.Sysctls,
+			OSCSyncJitterPeriod:     d.oscSyncJitterPeriod,
 		})
 		if err != nil {
 			return nil, err
 		}
 
-		// For backwards-compatibility with the OS extensions, we do not directly add the cloud-config-downloader unit
-		// but rather the systemd configuration file.
-		// See for more information:
-		// - https://github.com/gardener/gardener/pull/3449/
-		// - https://github.com/gardener/gardener-extension-os-gardenlinux/pull/24
-		var ccdUnitContent *string
-		for _, unit := range downloaderUnits {
-			if unit.Name == downloader.UnitName {
-				ccdUnitContent = unit.Content
-				break
+		if features.DefaultFeatureGate.Enabled(features.UseGardenerNodeAgent) {
+			// Also add gardener-node-init units to the original OSC - this is for the migration purpose when
+			// cloud-config-downloader is still running on the nodes. It needs to start the init unit so that it can extract
+			// the gardener-node-agent binary.
+			// TODO(rfranzke): Remove this after UseGardenerNodeAgent feature gate gets removed.
+			for _, unit := range initUnits {
+				units = append(units, unit)
+				// initFiles are not added because they are already part of gardener-node-agent component
 			}
-		}
 
-		if ccdUnitContent != nil {
-			// We do not want to overwrite a valid Bootstraptoken with the tokenPlaceholder
-			for _, downloaderFile := range downloaderFiles {
-				if downloaderFile.Path == downloader.PathBootstrapToken {
-					continue
+			// cloud-config-downloader does not understand unit files, so let's add all unit files also as regular files to
+			// prevent it from cleaning them up when the UseGardenerNodeAgent feature gate gets turned on.
+			// TODO(rfranzke): Remove this after UseGardenerNodeAgent feature gate gets removed.
+			for _, unit := range units {
+				for _, file := range unit.Files {
+					if file.Content.ImageRef != nil {
+						continue
+					}
+					files = append(files, file)
 				}
-				files = append(files, downloaderFile)
+			}
+		} else {
+			// For backwards-compatibility with the OS extensions, we do not directly add the cloud-config-downloader unit
+			// but rather the systemd configuration file.
+			// See for more information:
+			// - https://github.com/gardener/gardener/pull/3449/
+			// - https://github.com/gardener/gardener-extension-os-gardenlinux/pull/24
+			var ccdUnitContent *string
+			for _, unit := range downloaderUnits {
+				if unit.Name == downloader.UnitName {
+					ccdUnitContent = unit.Content
+					break
+				}
 			}
 
-			files = append(files, extensionsv1alpha1.File{
-				Path:        "/etc/systemd/system/" + downloader.UnitName,
-				Permissions: pointer.Int32(0644),
-				Content: extensionsv1alpha1.FileContent{
-					Inline: &extensionsv1alpha1.FileContentInline{
-						Encoding: "b64",
-						Data:     utils.EncodeBase64([]byte(*ccdUnitContent)),
+			if ccdUnitContent != nil {
+				// We do not want to overwrite a valid Bootstraptoken with the tokenPlaceholder
+				for _, downloaderFile := range downloaderFiles {
+					if downloaderFile.Path == downloader.PathBootstrapToken {
+						continue
+					}
+					files = append(files, downloaderFile)
+				}
+
+				files = append(files, extensionsv1alpha1.File{
+					Path:        "/etc/systemd/system/" + downloader.UnitName,
+					Permissions: pointer.Int32(0644),
+					Content: extensionsv1alpha1.FileContent{
+						Inline: &extensionsv1alpha1.FileContentInline{
+							Encoding: "b64",
+							Data:     utils.EncodeBase64([]byte(*ccdUnitContent)),
+						},
 					},
-				},
-			})
+				})
+			}
 		}
 
 	default:
@@ -705,8 +770,19 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 	return d.osc, err
 }
 
-// Key returns the key that can be used as secret name based on the provided worker name, Kubernetes version and CRI configuration.
+// Key returns the key that can be used as secret name based on the provided worker name, Kubernetes version and CRI
+// configuration.
 func Key(workerName string, kubernetesVersion *semver.Version, criConfig *gardencorev1beta1.CRI) string {
+	return key("cloud-config", workerName, kubernetesVersion, criConfig)
+}
+
+// GardenerNodeAgentKey returns the key that can be used as secret name based on the provided worker name, Kubernetes
+// version and CRI configuration.
+func GardenerNodeAgentKey(workerName string, kubernetesVersion *semver.Version, criConfig *gardencorev1beta1.CRI) string {
+	return key("gardener-node-agent", workerName, kubernetesVersion, criConfig)
+}
+
+func key(prefix, workerName string, kubernetesVersion *semver.Version, criConfig *gardencorev1beta1.CRI) string {
 	if kubernetesVersion == nil {
 		return ""
 	}
@@ -720,7 +796,7 @@ func Key(workerName string, kubernetesVersion *semver.Version, criConfig *garden
 		criName = criConfig.Name
 	}
 
-	return fmt.Sprintf("cloud-config-%s-%s", workerName, utils.ComputeSHA256Hex([]byte(kubernetesMajorMinorVersion + string(criName)))[:5])
+	return fmt.Sprintf("%s-%s-%s", prefix, workerName, utils.ComputeSHA256Hex([]byte(kubernetesMajorMinorVersion + string(criName)))[:5])
 }
 
 func keySuffix(machineImageName string, purpose extensionsv1alpha1.OperatingSystemConfigPurpose) string {

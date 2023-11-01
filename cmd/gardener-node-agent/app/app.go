@@ -16,14 +16,17 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	goruntime "runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -31,8 +34,11 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	clientcmdlatest "k8s.io/client-go/tools/clientcmd/api/latest"
+	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -45,6 +51,8 @@ import (
 	"github.com/gardener/gardener/cmd/utils"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/downloader"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
 	"github.com/gardener/gardener/pkg/controllerutils/routes"
 	"github.com/gardener/gardener/pkg/features"
 	gardenerhealthz "github.com/gardener/gardener/pkg/healthz"
@@ -53,6 +61,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/bootstrap"
 	"github.com/gardener/gardener/pkg/nodeagent/controller"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
+	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
 
 // Name is a const for the name of this component.
@@ -146,9 +155,15 @@ func run(ctx context.Context, cancel context.CancelFunc, log logr.Logger, cfg *c
 		}
 	}
 
-	log.Info("Fetching node name based on hostname")
-	nodeName, err := getNodeName(ctx, log, restConfig)
+	log.Info("Fetching hostname")
+	hostName, err := os.Hostname()
 	if err != nil {
+		return fmt.Errorf("failed fetching hostname: %w", err)
+	}
+
+	log.Info("Checking whether kubelet bootstrap kubeconfig needs to be created")
+	fs := afero.Afero{Fs: afero.NewOsFs()}
+	if err := createKubeletBootstrapKubeconfig(log, fs, cfg.APIServer); err != nil {
 		return err
 	}
 
@@ -164,16 +179,10 @@ func run(ctx context.Context, cancel context.CancelFunc, log logr.Logger, cfg *c
 			ExtraHandlers: extraHandlers,
 		},
 
-		Cache: cache.Options{
-			ByObject: map[client.Object]cache.ByObject{
-				&corev1.Secret{}: {
-					Namespaces: map[string]cache.Config{metav1.NamespaceSystem: {}},
-				},
-				&corev1.Node{}: {
-					Field: fields.SelectorFromSet(fields.Set{metav1.ObjectNameField: nodeName}),
-				},
-			},
-		},
+		Cache: cache.Options{ByObject: map[client.Object]cache.ByObject{
+			&corev1.Secret{}: {Namespaces: map[string]cache.Config{metav1.NamespaceSystem: {}}},
+			&corev1.Node{}:   {Label: labels.SelectorFromSet(labels.Set{corev1.LabelHostname: hostName})},
+		}},
 		LeaderElection: false,
 		Controller: controllerconfig.Controller{
 			RecoverPanic: pointer.Bool(true),
@@ -192,8 +201,13 @@ func run(ctx context.Context, cancel context.CancelFunc, log logr.Logger, cfg *c
 	}
 
 	log.Info("Adding controllers to manager")
-	if err := controller.AddToManager(cancel, mgr, cfg, nodeName); err != nil {
+	if err := controller.AddToManager(cancel, mgr, cfg, hostName); err != nil {
 		return fmt.Errorf("failed adding controllers to manager: %w", err)
+	}
+
+	log.Info("Adding legacy cloud-config-downloader cleaner to manager")
+	if err := mgr.Add(cleanupLegacyCloudConfigDownloader(log, fs, dbus.New())); err != nil {
+		return fmt.Errorf("failed adding legacy cloud-config-downloader cleaner to manager: %w", err)
 	}
 
 	log.Info("Starting manager")
@@ -218,6 +232,14 @@ func getRESTConfig(log logr.Logger, cfg *config.NodeAgentConfiguration) (*rest.C
 	} else if err == nil {
 		log.Info("Token file already exists, nothing to be done", "path", restConfig.BearerTokenFile)
 		return restConfig, false, nil
+	}
+
+	if _, err := os.Stat(downloader.PathCredentialsToken); err != nil && !os.IsNotExist(err) {
+		return nil, false, fmt.Errorf("failed checking whether cloud-config-downloader token file %q exists: %w", downloader.PathCredentialsToken, err)
+	} else if err == nil {
+		log.Info("Token file does not exist, but legacy cloud-config-downloader token file does - using it", "path", downloader.PathCredentialsToken)
+		restConfig.BearerTokenFile = downloader.PathCredentialsToken
+		return restConfig, true, nil
 	}
 
 	if _, err := os.Stat(nodeagentv1alpha1.BootstrapTokenFilePath); err != nil && !os.IsNotExist(err) {
@@ -261,30 +283,73 @@ func fetchAccessToken(ctx context.Context, log logr.Logger, restConfig *rest.Con
 	return nil
 }
 
-func getNodeName(ctx context.Context, log logr.Logger, restConfig *rest.Config) (string, error) {
-	hostname, err := os.Hostname()
+func cleanupLegacyCloudConfigDownloader(log logr.Logger, fs afero.Afero, db dbus.DBus) manager.RunnableFunc {
+	return func(ctx context.Context) error {
+		log.Info("Removing legacy directory", "path", downloader.PathCCDDirectory)
+		if err := fs.RemoveAll(downloader.PathCCDDirectory); err != nil {
+			return fmt.Errorf("failed to remove legacy directory %q: %w", downloader.PathCCDDirectory)
+		}
+
+		if _, err := fs.Stat(path.Join("/", "etc", "systemd", "system", downloader.UnitName)); err != nil {
+			if !errors.Is(err, afero.ErrFileNotFound) {
+				return fmt.Errorf("failed checking whether unit file for %q still exists: %w", downloader.UnitName, err)
+			}
+			return nil
+		}
+
+		log.Info("Stopping legacy unit", "unit", downloader.UnitName)
+		if err := db.Stop(ctx, nil, nil, downloader.UnitName); err != nil {
+			return fmt.Errorf("failed to stop legacy system unit %s: %w", downloader.UnitName, err)
+		}
+
+		log.Info("Disabling legacy unit", "unit", downloader.UnitName)
+		if err := db.Disable(ctx, downloader.UnitName); err != nil {
+			return fmt.Errorf("failed to disable legacy system unit %s: %w", downloader.UnitName, err)
+		}
+
+		return nil
+	}
+}
+
+func createKubeletBootstrapKubeconfig(log logr.Logger, fs afero.Afero, apiServerConfig config.APIServer) error {
+	bootstrapToken, err := fs.ReadFile(nodeagentv1alpha1.BootstrapTokenFilePath)
 	if err != nil {
-		return "", fmt.Errorf("failed fetching hostname: %w", err)
+		if !errors.Is(err, afero.ErrFileNotFound) {
+			return fmt.Errorf("failed checking whether bootstrap token file %q already exists: %w", nodeagentv1alpha1.BootstrapTokenFilePath, err)
+		}
+		log.Info("Bootstrap token file does not exist, nothing to be done", "path", nodeagentv1alpha1.BootstrapTokenFilePath)
+		return nil
 	}
 
-	cl, err := client.New(restConfig, client.Options{})
+	if _, err := fs.Stat(kubelet.PathKubeconfigReal); err != nil && !errors.Is(err, afero.ErrFileNotFound) {
+		return fmt.Errorf("failed checking whether kubelet kubeconfig file %q already exists: %w", kubelet.PathKubeconfigReal, err)
+	} else if err == nil {
+		log.Info("Kubelet kubeconfig with client certificates already exists, nothing to be done", "path", kubelet.PathKubeconfigReal)
+		return nil
+	}
+
+	kubeletClientCertificatePath := filepath.Join(kubelet.PathKubeletDirectory, "pki", "kubelet-client-current.pem")
+	if _, err := fs.Stat(kubeletClientCertificatePath); err != nil && !errors.Is(err, afero.ErrFileNotFound) {
+		return fmt.Errorf("failed checking whether kubelet client certificate file %q already exists: %w", kubeletClientCertificatePath, err)
+	} else if err == nil {
+		log.Info("Kubelet client certificates file already exists, nothing to be done", "path", kubeletClientCertificatePath)
+		return nil
+	}
+
+	log.Info("Creating kubelet directory", "path", kubelet.PathKubeletDirectory)
+	if err := fs.MkdirAll(kubelet.PathKubeletDirectory, os.ModeDir); err != nil {
+		return fmt.Errorf("unable to create kubelet directory %q: %w", kubelet.PathKubeletDirectory, err)
+	}
+
+	kubeconfig, err := runtime.Encode(clientcmdlatest.Codec, kubernetesutils.NewKubeconfig(
+		"kubelet-bootstrap",
+		clientcmdv1.Cluster{Server: apiServerConfig.Server, CertificateAuthorityData: apiServerConfig.CABundle},
+		clientcmdv1.AuthInfo{Token: strings.TrimSpace(string(bootstrapToken))},
+	))
 	if err != nil {
-		return "", fmt.Errorf("unable to create client: %w", err)
+		return fmt.Errorf("unable to encode kubeconfig: %w", err)
 	}
 
-	nodeList := &metav1.PartialObjectMetadataList{}
-	nodeList.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("NodeList"))
-	if err := cl.List(ctx, nodeList, client.MatchingLabels{corev1.LabelHostname: hostname}); err != nil {
-		return "", err
-	}
-
-	switch len(nodeList.Items) {
-	case 0:
-		return "", fmt.Errorf("could not find any node with label %s=%s", corev1.LabelHostname, hostname)
-	case 1:
-		log.Info("Found node name based on hostname", "hostname", hostname, "nodeName", nodeList.Items[0].Name)
-		return nodeList.Items[0].Name, nil
-	default:
-		return "", fmt.Errorf("found more than one node with label %s=%s", corev1.LabelHostname, hostname)
-	}
+	log.Info("Writing kubelet bootstrap kubeconfig file", "path", kubelet.PathKubeconfigBootstrap)
+	return fs.WriteFile(kubelet.PathKubeconfigBootstrap, kubeconfig, 0600)
 }

@@ -532,7 +532,7 @@ var _ = Describe("health check", func() {
 					},
 				},
 				cloudConfigSecretMeta,
-				PointTo(beConditionWithStatusAndMsg(gardencorev1beta1.ConditionFalse, "CloudConfigOutdated", fmt.Sprintf("the last successfully applied cloud config on node %q hasn't been reported yet", nodeName)))),
+				PointTo(beConditionWithStatusAndMsg(gardencorev1beta1.ConditionFalse, "CloudConfigOutdated", fmt.Sprintf("the last successfully applied operating system config on node %q hasn't been reported yet", nodeName)))),
 			Entry("outdated cloud-config secret checksum for a worker pool",
 				kubernetesVersion,
 				[]corev1.Node{
@@ -552,7 +552,7 @@ var _ = Describe("health check", func() {
 						Labels:      map[string]string{"worker.gardener.cloud/pool": workerPoolName1},
 					},
 				},
-				PointTo(beConditionWithStatusAndMsg(gardencorev1beta1.ConditionFalse, "CloudConfigOutdated", fmt.Sprintf("the last successfully applied cloud config on node %q is outdated", nodeName)))),
+				PointTo(beConditionWithStatusAndMsg(gardencorev1beta1.ConditionFalse, "CloudConfigOutdated", fmt.Sprintf("the last successfully applied operating system config on node %q is outdated", nodeName)))),
 		)
 	})
 

@@ -34,7 +34,8 @@ func ValidateOperatingSystemConfig(osc *extensionsv1alpha1.OperatingSystemConfig
 	allErrs = append(allErrs, ValidateOperatingSystemConfigSpec(&osc.Spec, field.NewPath("spec"))...)
 	allErrs = append(allErrs, ValidateOperatingSystemConfigStatus(&osc.Status, field.NewPath("status"))...)
 
-	allErrs = append(allErrs, validateFileDuplicates(osc)...)
+	// TODO(rfranzke): Uncomment the next line when UseGardenerNodeAgent feature gets removed.
+	// allErrs = append(allErrs, validateFileDuplicates(osc)...)
 
 	return allErrs
 }

@@ -17,23 +17,34 @@ package botanist
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/gardener/gardener/imagevector"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/downloader"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/executor"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/nodeagent"
 	nodelocaldnsconstants "github.com/gardener/gardener/pkg/component/nodelocaldns/constants"
+	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -47,7 +58,7 @@ const SecretLabelKeyManagedResource = "managed-resource"
 
 // DefaultOperatingSystemConfig creates the default deployer for the OperatingSystemConfig custom resource.
 func (b *Botanist) DefaultOperatingSystemConfig() (operatingsystemconfig.Interface, error) {
-	oscImages, err := imagevectorutils.FindImages(imagevector.ImageVector(), []string{imagevector.ImageNameHyperkube, imagevector.ImageNamePauseContainer, imagevector.ImageNameValitail}, imagevectorutils.RuntimeVersion(b.ShootVersion()), imagevectorutils.TargetVersion(b.ShootVersion()))
+	oscImages, err := imagevectorutils.FindImages(imagevector.ImageVector(), []string{imagevector.ImageNameHyperkube, imagevector.ImageNamePauseContainer, imagevector.ImageNameValitail, imagevector.ImageNameGardenerNodeAgent}, imagevectorutils.RuntimeVersion(b.ShootVersion()), imagevectorutils.TargetVersion(b.ShootVersion()))
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +94,7 @@ func (b *Botanist) DefaultOperatingSystemConfig() (operatingsystemconfig.Interfa
 				ValitailEnabled:     valitailEnabled,
 				ValiIngressHostName: valiIngressHost,
 				NodeLocalDNSEnabled: v1beta1helper.IsNodeLocalDNSEnabled(b.Shoot.GetInfo().Spec.SystemComponents),
+				SyncJitterPeriod:    b.Shoot.OSCSyncJitterPeriod,
 			},
 		},
 		operatingsystemconfig.DefaultInterval,
@@ -301,4 +313,192 @@ func (b *Botanist) generateCloudConfigExecutorResourcesForWorker(
 	}
 
 	return secretName, resources, nil
+}
+
+// GardenerNodeAgentManagedResourceName is a constant for the name of a ManagedResource in the seed cluster in the shoot
+// namespace which contains resources for gardener-node-agent.
+const GardenerNodeAgentManagedResourceName = "shoot-gardener-node-agent"
+
+// DeployManagedResourceForGardenerNodeAgent creates the ManagedResource that contains:
+// - A secret containing the raw original OperatingSystemConfig for each worker pool.
+// - A secret containing some shared RBAC resources for downloading the OSC secrets + bootstrapping the node.
+func (b *Botanist) DeployManagedResourceForGardenerNodeAgent(ctx context.Context) error {
+	var (
+		managedResource                  = managedresources.NewForShoot(b.SeedClientSet.Client(), b.Shoot.SeedNamespace, GardenerNodeAgentManagedResourceName, managedresources.LabelValueGardener, false)
+		managedResourceSecretsCount      = len(b.Shoot.GetInfo().Spec.Provider.Workers) + 1
+		managedResourceSecretLabels      = map[string]string{SecretLabelKeyManagedResource: GardenerNodeAgentManagedResourceName}
+		managedResourceSecretNamesWanted = sets.New[string]()
+		managedResourceSecretNameToData  = make(map[string]map[string][]byte, managedResourceSecretsCount)
+
+		operatingSystemConfigSecretNames      []string
+		workerNameToOperatingSystemConfigMaps = b.Shoot.Components.Extensions.OperatingSystemConfig.WorkerNameToOperatingSystemConfigsMap()
+
+		fns = make([]flow.TaskFn, 0, managedResourceSecretsCount)
+	)
+
+	// Generate one OperatingSystemConfig secret for each worker pools. This secret will later be referenced in a
+	// ManagedResource.
+	for _, worker := range b.Shoot.GetInfo().Spec.Provider.Workers {
+		oscData, ok := workerNameToOperatingSystemConfigMaps[worker.Name]
+		if !ok {
+			return fmt.Errorf("did not find osc data for worker pool %q", worker.Name)
+		}
+
+		secretName, data, err := b.generateOperatingSystemConfigSecretForWorker(ctx, worker, oscData.Original.Object)
+		if err != nil {
+			return err
+		}
+
+		operatingSystemConfigSecretNames = append(operatingSystemConfigSecretNames, secretName)
+		managedResourceSecretNameToData[fmt.Sprintf("shoot-gardener-node-agent-%s", worker.Name)] = data
+	}
+
+	rbacResourcesData, err := nodeagent.GenerateRBACResourcesData(operatingSystemConfigSecretNames)
+	if err != nil {
+		return err
+	}
+	managedResourceSecretNameToData["shoot-gardener-node-agent-rbac"] = rbacResourcesData
+
+	// Create Secrets for the ManagedResource containing all the executor scripts as well as the RBAC resources.
+	for secretName, data := range managedResourceSecretNameToData {
+		var (
+			keyValues                                        = data
+			managedResourceSecretName, managedResourceSecret = managedresources.NewSecret(
+				b.SeedClientSet.Client(),
+				b.Shoot.SeedNamespace,
+				secretName,
+				keyValues,
+				true,
+			)
+		)
+
+		managedResource.WithSecretRef(managedResourceSecretName)
+		managedResourceSecretNamesWanted.Insert(managedResourceSecretName)
+
+		fns = append(fns, func(ctx context.Context) error {
+			return managedResourceSecret.
+				AddLabels(managedResourceSecretLabels).
+				Reconcile(ctx)
+		})
+	}
+
+	if err := flow.Parallel(fns...)(ctx); err != nil {
+		return err
+	}
+
+	if err := managedResource.Reconcile(ctx); err != nil {
+		return err
+	}
+
+	// Cleanup no longer required Secrets for the ManagedResource (e.g., those for removed worker pools).
+	secretList := &corev1.SecretList{}
+	if err := b.SeedClientSet.Client().List(ctx, secretList, client.InNamespace(b.Shoot.SeedNamespace), client.MatchingLabels(managedResourceSecretLabels)); err != nil {
+		return err
+	}
+
+	return kubernetesutils.DeleteObjectsFromListConditionally(ctx, b.SeedClientSet.Client(), secretList, func(obj runtime.Object) bool {
+		acc, err := meta.Accessor(obj)
+		if err != nil {
+			return false
+		}
+		return !managedResourceSecretNamesWanted.Has(acc.GetName())
+	})
+}
+
+var codec runtime.Codec
+
+func init() {
+	scheme := runtime.NewScheme()
+	utilruntime.Must(extensionsv1alpha1.AddToScheme(scheme))
+	yamlSerializer := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{Yaml: true, Pretty: false, Strict: false})
+	versions := schema.GroupVersions([]schema.GroupVersion{extensionsv1alpha1.SchemeGroupVersion})
+	codec = serializer.NewCodecFactory(scheme).CodecForVersions(yamlSerializer, yamlSerializer, versions, versions)
+}
+
+func (b *Botanist) generateOperatingSystemConfigSecretForWorker(
+	ctx context.Context,
+	worker gardencorev1beta1.Worker,
+	osc *extensionsv1alpha1.OperatingSystemConfig,
+) (
+	string,
+	map[string][]byte,
+	error,
+) {
+	// Eliminate unwanted data/fields
+	operatingSystemConfig := &extensionsv1alpha1.OperatingSystemConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        osc.Name,
+			Labels:      osc.Labels,
+			Annotations: osc.Annotations,
+		},
+		Spec:   osc.Spec,
+		Status: osc.Status,
+	}
+
+	// The OperatingSystemConfig will be deployed to the shoot to get processed by gardener-node-agent. It doesn't
+	// have access to the referenced secrets (stored in the shoot namespace in the seed), hence we have to translate
+	// all references into inline content.
+	for i, file := range operatingSystemConfig.Spec.Files {
+		if file.Content.SecretRef == nil {
+			continue
+		}
+
+		secret := &corev1.Secret{}
+		if err := b.SeedClientSet.Client().Get(ctx, client.ObjectKey{Name: file.Content.SecretRef.Name, Namespace: b.Shoot.SeedNamespace}, secret); err != nil {
+			return "", nil, fmt.Errorf("cannot resolve secret ref from osc: %w", err)
+		}
+
+		operatingSystemConfig.Spec.Files[i].Content.SecretRef = nil
+		operatingSystemConfig.Spec.Files[i].Content.Inline = &extensionsv1alpha1.FileContentInline{
+			Encoding: "b64",
+			Data:     utils.EncodeBase64(secret.Data[file.Content.SecretRef.DataKey]),
+		}
+	}
+
+	// TODO WIP: This block can be removed after Olivers PR.
+	for _, unit := range operatingSystemConfig.Spec.Units {
+		if unit.Name == kubelet.UnitName || unit.Name == "kubelet-monitor.service" {
+			var content []string
+			for _, line := range strings.Split(*unit.Content, "\n") {
+				if !strings.Contains(line, kubelet.PathScriptCopyKubernetesBinary) {
+					content = append(content, line)
+				}
+			}
+			unit.Content = pointer.String(strings.Join(content, "\n"))
+		}
+	}
+
+	oscRaw, err := runtime.Encode(codec, operatingSystemConfig)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed encoding OperatingSystemConfig: %w", err)
+	}
+
+	kubernetesVersion, err := v1beta1helper.CalculateEffectiveKubernetesVersion(b.Shoot.KubernetesVersion, worker.Kubernetes)
+	if err != nil {
+		return "", nil, err
+	}
+
+	nodeAgentSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      operatingsystemconfig.GardenerNodeAgentKey(worker.Name, kubernetesVersion, worker.CRI),
+			Namespace: metav1.NamespaceSystem,
+			Annotations: map[string]string{
+				downloader.AnnotationKeyChecksum: utils.ComputeSHA256Hex(oscRaw),
+			},
+			Labels: map[string]string{
+				v1beta1constants.GardenRole:      v1beta1constants.GardenRoleOperatingSystemConfig,
+				v1beta1constants.LabelWorkerPool: worker.Name,
+			},
+		},
+		Data: map[string][]byte{nodeagentv1alpha1.DataKeyOperatingSystemConfig: oscRaw},
+	}
+
+	resources, err := managedresources.
+		NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer).
+		AddAllAndSerialize(nodeAgentSecret)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed adding gardener-node-agent secret to the registry and serializing it: %w", err)
+	}
+
+	return nodeAgentSecret.Name, resources, nil
 }

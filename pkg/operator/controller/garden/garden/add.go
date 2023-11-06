@@ -39,6 +39,9 @@ const ControllerName = "garden"
 func (r *Reconciler) AddToManager(mgr manager.Manager) error {
 	var err error
 
+	if r.Manager == nil {
+		r.Manager = mgr
+	}
 	if r.RuntimeClientSet == nil {
 		r.RuntimeClientSet, err = kubernetes.NewWithConfig(
 			kubernetes.WithRESTConfig(mgr.GetConfig()),

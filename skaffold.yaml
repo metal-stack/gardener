@@ -814,6 +814,7 @@ build:
         - pkg/client/kubernetes/clientmap/builder
         - pkg/client/kubernetes/clientmap/internal
         - pkg/client/kubernetes/clientmap/keys
+        - pkg/controller/gardenletdeployer
         - pkg/controller/networkpolicy
         - pkg/controller/networkpolicy/helper
         - pkg/controller/networkpolicy/hostnameresolver

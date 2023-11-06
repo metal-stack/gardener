@@ -52,14 +52,18 @@ type GardenletList struct {
 
 // GardenletSpec is the specification of a Gardenlet.
 type GardenletSpec struct {
-	// KubeconfigSecretRef is a reference to a kubeconfig in which the Gardenlet is supposed to be deployed.
-	KubeconfigSecretRef corev1.SecretReference `json:"kubeconfigSecretRef"`
+	// KubeconfigSecretRef is a reference to a kubeconfig in which the Gardenlet is supposed to be deployed. If not
+	// provided, the gardenlet is deployed into the same cluster where gardener-operator runs.
+	// +optional
+	KubeconfigSecretRef *corev1.SecretReference `json:"kubeconfigSecretRef,omitempty"`
 
-	// GardenletBackup contains the object store configuration for backups for the seed that is managed by this gardenlet.
-	GardenletBackup *GardenletBackup `json:"backup,omitempty"`
+	// Backup contains the object store configuration for backups for the seed that is managed by this gardenlet.
+	// +optional
+	Backup *GardenletBackup `json:"backup,omitempty"`
 
 	// Gardenlet specifies that the Gardenlet controller should deploy a gardenlet into the cluster
 	// with the given deployment parameters and GardenletConfiguration.
+	// +optional
 	Gardenlet *seedmanagementv1alpha1.Gardenlet `json:"gardenlet,omitempty"`
 }
 
@@ -71,7 +75,7 @@ type GardenletBackup struct {
 
 	// SecretRef is a reference to a Secret object containing the cloud provider credentials for the object store where
 	// backups should be stored. It should have enough privileges to manipulate the objects as well as buckets.
-	SecretRef corev1.LocalObjectReference `json:"secretRef"`
+	SecretRef corev1.SecretReference `json:"secretRef"`
 }
 
 // GardenletStatus is the status of a gardenlet.

@@ -55,7 +55,8 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Garden describes a list of gardens.
+        description: Garden describes a gardener control plane to be managed by the
+          gardener-operator.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation

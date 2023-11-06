@@ -93,13 +93,16 @@ func (vp *valuesHelper) MergeGardenletConfiguration(config *gardenletv1alpha1.Ga
 	}
 
 	// Get parent config values
-	parentConfig, err := gardenlethelper.ConvertGardenletConfigurationExternal(vp.config)
-	if err != nil {
-		return nil, err
-	}
-	parentConfigValues, err := utils.ToValuesMap(parentConfig)
-	if err != nil {
-		return nil, err
+	parentConfigValues := make(map[string]interface{})
+	if vp.config != nil {
+		parentConfig, err := gardenlethelper.ConvertGardenletConfigurationExternal(vp.config)
+		if err != nil {
+			return nil, err
+		}
+		parentConfigValues, err = utils.ToValuesMap(parentConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Delete gardenClientConnection.bootstrapKubeconfig, seedClientConnection.kubeconfig, and seedConfig in parent config values

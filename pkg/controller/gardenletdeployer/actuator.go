@@ -438,7 +438,7 @@ func (a *Actuator) reconcileSeedSecrets(ctx context.Context, log logr.Logger, ob
 	}
 
 	// If backup is specified, create or update the backup secret if it doesn't exist or is owned by the managed seed
-	if spec.Backup != nil {
+	if infrastructureSecret != nil && spec.Backup != nil {
 		var checksum string
 
 		// Get backup secret
@@ -659,7 +659,7 @@ func (a *Actuator) prepareGardenletChartValues(
 	if bootstrap == seedmanagementv1alpha1.BootstrapNone {
 		a.removeBootstrapConfigFromGardenClientConnection(gardenletConfig.GardenClientConnection)
 	} else {
-		bootstrapKubeconfig, err = a.prepareGardenClientConnectionWithBootstrap(ctx, log, obj, shootClient, gardenletConfig.GardenClientConnection, gardenlet, seed, bootstrap)
+		bootstrapKubeconfig, err = a.prepareGardenClientConnectionWithBootstrap(ctx, log, obj, shootClient, gardenletConfig.GardenClientConnection, seed, bootstrap)
 		if err != nil {
 			return nil, err
 		}
@@ -714,9 +714,8 @@ func (a *Actuator) prepareGardenClientConnectionWithBootstrap(
 	ctx context.Context,
 	log logr.Logger,
 	obj client.Object,
-	shootClient kubernetes.Interface,
+	targetClient kubernetes.Interface,
 	gcc *gardenletv1alpha1.GardenClientConnection,
-	gardenlet *seedmanagementv1alpha1.Gardenlet,
 	seed *gardencorev1beta1.Seed,
 	bootstrap seedmanagementv1alpha1.Bootstrap,
 ) (
@@ -734,7 +733,7 @@ func (a *Actuator) prepareGardenClientConnectionWithBootstrap(
 	if seed != nil && seed.Status.ClientCertificateExpirationTimestamp != nil && seed.Status.ClientCertificateExpirationTimestamp.UTC().Before(time.Now().UTC()) {
 		// Check if client certificate is expired. If yes then delete the existing kubeconfig secret to make sure that the
 		// seed can be re-bootstrapped.
-		if err := kubernetesutils.DeleteSecretByReference(ctx, shootClient.Client(), gcc.KubeconfigSecret); err != nil {
+		if err := kubernetesutils.DeleteSecretByReference(ctx, targetClient.Client(), gcc.KubeconfigSecret); err != nil {
 			return "", err
 		}
 	} else if obj.GetAnnotations()[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationRenewKubeconfig {
@@ -742,11 +741,11 @@ func (a *Actuator) prepareGardenClientConnectionWithBootstrap(
 		log.Info("Renewing gardenlet kubeconfig secret due to operation annotation")
 		a.Recorder.Event(obj, corev1.EventTypeNormal, gardencorev1beta1.EventReconciling, "Renewing gardenlet kubeconfig secret due to operation annotation")
 
-		if err := kubernetesutils.DeleteSecretByReference(ctx, shootClient.Client(), gcc.KubeconfigSecret); err != nil {
+		if err := kubernetesutils.DeleteSecretByReference(ctx, targetClient.Client(), gcc.KubeconfigSecret); err != nil {
 			return "", err
 		}
 	} else {
-		seedIsAlreadyBootstrapped, err := isAlreadyBootstrapped(ctx, shootClient.Client(), gcc.KubeconfigSecret)
+		seedIsAlreadyBootstrapped, err := isAlreadyBootstrapped(ctx, targetClient.Client(), gcc.KubeconfigSecret)
 		if err != nil {
 			return "", err
 		}

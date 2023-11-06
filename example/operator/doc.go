@@ -13,7 +13,8 @@
 // limitations under the License.
 
 //go:generate ../../hack/generate-crds.sh -p 10-crd- --allow-dangerous-types operator.gardener.cloud
-//go:generate cp 10-crd-operator.gardener.cloud_gardens.yaml ../../charts/gardener/operator/templates/customresouredefintion.yaml
+//go:generate cp 10-crd-operator.gardener.cloud_gardens.yaml ../../charts/gardener/operator/templates/customresouredefintion-gardens.yaml
+//go:generate cp 10-crd-operator.gardener.cloud_gardenlets.yaml ../../charts/gardener/operator/templates/customresouredefintion-gardenlets.yaml
 
 // Package operator contains example manifests for working on operator.
 package operator

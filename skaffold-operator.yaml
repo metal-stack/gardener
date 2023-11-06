@@ -47,6 +47,8 @@ build:
         - pkg/apis/seedmanagement/encoding
         - pkg/apis/seedmanagement/install
         - pkg/apis/seedmanagement/v1alpha1
+        - pkg/apis/seedmanagement/v1alpha1/constants
+        - pkg/apis/seedmanagement/v1alpha1/helper
         - pkg/apis/settings
         - pkg/apis/settings/install
         - pkg/apis/settings/v1alpha1
@@ -99,6 +101,7 @@ build:
         - pkg/component/vpa/constants
         - pkg/component/vpnauthzserver
         - pkg/component/vpnseedserver
+        - pkg/controller/gardenletdeployer
         - pkg/controller/networkpolicy
         - pkg/controller/networkpolicy/helper
         - pkg/controller/networkpolicy/hostnameresolver
@@ -114,7 +117,9 @@ build:
         - pkg/extensions
         - pkg/features
         - pkg/gardenlet/apis/config
+        - pkg/gardenlet/apis/config/helper
         - pkg/gardenlet/apis/config/v1alpha1
+        - pkg/gardenlet/bootstrap/util
         - pkg/healthz
         - pkg/logger
         - pkg/operator/apis/config
@@ -126,6 +131,7 @@ build:
         - pkg/operator/controller/garden/care
         - pkg/operator/controller/garden/garden
         - pkg/operator/controller/garden/reference
+        - pkg/operator/controller/gardenlet
         - pkg/operator/controller/networkpolicyregistrar
         - pkg/operator/features
         - pkg/operator/webhook
@@ -157,6 +163,7 @@ build:
         - pkg/utils/gardener/tokenrequest
         - pkg/utils/imagevector
         - pkg/utils/kubernetes
+        - pkg/utils/kubernetes/bootstraptoken
         - pkg/utils/kubernetes/health
         - pkg/utils/kubernetes/health/checker
         - pkg/utils/kubernetes/unstructured
@@ -717,6 +724,232 @@ build:
       ldflags:
       - '{{.LD_FLAGS}}'
       main: ./cmd/gardener-admission-controller
+  - image: eu.gcr.io/gardener-project/gardener/gardenlet
+    ko:
+      dependencies:
+        paths:
+          - charts
+          - cmd/gardenlet/app
+          - cmd/gardenlet/app/bootstrappers
+          - cmd/utils
+          - imagevector
+          - pkg/api/extensions
+          - pkg/api/indexer
+          - pkg/apis/core
+          - pkg/apis/core/helper
+          - pkg/apis/core/install
+          - pkg/apis/core/v1beta1
+          - pkg/apis/core/v1beta1/constants
+          - pkg/apis/core/v1beta1/helper
+          - pkg/apis/core/validation
+          - pkg/apis/extensions
+          - pkg/apis/extensions/v1alpha1
+          - pkg/apis/extensions/v1alpha1/helper
+          - pkg/apis/extensions/validation
+          - pkg/apis/operations
+          - pkg/apis/operations/install
+          - pkg/apis/operations/v1alpha1
+          - pkg/apis/operator
+          - pkg/apis/operator/v1alpha1
+          - pkg/apis/resources
+          - pkg/apis/resources/v1alpha1
+          - pkg/apis/seedmanagement
+          - pkg/apis/seedmanagement/encoding
+          - pkg/apis/seedmanagement/install
+          - pkg/apis/seedmanagement/v1alpha1
+          - pkg/apis/seedmanagement/v1alpha1/constants
+          - pkg/apis/seedmanagement/v1alpha1/helper
+          - pkg/apis/settings
+          - pkg/apis/settings/install
+          - pkg/apis/settings/v1alpha1
+          - pkg/chartrenderer
+          - pkg/client/kubernetes
+          - pkg/client/kubernetes/cache
+          - pkg/client/kubernetes/clientmap
+          - pkg/client/kubernetes/clientmap/builder
+          - pkg/client/kubernetes/clientmap/internal
+          - pkg/client/kubernetes/clientmap/keys
+          - pkg/controller/gardenletdeployer
+          - pkg/controller/networkpolicy
+          - pkg/controller/networkpolicy/helper
+          - pkg/controller/networkpolicy/hostnameresolver
+          - pkg/controller/tokenrequestor
+          - pkg/controllerutils
+          - pkg/controllerutils/mapper
+          - pkg/controllerutils/predicate
+          - pkg/controllerutils/reconciler
+          - pkg/controllerutils/routes
+          - pkg/extensions
+          - pkg/features
+          - pkg/gardenlet/apis/config
+          - pkg/gardenlet/apis/config/helper
+          - pkg/gardenlet/apis/config/v1alpha1
+          - pkg/gardenlet/apis/config/validation
+          - pkg/gardenlet/bootstrap
+          - pkg/gardenlet/bootstrap/certificate
+          - pkg/gardenlet/bootstrap/util
+          - pkg/gardenlet/controller
+          - pkg/gardenlet/controller/backupbucket
+          - pkg/gardenlet/controller/backupentry
+          - pkg/gardenlet/controller/bastion
+          - pkg/gardenlet/controller/controllerinstallation
+          - pkg/gardenlet/controller/controllerinstallation/care
+          - pkg/gardenlet/controller/controllerinstallation/controllerinstallation
+          - pkg/gardenlet/controller/controllerinstallation/required
+          - pkg/gardenlet/controller/controllerinstallation/utils
+          - pkg/gardenlet/controller/managedseed
+          - pkg/gardenlet/controller/networkpolicy
+          - pkg/gardenlet/controller/seed
+          - pkg/gardenlet/controller/seed/care
+          - pkg/gardenlet/controller/seed/lease
+          - pkg/gardenlet/controller/seed/seed
+          - pkg/gardenlet/controller/shoot
+          - pkg/gardenlet/controller/shoot/care
+          - pkg/gardenlet/controller/shoot/shoot
+          - pkg/gardenlet/controller/shoot/shoot/helper
+          - pkg/gardenlet/controller/shoot/state
+          - pkg/gardenlet/features
+          - pkg/healthz
+          - pkg/logger
+          - pkg/operation
+          - pkg/operation/botanist
+          - pkg/operator/client
+          - pkg/component
+          - pkg/component/apiserver
+          - pkg/component/apiserverproxy
+          - pkg/component/backupentry
+          - pkg/component/blackboxexporter
+          - pkg/component/clusterautoscaler
+          - pkg/component/clusteridentity
+          - pkg/component/coredns
+          - pkg/component/coredns/constants
+          - pkg/component/dependencywatchdog
+          - pkg/component/etcd
+          - pkg/component/etcd/constants
+          - pkg/component/etcdcopybackupstask
+          - pkg/component/extensions
+          - pkg/component/extensions/backupentry
+          - pkg/component/extensions/containerruntime
+          - pkg/component/extensions/controlplane
+          - pkg/component/extensions/crds
+          - pkg/component/extensions/dnsrecord
+          - pkg/component/extensions/extension
+          - pkg/component/extensions/infrastructure
+          - pkg/component/extensions/network
+          - pkg/component/extensions/operatingsystemconfig
+          - pkg/component/extensions/operatingsystemconfig/downloader
+          - pkg/component/extensions/operatingsystemconfig/executor
+          - pkg/component/extensions/operatingsystemconfig/original
+          - pkg/component/extensions/operatingsystemconfig/original/components
+          - pkg/component/extensions/operatingsystemconfig/original/components/containerd
+          - pkg/component/extensions/operatingsystemconfig/original/components/docker
+          - pkg/component/extensions/operatingsystemconfig/original/components/gardeneruser
+          - pkg/component/extensions/operatingsystemconfig/original/components/journald
+          - pkg/component/extensions/operatingsystemconfig/original/components/kernelconfig
+          - pkg/component/extensions/operatingsystemconfig/original/components/kubelet
+          - pkg/component/extensions/operatingsystemconfig/original/components/containerd/logrotate
+          - pkg/component/extensions/operatingsystemconfig/original/components/docker/logrotate
+          - pkg/component/extensions/operatingsystemconfig/original/components/rootcertificates
+          - pkg/component/extensions/operatingsystemconfig/original/components/sshdensurer
+          - pkg/component/extensions/operatingsystemconfig/original/components/valitail
+          - pkg/component/extensions/operatingsystemconfig/original/components/varlibmount
+          - pkg/component/extensions/operatingsystemconfig/utils
+          - pkg/component/extensions/worker
+          - pkg/component/gardeneraccess
+          - pkg/component/gardenerapiserver
+          - pkg/component/hvpa
+          - pkg/component/istio
+          - pkg/component/kubeapiserver
+          - pkg/component/kubeapiserver/constants
+          - pkg/component/kubeapiserverexposure
+          - pkg/component/kubecontrollermanager
+          - pkg/component/kubeproxy
+          - pkg/component/kubernetesdashboard
+          - pkg/component/kubescheduler
+          - pkg/component/kubestatemetrics
+          - pkg/component/logging
+          - pkg/component/logging/eventlogger
+          - pkg/component/logging/fluentoperator
+          - pkg/component/logging/fluentoperator/customresources
+          - pkg/component/logging/vali
+          - pkg/component/machinecontrollermanager
+          - pkg/component/metricsserver
+          - pkg/component/monitoring
+          - pkg/component/namespaces
+          - pkg/component/nginxingress
+          - pkg/component/nodeexporter
+          - pkg/component/nodelocaldns
+          - pkg/component/nodelocaldns/constants
+          - pkg/component/nodeproblemdetector
+          - pkg/component/plutono
+          - pkg/component/resourcemanager
+          - pkg/component/resourcemanager/constants
+          - pkg/component/seedsystem
+          - pkg/component/shared
+          - pkg/component/shootsystem
+          - pkg/component/vpa
+          - pkg/component/vpa/constants
+          - pkg/component/vpnauthzserver
+          - pkg/component/vpnseedserver
+          - pkg/component/vpnshoot
+          - pkg/operation/botanist/matchers
+          - pkg/operation/common
+          - pkg/operation/garden
+          - pkg/operation/seed
+          - pkg/operation/shoot
+          - pkg/operator/client
+          - pkg/resourcemanager/apis/config
+          - pkg/resourcemanager/apis/config/v1alpha1
+          - pkg/resourcemanager/controller/garbagecollector/references
+          - pkg/resourcemanager/webhook/crddeletionprotection
+          - pkg/resourcemanager/webhook/endpointslicehints
+          - pkg/resourcemanager/webhook/extensionvalidation
+          - pkg/resourcemanager/webhook/highavailabilityconfig
+          - pkg/resourcemanager/webhook/kubernetesservicehost
+          - pkg/resourcemanager/webhook/podschedulername
+          - pkg/resourcemanager/webhook/podtopologyspreadconstraints
+          - pkg/resourcemanager/webhook/projectedtokenmount
+          - pkg/resourcemanager/webhook/seccompprofile
+          - pkg/resourcemanager/webhook/systemcomponentsconfig
+          - pkg/resourcemanager/webhook/tokeninvalidator
+          - pkg/utils
+          - pkg/utils/chart
+          - pkg/utils/context
+          - pkg/utils/errors
+          - pkg/utils/flow
+          - pkg/utils/gardener
+          - pkg/utils/gardener/gardenlet
+          - pkg/utils/gardener/secretsrotation
+          - pkg/utils/gardener/shootstate
+          - pkg/utils/gardener/tokenrequest
+          - pkg/utils/imagevector
+          - pkg/utils/kubernetes
+          - pkg/utils/kubernetes/bootstraptoken
+          - pkg/utils/kubernetes/client
+          - pkg/utils/kubernetes/health
+          - pkg/utils/kubernetes/health/checker
+          - pkg/utils/kubernetes/unstructured
+          - pkg/utils/managedresources
+          - pkg/utils/managedresources/builder
+          - pkg/utils/retry
+          - pkg/utils/secrets
+          - pkg/utils/secrets/manager
+          - pkg/utils/time
+          - pkg/utils/timewindow
+          - pkg/utils/validation/admissionplugins
+          - pkg/utils/validation/apigroups
+          - pkg/utils/validation/cidr
+          - pkg/utils/validation/features
+          - pkg/utils/validation/kubernetes/core
+          - pkg/utils/validation/kubernetesversion
+          - pkg/utils/version
+          - third_party/gopkg.in/yaml.v2
+          - third_party/controller-runtime/pkg/apiutil
+          - vendor
+          - VERSION
+      ldflags:
+        - '{{.LD_FLAGS}}'
+      main: ./cmd/gardenlet
 deploy:
   helm:
     releases:
@@ -742,6 +975,9 @@ deploy:
           - name: gardener-scheduler
             repository: '{{.IMAGE_REPO_eu_gcr_io_gardener_project_gardener_scheduler}}'
             tag: '{{.IMAGE_TAG_eu_gcr_io_gardener_project_gardener_scheduler}}@{{.IMAGE_DIGEST_eu_gcr_io_gardener_project_gardener_scheduler}}'
+          - name: gardenlet
+            repository: '{{.IMAGE_REPO_eu_gcr_io_gardener_project_gardener_gardenlet}}'
+            tag: '{{.IMAGE_TAG_eu_gcr_io_gardener_project_gardener_gardenlet}}@{{.IMAGE_DIGEST_eu_gcr_io_gardener_project_gardener_gardenlet}}'
           - name: gardener-admission-controller
             repository: '{{.IMAGE_REPO_eu_gcr_io_gardener_project_gardener_admission_controller}}'
             tag: '{{.IMAGE_TAG_eu_gcr_io_gardener_project_gardener_admission_controller}}@{{.IMAGE_DIGEST_eu_gcr_io_gardener_project_gardener_admission_controller}}'
@@ -764,3 +1000,169 @@ profiles:
       replicaCount: 1
       config.leaderElection.leaderElect: false
       config.server.healthProbes.enable: false
+
+---
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: provider-local
+profiles:
+- name: local
+  build:
+    artifacts:
+    - image: eu.gcr.io/gardener-project/gardener/extensions/provider-local
+      ko:
+        dependencies:
+          paths:
+          - cmd/gardener-extension-provider-local/app
+          - cmd/utils
+          - extensions/pkg/apis/config
+          - extensions/pkg/controller
+          - extensions/pkg/controller/backupbucket
+          - extensions/pkg/controller/backupentry
+          - extensions/pkg/controller/backupentry/genericactuator
+          - extensions/pkg/controller/cmd
+          - extensions/pkg/controller/controlplane
+          - extensions/pkg/controller/controlplane/genericactuator
+          - extensions/pkg/controller/dnsrecord
+          - extensions/pkg/controller/extension
+          - extensions/pkg/controller/healthcheck
+          - extensions/pkg/controller/healthcheck/worker
+          - extensions/pkg/controller/heartbeat
+          - extensions/pkg/controller/heartbeat/cmd
+          - extensions/pkg/controller/infrastructure
+          - extensions/pkg/controller/operatingsystemconfig
+          - extensions/pkg/controller/operatingsystemconfig/oscommon/actuator
+          - extensions/pkg/controller/operatingsystemconfig/oscommon/generator
+          - extensions/pkg/controller/operatingsystemconfig/oscommon/template
+          - extensions/pkg/controller/worker
+          - extensions/pkg/controller/worker/genericactuator
+          - extensions/pkg/controller/worker/helper
+          - extensions/pkg/predicate
+          - extensions/pkg/util
+          - extensions/pkg/util/secret/manager
+          - extensions/pkg/webhook
+          - extensions/pkg/webhook/certificates
+          - extensions/pkg/webhook/cmd
+          - extensions/pkg/webhook/context
+          - extensions/pkg/webhook/controlplane
+          - extensions/pkg/webhook/controlplane/genericmutator
+          - extensions/pkg/webhook/shoot
+          - imagevector
+          - pkg/api/core
+          - pkg/api/extensions
+          - pkg/apis/core
+          - pkg/apis/core/install
+          - pkg/apis/core/v1beta1
+          - pkg/apis/core/v1beta1/constants
+          - pkg/apis/core/v1beta1/helper
+          - pkg/apis/extensions
+          - pkg/apis/extensions/v1alpha1
+          - pkg/apis/extensions/v1alpha1/helper
+          - pkg/apis/operations
+          - pkg/apis/operations/install
+          - pkg/apis/operations/v1alpha1
+          - pkg/apis/operator
+          - pkg/apis/operator/v1alpha1
+          - pkg/apis/resources
+          - pkg/apis/resources/v1alpha1
+          - pkg/apis/seedmanagement
+          - pkg/apis/seedmanagement/encoding
+          - pkg/apis/seedmanagement/install
+          - pkg/apis/seedmanagement/v1alpha1
+          - pkg/apis/settings
+          - pkg/apis/settings/install
+          - pkg/apis/settings/v1alpha1
+          - pkg/chartrenderer
+          - pkg/client/kubernetes
+          - pkg/client/kubernetes/cache
+          - pkg/component
+          - pkg/component/extensions/operatingsystemconfig/original/components
+          - pkg/component/extensions/operatingsystemconfig/original/components/containerd
+          - pkg/component/extensions/operatingsystemconfig/original/components/docker
+          - pkg/component/extensions/operatingsystemconfig/original/components/kubelet
+          - pkg/component/extensions/operatingsystemconfig/original/components/containerd/logrotate
+          - pkg/component/extensions/operatingsystemconfig/original/components/docker/logrotate
+          - pkg/component/extensions/operatingsystemconfig/utils
+          - pkg/component/kubeapiserver/constants
+          - pkg/component/kubeproxy
+          - pkg/component/machinecontrollermanager
+          - pkg/controller/service
+          - pkg/controllerutils
+          - pkg/controllerutils/mapper
+          - pkg/controllerutils/predicate
+          - pkg/controllerutils/reconciler
+          - pkg/extensions
+          - pkg/features
+          - pkg/gardenlet/apis/config
+          - pkg/gardenlet/apis/config/v1alpha1
+          - pkg/healthz
+          - pkg/logger
+          - pkg/provider-local/apis/local
+          - pkg/provider-local/apis/local/helper
+          - pkg/provider-local/apis/local/install
+          - pkg/provider-local/apis/local/v1alpha1
+          - pkg/provider-local/charts
+          - pkg/provider-local/controller/backupbucket
+          - pkg/provider-local/controller/backupentry
+          - pkg/provider-local/controller/backupoptions
+          - pkg/provider-local/controller/controlplane
+          - pkg/provider-local/controller/dnsrecord
+          - pkg/provider-local/controller/extension/seed
+          - pkg/provider-local/controller/extension/shoot
+          - pkg/provider-local/controller/healthcheck
+          - pkg/provider-local/controller/infrastructure
+          - pkg/provider-local/controller/ingress
+          - pkg/provider-local/controller/networkpolicy
+          - pkg/provider-local/controller/operatingsystemconfig
+          - pkg/provider-local/controller/service
+          - pkg/provider-local/controller/worker
+          - pkg/provider-local/imagevector
+          - pkg/provider-local/local
+          - pkg/provider-local/webhook/controlplane
+          - pkg/provider-local/webhook/dnsconfig
+          - pkg/provider-local/webhook/machinecontrollermanager
+          - pkg/provider-local/webhook/networkpolicy
+          - pkg/provider-local/webhook/node
+          - pkg/provider-local/webhook/shoot
+          - pkg/resourcemanager/controller/garbagecollector/references
+          - pkg/utils
+          - pkg/utils/chart
+          - pkg/utils/context
+          - pkg/utils/errors
+          - pkg/utils/flow
+          - pkg/utils/gardener
+          - pkg/utils/gardener/shootstate
+          - pkg/utils/imagevector
+          - pkg/utils/kubernetes
+          - pkg/utils/kubernetes/client
+          - pkg/utils/kubernetes/health
+          - pkg/utils/kubernetes/unstructured
+          - pkg/utils/managedresources
+          - pkg/utils/managedresources/builder
+          - pkg/utils/retry
+          - pkg/utils/secrets
+          - pkg/utils/secrets/manager
+          - pkg/utils/time
+          - pkg/utils/timewindow
+          - pkg/utils/validation/kubernetesversion
+          - pkg/utils/version
+          - third_party/gopkg.in/yaml.v2
+          - third_party/controller-runtime/pkg/apiutil
+          - vendor
+          - VERSION
+        ldflags:
+        - '{{.LD_FLAGS}}'
+        main: ./cmd/gardener-extension-provider-local
+  resourceSelector:
+    allow:
+    # instruct skaffold to inject the built image reference into the image field in our ControllerDeployment
+    - groupKind: ControllerDeployment.core.gardener.cloud
+      image: [".*"]
+  manifests:
+    kustomize:
+      paths:
+      - example/provider-local/extension/skaffold
+  deploy:
+    kubectl: {}
+    statusCheck: false

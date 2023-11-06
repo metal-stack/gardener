@@ -504,7 +504,7 @@ Storage
 <h3 id="operator.gardener.cloud/v1alpha1.Garden">Garden
 </h3>
 <p>
-<p>Garden describes a list of gardens.</p>
+<p>Garden describes a gardener control plane to be managed by the gardener-operator.</p>
 </p>
 <table>
 <thead>
@@ -1057,6 +1057,254 @@ string
 <em>(Optional)</em>
 <p>LogLevel is the configured log level for the gardener-scheduler. Must be one of [info,debug,error].
 Defaults to info.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.Gardenlet">Gardenlet
+</h3>
+<p>
+<p>Gardenlet describes a gardenlet to be managed by the gardener-operator.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+<p>Standard object metadata.</p>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.GardenletSpec">
+GardenletSpec
+</a>
+</em>
+</td>
+<td>
+<p>Spec contains the specification of this garden.</p>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>kubeconfigSecretRef</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#secretreference-v1-core">
+Kubernetes core/v1.SecretReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KubeconfigSecretRef is a reference to a kubeconfig in which the Gardenlet is supposed to be deployed. If not
+provided, the gardenlet is deployed into the same cluster where gardener-operator runs.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>backup</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.GardenletBackup">
+GardenletBackup
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Backup contains the object store configuration for backups for the seed that is managed by this gardenlet.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>gardenlet</code></br>
+<em>
+github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1.Gardenlet
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Gardenlet specifies that the Gardenlet controller should deploy a gardenlet into the cluster
+with the given deployment parameters and GardenletConfiguration.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.GardenletStatus">
+GardenletStatus
+</a>
+</em>
+</td>
+<td>
+<p>Status contains the status of this garden.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.GardenletBackup">GardenletBackup
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.GardenletSpec">GardenletSpec</a>)
+</p>
+<p>
+<p>GardenletBackup contains the object store configuration for backups for the virtual garden etcd.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>provider</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Provider is a provider name. This field is immutable.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>secretRef</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#secretreference-v1-core">
+Kubernetes core/v1.SecretReference
+</a>
+</em>
+</td>
+<td>
+<p>SecretRef is a reference to a Secret object containing the cloud provider credentials for the object store where
+backups should be stored. It should have enough privileges to manipulate the objects as well as buckets.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.GardenletSpec">GardenletSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.Gardenlet">Gardenlet</a>)
+</p>
+<p>
+<p>GardenletSpec is the specification of a Gardenlet.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>kubeconfigSecretRef</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#secretreference-v1-core">
+Kubernetes core/v1.SecretReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KubeconfigSecretRef is a reference to a kubeconfig in which the Gardenlet is supposed to be deployed. If not
+provided, the gardenlet is deployed into the same cluster where gardener-operator runs.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>backup</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.GardenletBackup">
+GardenletBackup
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Backup contains the object store configuration for backups for the seed that is managed by this gardenlet.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>gardenlet</code></br>
+<em>
+github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1.Gardenlet
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Gardenlet specifies that the Gardenlet controller should deploy a gardenlet into the cluster
+with the given deployment parameters and GardenletConfiguration.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.GardenletStatus">GardenletStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.Gardenlet">Gardenlet</a>)
+</p>
+<p>
+<p>GardenletStatus is the status of a gardenlet.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>conditions</code></br>
+<em>
+[]github.com/gardener/gardener/pkg/apis/core/v1beta1.Condition
+</em>
+</td>
+<td>
+<p>Conditions is a list of conditions.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>observedGeneration</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+<p>ObservedGeneration is the most recent generation observed for this resource.</p>
 </td>
 </tr>
 </tbody>

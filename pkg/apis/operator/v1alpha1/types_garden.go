@@ -38,7 +38,7 @@ import (
 // +kubebuilder:printcolumn:name="Observability",type=string,JSONPath=`.status.conditions[?(@.type=="ObservabilityComponentsHealthy")].status`,description="Indicates whether the observability components related to the runtime cluster are healthy."
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`,description="creation timestamp"
 
-// Garden describes a list of gardens.
+// Garden describes a gardener control plane to be managed by the gardener-operator.
 type Garden struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object metadata.

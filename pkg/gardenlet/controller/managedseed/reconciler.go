@@ -19,27 +19,40 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
+	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap/keys"
+	"github.com/gardener/gardener/pkg/controller/gardenletdeployer"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/gardenlet/apis/config"
+	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
 
 // Reconciler reconciles the ManagedSeed.
 type Reconciler struct {
+	GardenConfig          *rest.Config
+	GardenAPIReader       client.Reader
 	GardenClient          client.Client
-	Actuator              Actuator
+	SeedClient            client.Client
 	Config                config.GardenletConfiguration
 	Clock                 clock.Clock
+	Recorder              record.EventRecorder
 	ShootClientMap        clientmap.ClientMap
 	GardenNamespaceGarden string
 	GardenNamespaceShoot  string
@@ -91,18 +104,33 @@ func (r *Reconciler) reconcile(
 		}
 	}()
 
+	// Get shoot
+	shoot := &gardencorev1beta1.Shoot{}
+	if err := r.GardenAPIReader.Get(ctx, kubernetesutils.Key(ms.Namespace, ms.Spec.Shoot.Name), shoot); err != nil {
+		return reconcile.Result{}, fmt.Errorf("could not get shoot %s/%s: %w", ms.Namespace, ms.Spec.Shoot.Name, err)
+	}
+
+	log = log.WithValues("shootName", shoot.Name)
+
+	// Check if shoot is reconciled and update ShootReconciled condition
+	if !shootReconciled(shoot) {
+		log.Info("Waiting for shoot to be reconciled")
+
+		msg := fmt.Sprintf("Waiting for shoot %q to be reconciled", client.ObjectKeyFromObject(shoot).String())
+		r.Recorder.Event(ms, corev1.EventTypeNormal, gardencorev1beta1.EventReconciling, msg)
+		updateCondition(r.Clock, status, seedmanagementv1alpha1.ManagedSeedShootReconciled, gardencorev1beta1.ConditionFalse, gardencorev1beta1.EventReconciling, msg)
+
+		return reconcile.Result{RequeueAfter: r.Config.Controllers.ManagedSeed.WaitSyncPeriod.Duration}, nil
+	}
+	updateCondition(r.Clock, status, seedmanagementv1alpha1.ManagedSeedShootReconciled, gardencorev1beta1.ConditionTrue, gardencorev1beta1.EventReconciled,
+		fmt.Sprintf("Shoot %q has been reconciled", client.ObjectKeyFromObject(shoot).String()))
+
 	// Reconcile creation or update
 	log.V(1).Info("Reconciling")
-	var wait bool
-	if status, wait, err = r.Actuator.Reconcile(ctx, log, ms); err != nil {
+	if err := r.newActuator(shoot).Reconcile(ctx, log, ms, ms.Status.Conditions, ms.Spec.Gardenlet); err != nil {
 		return reconcile.Result{}, fmt.Errorf("could not reconcile ManagedSeed %s creation or update: %w", kubernetesutils.ObjectName(ms), err)
 	}
 	log.V(1).Info("Reconciliation finished")
-
-	// If waiting, requeue after WaitSyncPeriod
-	if wait {
-		return reconcile.Result{RequeueAfter: r.Config.Controllers.ManagedSeed.WaitSyncPeriod.Duration}, nil
-	}
 
 	// Return success result
 	return reconcile.Result{RequeueAfter: r.Config.Controllers.ManagedSeed.SyncPeriod.Duration}, nil
@@ -134,9 +162,15 @@ func (r *Reconciler) delete(
 		}
 	}()
 
+	// Get shoot
+	shoot := &gardencorev1beta1.Shoot{}
+	if err := r.GardenAPIReader.Get(ctx, kubernetesutils.Key(ms.Namespace, ms.Spec.Shoot.Name), shoot); err != nil {
+		return reconcile.Result{}, fmt.Errorf("could not get shoot %s/%s: %w", ms.Namespace, ms.Spec.Shoot.Name, err)
+	}
+
 	// Reconcile deletion
 	log.V(1).Info("Deletion")
-	if status, wait, removeFinalizer, err = r.Actuator.Delete(ctx, log, ms); err != nil {
+	if wait, removeFinalizer, err = r.newActuator(shoot).Delete(ctx, log, ms, ms.Status.Conditions, ms.Spec.Gardenlet); err != nil {
 		return reconcile.Result{}, fmt.Errorf("could not reconcile ManagedSeed %s deletion: %w", kubernetesutils.ObjectName(ms), err)
 	}
 	log.V(1).Info("Deletion finished")
@@ -161,6 +195,57 @@ func (r *Reconciler) delete(
 	return reconcile.Result{RequeueAfter: r.Config.Controllers.ManagedSeed.SyncPeriod.Duration}, nil
 }
 
+func (r *Reconciler) newActuator(shoot *gardencorev1beta1.Shoot) gardenletdeployer.Interface {
+	return &gardenletdeployer.Actuator{
+		GardenConfig:    r.GardenConfig,
+		GardenAPIReader: r.GardenAPIReader,
+		GardenClient:    r.GardenClient,
+		GetTargetClientFunc: func(ctx context.Context) (kubernetes.Interface, error) {
+			return r.ShootClientMap.GetClient(ctx, keys.ForShoot(shoot))
+		},
+		CheckIfVPAAlreadyExists: func(ctx context.Context) (bool, error) {
+			if err := r.SeedClient.Get(ctx, kubernetesutils.Key(shoot.Status.TechnicalID, "vpa-admission-controller"), &appsv1.Deployment{}); err != nil {
+				if apierrors.IsNotFound(err) {
+					return false, nil
+				}
+				return false, err
+			}
+			return true, nil
+		},
+		GetKubeconfigSecret: func(ctx context.Context) (*corev1.Secret, error) {
+			if !pointer.BoolDeref(shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig, false) {
+				return nil, nil
+			}
+
+			secret := &corev1.Secret{}
+			if err := r.GardenClient.Get(ctx, kubernetesutils.Key(shoot.Namespace, gardenerutils.ComputeShootProjectSecretName(shoot.Name, gardenerutils.ShootProjectSecretSuffixKubeconfig)), secret); err != nil {
+				return nil, err
+			}
+			return secret, nil
+		},
+		GetInfrastructureSecret: func(ctx context.Context) (*corev1.Secret, error) {
+			secretBinding := &gardencorev1beta1.SecretBinding{}
+			if shoot.Spec.SecretBindingName == nil {
+				return nil, fmt.Errorf("secretbinding name is nil for the Shoot: %s/%s", shoot.Namespace, shoot.Name)
+			}
+			if err := r.GardenClient.Get(ctx, kubernetesutils.Key(shoot.Namespace, *shoot.Spec.SecretBindingName), secretBinding); err != nil {
+				return nil, err
+			}
+			return kubernetesutils.GetSecretByReference(ctx, r.GardenClient, &secretBinding.SecretRef)
+		},
+		GetTargetDomain: func() string {
+			if shoot.Spec.DNS != nil && shoot.Spec.DNS.Domain != nil {
+				return *shoot.Spec.DNS.Domain
+			}
+			return ""
+		},
+		Clock:                 r.Clock,
+		ValuesHelper:          gardenletdeployer.NewValuesHelper(&r.Config),
+		Recorder:              r.Recorder,
+		GardenNamespaceTarget: r.GardenNamespaceShoot,
+	}
+}
+
 func (r *Reconciler) updateStatus(ctx context.Context, ms *seedmanagementv1alpha1.ManagedSeed, status *seedmanagementv1alpha1.ManagedSeedStatus) error {
 	if status == nil {
 		return nil
@@ -168,4 +253,15 @@ func (r *Reconciler) updateStatus(ctx context.Context, ms *seedmanagementv1alpha
 	patch := client.StrategicMergeFrom(ms.DeepCopy())
 	ms.Status = *status
 	return r.GardenClient.Status().Patch(ctx, ms, patch)
+}
+
+func shootReconciled(shoot *gardencorev1beta1.Shoot) bool {
+	lastOp := shoot.Status.LastOperation
+	return shoot.Generation == shoot.Status.ObservedGeneration && lastOp != nil && lastOp.State == gardencorev1beta1.LastOperationStateSucceeded
+}
+
+func updateCondition(clock clock.Clock, status *seedmanagementv1alpha1.ManagedSeedStatus, ct gardencorev1beta1.ConditionType, cs gardencorev1beta1.ConditionStatus, reason, message string) {
+	condition := v1beta1helper.GetOrInitConditionWithClock(clock, status.Conditions, ct)
+	condition = v1beta1helper.UpdatedConditionWithClock(clock, condition, cs, reason, message)
+	status.Conditions = v1beta1helper.MergeConditions(status.Conditions, condition)
 }

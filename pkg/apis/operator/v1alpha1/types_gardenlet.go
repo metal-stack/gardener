@@ -15,10 +15,11 @@
 package v1alpha1
 
 import (
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -62,7 +63,7 @@ type GardenletSpec struct {
 	Gardenlet *seedmanagementv1alpha1.Gardenlet `json:"gardenlet,omitempty"`
 }
 
-// Backup contains the object store configuration for backups for the virtual garden etcd.
+// GardenletBackup contains the object store configuration for backups for the virtual garden etcd.
 type GardenletBackup struct {
 	// Provider is a provider name. This field is immutable.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Provider is immutable"
@@ -80,8 +81,3 @@ type GardenletStatus struct {
 	// ObservedGeneration is the most recent generation observed for this resource.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
-
-const (
-	// GardenletRegistered is a condition type for indicating whether the Gardenlet has been registered.
-	GardenletRegistered gardencorev1beta1.ConditionType = "GardenletRegistered"
-)

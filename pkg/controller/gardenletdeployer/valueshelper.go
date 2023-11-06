@@ -1,4 +1,4 @@
-// Copyright 2021 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+// Copyright 2023 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package managedseed
+package gardenletdeployer
 
 import (
 	"os"
@@ -22,7 +22,6 @@ import (
 	"k8s.io/utils/pointer"
 
 	"github.com/gardener/gardener/imagevector"
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
 	"github.com/gardener/gardener/pkg/gardenlet/apis/config"
 	gardenlethelper "github.com/gardener/gardener/pkg/gardenlet/apis/config/helper"
@@ -36,7 +35,7 @@ import (
 // as well as computing the values to be used when applying the gardenlet chart.
 type ValuesHelper interface {
 	// MergeGardenletDeployment merges the given GardenletDeployment with the values from the parent gardenlet.
-	MergeGardenletDeployment(*seedmanagementv1alpha1.GardenletDeployment, *gardencorev1beta1.Shoot) (*seedmanagementv1alpha1.GardenletDeployment, error)
+	MergeGardenletDeployment(*seedmanagementv1alpha1.GardenletDeployment) (*seedmanagementv1alpha1.GardenletDeployment, error)
 	// MergeGardenletConfiguration merges the given GardenletConfiguration with the parent GardenletConfiguration.
 	MergeGardenletConfiguration(config *gardenletv1alpha1.GardenletConfiguration) (*gardenletv1alpha1.GardenletConfiguration, error)
 	// GetGardenletChartValues computes the values to be used when applying the gardenlet chart.
@@ -56,7 +55,7 @@ func NewValuesHelper(config *config.GardenletConfiguration) ValuesHelper {
 }
 
 // MergeGardenletDeployment merges the given GardenletDeployment with the values from the parent gardenlet.
-func (vp *valuesHelper) MergeGardenletDeployment(deployment *seedmanagementv1alpha1.GardenletDeployment, _ *gardencorev1beta1.Shoot) (*seedmanagementv1alpha1.GardenletDeployment, error) {
+func (vp *valuesHelper) MergeGardenletDeployment(deployment *seedmanagementv1alpha1.GardenletDeployment) (*seedmanagementv1alpha1.GardenletDeployment, error) {
 	// Convert deployment object to values
 	deploymentValues, err := utils.ToValuesMap(deployment)
 	if err != nil {

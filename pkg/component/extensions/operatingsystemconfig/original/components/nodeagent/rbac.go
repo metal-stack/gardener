@@ -15,6 +15,7 @@
 package nodeagent
 
 import (
+	coordinationv1 "k8s.io/api/coordination/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -43,6 +44,11 @@ func GenerateRBACResourcesData(secretNames []string) (map[string][]byte, error) 
 					APIGroups: []string{""},
 					Resources: []string{"events"},
 					Verbs:     []string{"get", "list", "watch", "create", "patch", "update"},
+				},
+				{
+					APIGroups: []string{coordinationv1.GroupName},
+					Resources: []string{"leases"},
+					Verbs:     []string{"get", "list", "watch", "create", "update"},
 				},
 			},
 		}

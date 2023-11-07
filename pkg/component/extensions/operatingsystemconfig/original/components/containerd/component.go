@@ -111,12 +111,14 @@ ExecStart=` + pathHealthMonitor),
 		},
 	}
 
-	var files []extensionsv1alpha1.File
-	if features.DefaultFeatureGate.Enabled(features.UseGardenerNodeAgent) {
-		monitorUnit.Files = append(monitorUnit.Files, monitorFile)
-	} else {
+	var (
+		files []extensionsv1alpha1.File
+		units []extensionsv1alpha1.Unit
+	)
+	if !features.DefaultFeatureGate.Enabled(features.UseGardenerNodeAgent) {
 		files = append(logRotateFiles, monitorFile)
+		units = append(logRotateUnits, monitorUnit)
 	}
 
-	return append(logRotateUnits, monitorUnit), files, nil
+	return units, files, nil
 }

@@ -167,6 +167,7 @@ github.com/coreos/go-semver/semver
 github.com/coreos/go-systemd/v22/daemon
 github.com/coreos/go-systemd/v22/dbus
 github.com/coreos/go-systemd/v22/journal
+github.com/coreos/go-systemd/v22/login1
 github.com/coreos/go-systemd/v22/unit
 # github.com/cyphar/filepath-securejoin v0.2.3
 ## explicit; go 1.13

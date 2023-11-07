@@ -200,23 +200,12 @@ ExecStart=` + pathHealthMonitor),
 				},
 			},
 		})
-		healthMonitorFiles = append(healthMonitorFiles, extensionsv1alpha1.File{
-			Path:        v1beta1constants.OperatingSystemConfigFilePathBinaries + "/kubectl",
-			Permissions: pointer.Int32(0755),
-			Content: extensionsv1alpha1.FileContent{
-				ImageRef: &extensionsv1alpha1.FileContentImageRef{
-					Image:           ctx.Images[imagevector.ImageNameHyperkube].String(),
-					FilePathInImage: "/kubectl",
-				},
-			},
-		})
 		kubeletUnit.Files = kubeletFiles
-		healthMonitorUnit.Files = healthMonitorFiles
+		units = append(units, kubeletUnit)
 	} else {
 		files = append(kubeletFiles, healthMonitorFiles...)
+		units = append(units, kubeletUnit, healthMonitorUnit)
 	}
-
-	units = append(units, kubeletUnit, healthMonitorUnit)
 
 	return units, files, nil
 }

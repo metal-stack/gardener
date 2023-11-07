@@ -287,7 +287,7 @@ func cleanupLegacyCloudConfigDownloader(log logr.Logger, fs afero.Afero, db dbus
 	return func(ctx context.Context) error {
 		log.Info("Removing legacy directory", "path", downloader.PathCCDDirectory)
 		if err := fs.RemoveAll(downloader.PathCCDDirectory); err != nil {
-			return fmt.Errorf("failed to remove legacy directory %q: %w", downloader.PathCCDDirectory)
+			return fmt.Errorf("failed to remove legacy directory %q: %w", downloader.PathCCDDirectory, err)
 		}
 
 		if _, err := fs.Stat(path.Join("/", "etc", "systemd", "system", downloader.UnitName)); err != nil {

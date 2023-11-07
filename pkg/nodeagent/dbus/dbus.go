@@ -20,6 +20,7 @@ import (
 	"reflect"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	"github.com/coreos/go-systemd/v22/login1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -41,6 +42,8 @@ type DBus interface {
 	Stop(ctx context.Context, recorder record.EventRecorder, node runtime.Object, unitName string) error
 	// Restart the given unit and record an event to the node object, same as executing "systemctl restart unit".
 	Restart(ctx context.Context, recorder record.EventRecorder, node runtime.Object, unitName string) error
+	// Reboot this machines, is the same as executing "systemctl reboot".
+	Reboot() error
 }
 
 type db struct{}
@@ -48,6 +51,16 @@ type db struct{}
 // New returns a new working DBus
 func New() DBus {
 	return &db{}
+}
+func (_ *db) Reboot() error {
+	login, err := login1.New()
+	if err != nil {
+		return fmt.Errorf("unable to connect to dbus: %w", err)
+	}
+	defer login.Close()
+
+	login.Reboot(false)
+	return nil
 }
 
 func (_ *db) Enable(ctx context.Context, unitNames ...string) error {

@@ -304,11 +304,11 @@ func validateSeedNetworksUpdate(newSeedNetworks, oldSeedNetworks core.SeedNetwor
 
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeedNetworks.IPFamilies, oldSeedNetworks.IPFamilies, fldPath.Child("ipFamilies"))...)
 
-	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeedNetworks.Pods, oldSeedNetworks.Pods, fldPath.Child("pods"))...)
-	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeedNetworks.Services, oldSeedNetworks.Services, fldPath.Child("services"))...)
-	if oldSeedNetworks.Nodes != nil {
-		allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeedNetworks.Nodes, oldSeedNetworks.Nodes, fldPath.Child("nodes"))...)
-	}
+	// allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeedNetworks.Pods, oldSeedNetworks.Pods, fldPath.Child("pods"))...)
+	// allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeedNetworks.Services, oldSeedNetworks.Services, fldPath.Child("services"))...)
+	// if oldSeedNetworks.Nodes != nil {
+	// 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeedNetworks.Nodes, oldSeedNetworks.Nodes, fldPath.Child("nodes"))...)
+	// }
 
 	return allErrs
 }

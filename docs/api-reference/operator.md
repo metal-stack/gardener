@@ -604,6 +604,83 @@ string
 </tr>
 </tbody>
 </table>
+<h3 id="operator.gardener.cloud/v1alpha1.Deployment">Deployment
+</h3>
+<p>
+<p>Deployment contains deployment configuration for the admission and extension concept.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>admission</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">
+DeploymentSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Admission contains the deployment specification for the extension admission controller.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>extension</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.ExtensionDeploymentSpec">
+ExtensionDeploymentSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Extension contains the deployment specification for the extension.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.DeploymentSpec">DeploymentSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.Deployment">Deployment</a>, 
+<a href="#operator.gardener.cloud/v1alpha1.ExtensionDeploymentSpec">ExtensionDeploymentSpec</a>, 
+<a href="#operator.gardener.cloud/v1alpha1.ExtensionSpec">ExtensionSpec</a>)
+</p>
+<p>
+<p>DeploymentSpec is the specification for the deployment of a component.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>helm</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.Helm">
+Helm
+</a>
+</em>
+</td>
+<td>
+<p>Helm is the Helm deployment configuration.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.gardener.cloud/v1alpha1.ETCD">ETCD
 </h3>
 <p>
@@ -727,6 +804,239 @@ Storage
 <td>
 <em>(Optional)</em>
 <p>Storage contains storage configuration.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.Extension">Extension
+</h3>
+<p>
+<p>Extension describes a Gardener extension.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+<p>Standard object metadata.</p>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.ExtensionSpec">
+ExtensionSpec
+</a>
+</em>
+</td>
+<td>
+<p>Spec contains the specification of this extension.</p>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>resources</code></br>
+<em>
+[]github.com/gardener/gardener/pkg/apis/core/v1beta1.ControllerResource
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Resources is a list of combinations of kinds (DNSRecord, Backupbucket, &hellip;) and their actual types
+(aws-route53, gcp).</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>deployment</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">
+DeploymentSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Deployment contains deployment configuration for the admission and extension concept.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.ExtensionStatus">
+ExtensionStatus
+</a>
+</em>
+</td>
+<td>
+<p>Status contains the status of this extension.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.ExtensionDeploymentSpec">ExtensionDeploymentSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.Deployment">Deployment</a>)
+</p>
+<p>
+<p>ExtensionDeploymentSpec contains the deployment specification for an extension.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>DeploymentSpec</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">
+DeploymentSpec
+</a>
+</em>
+</td>
+<td>
+<p>
+(Members of <code>DeploymentSpec</code> are embedded into this type.)
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>policy</code></br>
+<em>
+github.com/gardener/gardener/pkg/apis/core/v1beta1.ControllerDeploymentPolicy
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Policy controls how the controller is deployed. It defaults to &lsquo;OnDemand&rsquo;.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.ExtensionSpec">ExtensionSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.Extension">Extension</a>)
+</p>
+<p>
+<p>ExtensionSpec contains the specification of a Gardener extension.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>resources</code></br>
+<em>
+[]github.com/gardener/gardener/pkg/apis/core/v1beta1.ControllerResource
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Resources is a list of combinations of kinds (DNSRecord, Backupbucket, &hellip;) and their actual types
+(aws-route53, gcp).</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>deployment</code></br>
+<em>
+<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">
+DeploymentSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Deployment contains deployment configuration for the admission and extension concept.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.ExtensionStatus">ExtensionStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.Extension">Extension</a>)
+</p>
+<p>
+<p>ExtensionStatus is the status of a Gardener extension.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>observedGeneration</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+<p>ObservedGeneration is the most recent generation observed for this resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>conditions</code></br>
+<em>
+[]github.com/gardener/gardener/pkg/apis/core/v1beta1.Condition
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Conditions represents the latest available observations of an Extension&rsquo;s current state.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>providerStatus</code></br>
+<em>
+k8s.io/apimachinery/pkg/runtime.RawExtension
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ProviderStatus contains type-specific status.</p>
 </td>
 </tr>
 </tbody>
@@ -1484,6 +1794,60 @@ string
 </td>
 <td>
 <p>Resource is the resource name.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.gardener.cloud/v1alpha1.Helm">Helm
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">DeploymentSpec</a>)
+</p>
+<p>
+<p>Helm is the Helm deployment configuration.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ociRepository</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>OCIRepository is the configuration of to the OCI repository.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>rawChart</code></br>
+<em>
+[]byte
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>RawChart is the base64-encoded, gzip&rsquo;ed, tar&rsquo;ed Helm chart.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>values</code></br>
+<em>
+k8s.io/apimachinery/pkg/runtime.RawExtension
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Values are the chart values.</p>
 </td>
 </tr>
 </tbody>

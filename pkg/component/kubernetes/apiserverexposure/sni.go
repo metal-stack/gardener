@@ -132,9 +132,8 @@ func (s *sni) Deploy(ctx context.Context) error {
 			return err
 		}
 
-		filename := fmt.Sprintf("envoyfilter__%s__%s.yaml", envoyFilter.Namespace, envoyFilter.Name)
 		registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
-		registry.AddSerialized(filename, envoyFilterSpec.Bytes())
+		registry.AddSerialized(envoyFilterSpec.Bytes())
 		if err := managedresources.CreateForSeed(ctx, s.client, s.namespace, managedResourceName, false, registry.SerializedObjects()); err != nil {
 			return err
 		}

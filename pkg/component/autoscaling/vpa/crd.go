@@ -19,13 +19,13 @@ var (
 	//go:embed templates/crd-autoscaling.k8s.io_verticalpodautoscalercheckpoints.yaml
 	verticalPodAutoscalerCheckpointCRD string
 
-	crdResources map[string]string
+	crdResources []string
 )
 
 func init() {
-	crdResources = map[string]string{
-		"crd-verticalpodautoscalers.yaml":           verticalPodAutoscalerCRD,
-		"crd-verticalpodautoscalercheckpoints.yaml": verticalPodAutoscalerCheckpointCRD,
+	crdResources = []string{
+		verticalPodAutoscalerCRD,
+		verticalPodAutoscalerCheckpointCRD,
 	}
 }
 
@@ -44,9 +44,9 @@ func NewCRD(applier kubernetes.Applier, registry *managedresources.Registry) com
 
 // Deploy creates and updates the CRD definitions for the Kubernetes Vertical Pod Autoscaler.
 func (v *vpaCRD) Deploy(ctx context.Context) error {
-	for filename, resource := range crdResources {
+	for _, resource := range crdResources {
 		if v.registry != nil {
-			v.registry.AddSerialized(filename, []byte(resource))
+			v.registry.AddSerialized([]byte(resource))
 			continue
 		}
 

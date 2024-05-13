@@ -5,6 +5,7 @@
 package managedresources
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/andybalholm/brotli"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -19,8 +21,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	forkedyaml "github.com/gardener/gardener/third_party/gopkg.in/yaml.v2"
 )
 
@@ -29,7 +31,7 @@ import (
 type Registry struct {
 	scheme           *runtime.Scheme
 	codec            runtime.Codec
-	nameToObject     map[string]*object
+	objects          []*object
 	isYAMLSerializer bool
 }
 
@@ -47,7 +49,7 @@ func NewRegistry(scheme *runtime.Scheme, codec serializer.CodecFactory, serializ
 	}
 
 	// Use set to remove duplicates
-	groupVersions = sets.New(groupVersions...).UnsortedList()
+	groupVersions = sets.New[schema.GroupVersion](groupVersions...).UnsortedList()
 
 	// Sort groupVersions to ensure groupVersions.Identifier() is stable key
 	// for the map in https://github.com/kubernetes/apimachinery/blob/v0.26.1/pkg/runtime/serializer/versioning/versioning.go#L94
@@ -71,7 +73,6 @@ func NewRegistry(scheme *runtime.Scheme, codec serializer.CodecFactory, serializ
 	return &Registry{
 		scheme:           scheme,
 		codec:            codec.CodecForVersions(serializer, serializer, groupVersions, groupVersions),
-		nameToObject:     make(map[string]*object),
 		isYAMLSerializer: serializerIdentifier.YAML == "true",
 	}
 }
@@ -82,16 +83,6 @@ func (r *Registry) Add(objs ...client.Object) error {
 	for _, obj := range objs {
 		if obj == nil || reflect.ValueOf(obj) == reflect.Zero(reflect.TypeOf(obj)) {
 			continue
-		}
-
-		objectName, err := r.objectName(obj)
-		if err != nil {
-			return err
-		}
-		filename := objectName + ".yaml"
-
-		if _, ok := r.nameToObject[filename]; ok {
-			return fmt.Errorf("duplicate filename in registry: %q", filename)
 		}
 
 		serializationYAML, err := runtime.Encode(r.codec, obj)
@@ -117,27 +108,37 @@ func (r *Registry) Add(objs ...client.Object) error {
 			serializationYAML = serBytes
 		}
 
-		r.nameToObject[filename] = &object{
+		r.objects = append(r.objects, &object{
 			obj:           obj,
 			serialization: serializationYAML,
-		}
+		})
 	}
 
 	return nil
 }
 
 // AddSerialized adds the provided serialized YAML for the registry. The provided filename will be used as key.
-func (r *Registry) AddSerialized(filename string, serializationYAML []byte) {
-	r.nameToObject[filename] = &object{serialization: serializationYAML}
+func (r *Registry) AddSerialized(serializationYAML []byte) {
+	r.objects = append(r.objects, &object{serialization: serializationYAML})
 }
 
 // SerializedObjects returns a map whose keys are filenames and whose values are serialized objects.
 func (r *Registry) SerializedObjects() map[string][]byte {
-	out := make(map[string][]byte, len(r.nameToObject))
-	for name, object := range r.nameToObject {
-		out[name] = object.serialization
+	var data []byte
+	for _, object := range r.objects {
+		data = append(data, append([]byte("---\n"), object.serialization...)...)
 	}
-	return out
+
+	var buf bytes.Buffer
+	w := brotli.NewWriter(&buf)
+	if _, err := w.Write(data); err != nil {
+		panic(err) // unreachable in hackathon
+	}
+	if err := w.Close(); err != nil {
+		panic(err) // unreachable in hackathon
+	}
+
+	return map[string][]byte{resourcesv1alpha1.CompressedDataKey: buf.Bytes()}
 }
 
 // AddAllAndSerialize calls Add() for all the given objects before calling SerializedObjects().
@@ -149,33 +150,19 @@ func (r *Registry) AddAllAndSerialize(objects ...client.Object) (map[string][]by
 }
 
 // RegisteredObjects returns a map whose keys are filenames and whose values are objects.
-func (r *Registry) RegisteredObjects() map[string]client.Object {
-	out := make(map[string]client.Object, len(r.nameToObject))
-	for name, object := range r.nameToObject {
-		out[name] = object.obj
+func (r *Registry) RegisteredObjects() []client.Object {
+	out := make([]client.Object, len(r.objects))
+	for _, object := range r.objects {
+		out = append(out, object.obj)
 	}
 	return out
 }
 
 // String returns the string representation of the registry.
 func (r *Registry) String() string {
-	out := make([]string, 0, len(r.nameToObject))
-	for name, object := range r.nameToObject {
-		out = append(out, fmt.Sprintf("* %s:\n%s", name, object.serialization))
+	out := make([]string, 0, len(r.objects))
+	for _, object := range r.objects {
+		out = append(out, fmt.Sprintf("---\n%s\n", object.serialization))
 	}
 	return strings.Join(out, "\n\n")
-}
-
-func (r *Registry) objectName(obj client.Object) (string, error) {
-	gvk, err := apiutil.GVKForObject(obj, r.scheme)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf(
-		"%s__%s__%s",
-		strings.ToLower(gvk.Kind),
-		obj.GetNamespace(),
-		strings.Replace(obj.GetName(), ":", "_", -1),
-	), nil
 }

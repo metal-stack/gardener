@@ -259,6 +259,37 @@ const (
 type CRIConfig struct {
 	// Name is a mandatory string containing the name of the CRI library. Supported values are `containerd`.
 	Name CRIName `json:"name"`
+	// ContainerdConfig is the containerd configuration.
+	// +optional
+	Containerd *ContainerdConfig `json:"containerd,omitempty"`
+}
+
+// ContainerdConfig contains configuration options for containerd.
+type ContainerdConfig struct {
+	// Registries configures the registry hosts for containerd.
+	// +optional
+	Registries []RegistryConfig `json:"registries,omitempty"`
+}
+
+// RegistryConfig contains registry configuration options.
+type RegistryConfig struct {
+	// Server is the registry server.
+	Server string `json:"server,omitempty"`
+	// Hosts are the registry hosts.
+	Hosts []RegistryHost `json:"hosts,omitempty"`
+}
+
+// RegistryHost contains configuration values for a registry host.
+type RegistryHost struct {
+	// URL is the endpoint address of the registry mirror.
+	URL string `json:"url"`
+	// Capabilities determine what operations a host is
+	// capable of performing. Defaults to
+	//  - pull
+	//  - resolve
+	Capabilities []string `json:"capabilities,omitempty"`
+	// CACerts are paths to public key certificates used for TLS.
+	CACerts []string `json:"caCerts,omitempty"`
 }
 
 // CRIName is a type alias for the CRI name string.

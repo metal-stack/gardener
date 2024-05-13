@@ -47,7 +47,7 @@ type ExtensionSpec struct {
 	Resources []gardencorev1beta1.ControllerResource `json:"resources,omitempty"`
 	// Deployment contains deployment configuration for the admission and extension concept.
 	// +optional
-	Deployment *DeploymentSpec `json:"deployment,omitempty"`
+	Deployment *Deployment `json:"deployment,omitempty"`
 }
 
 // Deployment contains deployment configuration for the admission and extension concept.
@@ -69,7 +69,8 @@ type DeploymentSpec struct {
 // Helm is the Helm deployment configuration.
 type Helm struct {
 	// OCIRepository is the configuration of to the OCI repository.
-	OCIRepository string `json:"ociRepository"`
+	// +optional
+	OCIRepository string `json:"ociRepository,omitempty"`
 	// RawChart is the base64-encoded, gzip'ed, tar'ed Helm chart.
 	// +optional
 	RawChart []byte `json:"rawChart,omitempty"`
@@ -84,6 +85,8 @@ type ExtensionDeploymentSpec struct {
 	// Policy controls how the controller is deployed. It defaults to 'OnDemand'.
 	// +optional
 	Policy *gardencorev1beta1.ControllerDeploymentPolicy `json:"policy,omitempty"`
+	// Annotations are annotations that need to be added to both the controller registration and deployment.
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // ExtensionStatus is the status of a Gardener extension.

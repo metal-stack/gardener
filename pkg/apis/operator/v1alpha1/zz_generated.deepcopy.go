@@ -455,6 +455,13 @@ func (in *ExtensionDeploymentSpec) DeepCopyInto(out *ExtensionDeploymentSpec) {
 		*out = new(v1beta1.ControllerDeploymentPolicy)
 		**out = **in
 	}
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 
@@ -513,7 +520,7 @@ func (in *ExtensionSpec) DeepCopyInto(out *ExtensionSpec) {
 	}
 	if in.Deployment != nil {
 		in, out := &in.Deployment, &out.Deployment
-		*out = new(DeploymentSpec)
+		*out = new(Deployment)
 		(*in).DeepCopyInto(*out)
 	}
 	return

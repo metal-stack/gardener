@@ -63,6 +63,14 @@ type ControllerConfiguration struct {
 	NetworkPolicy NetworkPolicyControllerConfiguration `json:"networkPolicy"`
 	// VPAEvictionRequirements is the configuration for the VPAEvictionrequirements controller.
 	VPAEvictionRequirements VPAEvictionRequirementsControllerConfiguration `json:"vpaEvictionRequirements"`
+	// ExtensionGardenConfig defines the configuration of the GardenExtension controller.
+	ExtensionGardenConfig ExtensionGardenConfigControllerConfiguration `json:"extensionGardenConfig"`
+}
+
+// ExtensionGardenConfigControllerConfiguration defines the configuration of the GardenExtension controller.
+type ExtensionGardenConfigControllerConfiguration struct {
+	// ConcurrentSyncs is the number of concurrent worker routines for this controller.
+	ConcurrentSyncs *int `json:"concurrentSyncs,omitempty"`
 }
 
 // GardenCareControllerConfiguration defines the configuration of the GardenCare controller.

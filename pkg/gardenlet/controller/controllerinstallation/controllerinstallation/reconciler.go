@@ -7,7 +7,6 @@ package controllerinstallation
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -35,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
+	gardencorev1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
@@ -141,19 +141,16 @@ func (r *Reconciler) reconcile(
 		return reconcile.Result{}, err
 	}
 
-	var providerConfig *runtime.RawExtension
+	var helmDeployment *gardencorev1.HelmControllerDeployment
 	if deploymentRef := controllerInstallation.Spec.DeploymentRef; deploymentRef != nil {
-		controllerDeployment := &gardencorev1beta1.ControllerDeployment{}
+		controllerDeployment := &gardencorev1.ControllerDeployment{}
 		if err := r.GardenClient.Get(gardenCtx, kubernetesutils.Key(deploymentRef.Name), controllerDeployment); err != nil {
 			return reconcile.Result{}, err
 		}
-		providerConfig = &controllerDeployment.ProviderConfig
-	}
-
-	helmDeployment := &gardencorev1beta1.HelmControllerDeployment{}
-	if err := json.Unmarshal(providerConfig.Raw, helmDeployment); err != nil {
-		conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartInformationInvalid", fmt.Sprintf("chart Information cannot be unmarshalled: %+v", err))
-		return reconcile.Result{}, err
+		if controllerDeployment.Helm == nil {
+			return reconcile.Result{}, nil
+		}
+		helmDeployment = controllerDeployment.Helm
 	}
 
 	var helmValues map[string]interface{}
@@ -244,7 +241,7 @@ func (r *Reconciler) reconcile(
 		},
 	}
 
-	release, err := r.SeedClientSet.ChartRenderer().RenderArchive(helmDeployment.Chart, controllerRegistration.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
+	release, err := r.SeedClientSet.ChartRenderer().RenderArchive(helmDeployment.RawChart, controllerRegistration.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
 	if err != nil {
 		conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartCannotBeRendered", fmt.Sprintf("chart rendering process failed: %+v", err))
 		return reconcile.Result{}, err

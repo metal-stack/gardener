@@ -1,25 +1,77 @@
 apiVersion: operator.gardener.cloud/v1alpha1
 kind: Extension
 metadata:
-  name: local
-#spec:
-#  resources:
-#  - kind: BackupBucket
-#    type: local
-#    primary: true|false
-#    globallyEnabled: true|false # only valid if kind=Extension
-#    reconcileTimeout: 30s # only valid if kind=Extension
-#    lifecycle: {}
-#    workerlessSupported: true|false # only valid if kind=Extension
-#  deployment:
-#    admission:
-#      helm:
-#        ociRepository: {}
-#        rawChart: # tar | gzip | base64
-#        values: {}
-#    extension:
-#      helm:
-#        ociRepository: {}
-#        rawChart: # tar | gzip | base64
-#        values: {}
-#    # policy: OnDemand|Always
+  name: aws
+spec:
+  resources:
+    - kind: BackupBucket
+      primary: true
+      type: aws
+    - kind: BackupEntry
+      primary: true
+      type: aws
+    - kind: Bastion
+      primary: true
+      type: aws
+    - kind: ControlPlane
+      primary: true
+      type: aws
+    - kind: DNSRecord
+      primary: true
+      type: aws-dns
+    - kind: Infrastructure
+      primary: true
+      type: aws
+    - kind: Worker
+      primary: true
+      type: aws
+  deployment:
+    extension:
+      policy: OnDemand
+      helm:
+        ociRepository: ""
+        rawChart: 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
+        values:
+          config:
+            etcd:
+              storage:
+                capacity: 80Gi
+                className: gardener.cloud-fast
+          controllers:
+            backupentry:
+              concurrentSyncs: 50
+            controlplane:
+              concurrentSyncs: 50
+            dnsrecord:
+              concurrentSyncs: 50
+              providerClientBurst: 1
+              providerClientQPS: 0.5
+              providerClientWaitTimeout: 50s
+            healthcheck:
+              concurrentSyncs: 50
+            infrastructure:
+              concurrentSyncs: 50
+            worker:
+              concurrentSyncs: 50
+          image:
+            repository: europe-docker.pkg.dev/gardener-project/public/gardener/extensions/provider-aws
+            tag: v1.55.0-dev-a010bfee2bbd30b35b03097a3739bd428db0bf76
+          replicaCount: 3
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 512Mi
+          vpa:
+            enabled: true
+            resourcePolicy:
+              minAllowed:
+                memory: 256Mi
+            updatePolicy:
+              updateMode: Auto
+    admission:
+      helm:
+        ociRepository: ""
+        rawChart: # tar | gzip | base64
+        values: { }

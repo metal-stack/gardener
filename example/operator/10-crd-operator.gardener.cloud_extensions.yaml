@@ -50,24 +50,59 @@ spec:
                 description: Deployment contains deployment configuration for the
                   admission and extension concept.
                 properties:
-                  helm:
-                    description: Helm is the Helm deployment configuration.
+                  admission:
+                    description: Admission contains the deployment specification for
+                      the extension admission controller.
                     properties:
-                      ociRepository:
-                        description: OCIRepository is the configuration of to the
-                          OCI repository.
-                        type: string
-                      rawChart:
-                        description: RawChart is the base64-encoded, gzip'ed, tar'ed
-                          Helm chart.
-                        format: byte
-                        type: string
-                      values:
-                        description: Values are the chart values.
+                      helm:
+                        description: Helm is the Helm deployment configuration.
+                        properties:
+                          ociRepository:
+                            description: OCIRepository is the configuration of to
+                              the OCI repository.
+                            type: string
+                          rawChart:
+                            description: RawChart is the base64-encoded, gzip'ed,
+                              tar'ed Helm chart.
+                            format: byte
+                            type: string
+                          values:
+                            description: Values are the chart values.
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                         type: object
-                        x-kubernetes-preserve-unknown-fields: true
-                    required:
-                    - ociRepository
+                    type: object
+                  extension:
+                    description: Extension contains the deployment specification for
+                      the extension.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Annotations are annotations that need to be added
+                          to both the controller registration and deployment.
+                        type: object
+                      helm:
+                        description: Helm is the Helm deployment configuration.
+                        properties:
+                          ociRepository:
+                            description: OCIRepository is the configuration of to
+                              the OCI repository.
+                            type: string
+                          rawChart:
+                            description: RawChart is the base64-encoded, gzip'ed,
+                              tar'ed Helm chart.
+                            format: byte
+                            type: string
+                          values:
+                            description: Values are the chart values.
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      policy:
+                        description: Policy controls how the controller is deployed.
+                          It defaults to 'OnDemand'.
+                        type: string
                     type: object
                 type: object
               resources:

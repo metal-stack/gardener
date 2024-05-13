@@ -607,6 +607,10 @@ string
 <h3 id="operator.gardener.cloud/v1alpha1.Deployment">Deployment
 </h3>
 <p>
+(<em>Appears on:</em>
+<a href="#operator.gardener.cloud/v1alpha1.ExtensionSpec">ExtensionSpec</a>)
+</p>
+<p>
 <p>Deployment contains deployment configuration for the admission and extension concept.</p>
 </p>
 <table>
@@ -652,8 +656,7 @@ ExtensionDeploymentSpec
 <p>
 (<em>Appears on:</em>
 <a href="#operator.gardener.cloud/v1alpha1.Deployment">Deployment</a>, 
-<a href="#operator.gardener.cloud/v1alpha1.ExtensionDeploymentSpec">ExtensionDeploymentSpec</a>, 
-<a href="#operator.gardener.cloud/v1alpha1.ExtensionSpec">ExtensionSpec</a>)
+<a href="#operator.gardener.cloud/v1alpha1.ExtensionDeploymentSpec">ExtensionDeploymentSpec</a>)
 </p>
 <p>
 <p>DeploymentSpec is the specification for the deployment of a component.</p>
@@ -867,8 +870,8 @@ ExtensionSpec
 <td>
 <code>deployment</code></br>
 <em>
-<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">
-DeploymentSpec
+<a href="#operator.gardener.cloud/v1alpha1.Deployment">
+Deployment
 </a>
 </em>
 </td>
@@ -939,6 +942,17 @@ github.com/gardener/gardener/pkg/apis/core/v1beta1.ControllerDeploymentPolicy
 <p>Policy controls how the controller is deployed. It defaults to &lsquo;OnDemand&rsquo;.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>annotations</code></br>
+<em>
+map[string]string
+</em>
+</td>
+<td>
+<p>Annotations are annotations that need to be added to both the controller registration and deployment.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.gardener.cloud/v1alpha1.ExtensionSpec">ExtensionSpec
@@ -975,8 +989,8 @@ github.com/gardener/gardener/pkg/apis/core/v1beta1.ControllerDeploymentPolicy
 <td>
 <code>deployment</code></br>
 <em>
-<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">
-DeploymentSpec
+<a href="#operator.gardener.cloud/v1alpha1.Deployment">
+Deployment
 </a>
 </em>
 </td>
@@ -1823,6 +1837,7 @@ string
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>OCIRepository is the configuration of to the OCI repository.</p>
 </td>
 </tr>

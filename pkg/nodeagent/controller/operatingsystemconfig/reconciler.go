@@ -10,11 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/go-logr/logr"
 	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
@@ -156,12 +158,85 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("failed removing bootstrap token file %q: %w", nodeagentv1alpha1.BootstrapTokenFilePath, err)
 	}
 
+	if osc.Spec.CRIConfig != nil && osc.Spec.CRIConfig.Name == extensionsv1alpha1.CRINameContainerD {
+		err = r.ReconcileContainerdConfig(log, osc.Spec.CRIConfig.Containerd)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
+		}
+	}
+
 	r.Recorder.Event(node, corev1.EventTypeNormal, "OSCApplied", "Operating system config has been applied successfully")
 	patch := client.MergeFrom(node.DeepCopy())
 	metav1.SetMetaDataLabel(&node.ObjectMeta, v1beta1constants.LabelWorkerKubernetesVersion, r.Config.KubernetesVersion.String())
 	metav1.SetMetaDataAnnotation(&node.ObjectMeta, nodeagentv1alpha1.AnnotationKeyChecksumAppliedOperatingSystemConfig, oscChecksum)
 
 	return reconcile.Result{RequeueAfter: r.Config.SyncPeriod.Duration}, r.Client.Patch(ctx, node, patch)
+}
+
+func (r *Reconciler) ReconcileContainerdConfig(log logr.Logger, containerdConfig *extensionsv1alpha1.ContainerdConfig) error {
+	if containerdConfig == nil {
+		return nil
+	}
+
+	log.Info("Applying containerd configuration")
+
+	for _, registryConfig := range containerdConfig.Registries {
+		u, err := url.Parse(registryConfig.Server)
+		if err != nil {
+			return fmt.Errorf("unable to parse registry server url: %w", err)
+		}
+
+		baseDir := path.Join(extensionsv1alpha1.ContainerDCertsDir, u.Host)
+		err = r.FS.MkdirAll(baseDir, defaultDirPermissions)
+		if err != nil {
+			return fmt.Errorf("unable to ensure registry config base directory: %w", err)
+		}
+
+		f, err := r.FS.OpenFile(path.Join(baseDir, "hosts.toml"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("unable to open hosts.toml: %w", err)
+		}
+
+		err = func() error {
+			defer f.Close()
+
+			content := map[string]any{
+				"server": registryConfig.Server,
+			}
+
+			for _, host := range registryConfig.Hosts {
+				type hostConfig struct {
+					Capabilities []string `toml:"capabilities,omitempty"`
+					CaCerts      []string `toml:"ca,omitempty"`
+				}
+
+				h := hostConfig{
+					Capabilities: []string{"pull", "resolve"},
+				}
+
+				if len(host.Capabilities) > 0 {
+					h.Capabilities = host.Capabilities
+				}
+				if len(host.CACerts) > 0 {
+					h.CaCerts = host.CACerts
+				}
+
+				content[fmt.Sprintf("host.%q", host.URL)] = h
+			}
+
+			err = toml.NewEncoder(f).Encode(content)
+			if err != nil {
+				return fmt.Errorf("unable to encode hosts.toml: %w", err)
+			}
+
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *Reconciler) getNode(ctx context.Context) (*corev1.Node, error) {

@@ -281,7 +281,7 @@ type RegistryConfig struct {
 
 // RegistryHost contains configuration values for a registry host.
 type RegistryHost struct {
-	// URL is the endpoint address of the registry mirror.
+	// URL is the endpoint address of the registry host.
 	URL string `json:"url"`
 	// Capabilities determine what operations a host is
 	// capable of performing. Defaults to
@@ -298,10 +298,13 @@ type CRIName string
 const (
 	// CRINameContainerD is a constant for ContainerD CRI name
 	CRINameContainerD CRIName = "containerd"
-)
 
-// ContainerDRuntimeContainersBinFolder is the folder where Container Runtime binaries should be saved for ContainerD usage
-const ContainerDRuntimeContainersBinFolder = "/var/bin/containerruntimes"
+	// ContainerDRuntimeContainersBinFolder is the folder where Container Runtime binaries should be saved for ContainerD usage
+	ContainerDRuntimeContainersBinFolder = "/var/bin/containerruntimes"
+
+	// ContainerDCertsDir is the certs directory of containerd.
+	ContainerDCertsDir = "/etc/containerd/certs.d"
+)
 
 // FileCodecID is the id of a FileCodec for cloud-init scripts.
 type FileCodecID string

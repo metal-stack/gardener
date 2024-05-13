@@ -100,7 +100,7 @@ spec:
                                     type: array
                                   url:
                                     description: URL is the endpoint address of the
-                                      registry mirror.
+                                      registry host.
                                     type: string
                                 required:
                                 - url

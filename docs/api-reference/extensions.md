@@ -4040,7 +4040,7 @@ string
 </em>
 </td>
 <td>
-<p>URL is the endpoint address of the registry mirror.</p>
+<p>URL is the endpoint address of the registry host.</p>
 </td>
 </tr>
 <tr>

@@ -521,6 +521,7 @@ func (o *operatingSystemConfig) newDeployer(osc *extensionsv1alpha1.OperatingSys
 		clusterDNSAddress:       o.values.ClusterDNSAddress,
 		clusterDomain:           o.values.ClusterDomain,
 		criName:                 criName,
+		criCgroupDriver:         extensionsv1alpha1.CRICgroupDriverSystemd,
 		images:                  images,
 		kubeletCABundle:         kubeletCASecret.Data[secretsutils.DataKeyCertificateBundle],
 		kubeletConfigParameters: kubeletConfigParameters,
@@ -584,6 +585,7 @@ type deployer struct {
 	clusterDNSAddress       string
 	clusterDomain           string
 	criName                 extensionsv1alpha1.CRIName
+	criCgroupDriver         extensionsv1alpha1.CRICgroupDriverName
 	images                  map[string]*imagevectorutils.Image
 	kubeletCABundle         []byte
 	kubeletConfigParameters components.ConfigurableKubeletConfigParameters
@@ -619,6 +621,7 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 		ClusterDNSAddress:       d.clusterDNSAddress,
 		ClusterDomain:           d.clusterDomain,
 		CRIName:                 d.criName,
+		CRICgroupDriverName:     d.criCgroupDriver,
 		Images:                  d.images,
 		NodeLabels:              gardenerutils.NodeLabelsForWorkerPool(d.worker, d.nodeLocalDNSEnabled),
 		KubeletCABundle:         d.kubeletCABundle,
@@ -685,7 +688,8 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 
 		if d.worker.CRI != nil {
 			d.osc.Spec.CRIConfig = &extensionsv1alpha1.CRIConfig{
-				Name: extensionsv1alpha1.CRIName(d.worker.CRI.Name),
+				Name:            extensionsv1alpha1.CRIName(d.worker.CRI.Name),
+				CRICgroupDriver: d.criCgroupDriver,
 			}
 		}
 

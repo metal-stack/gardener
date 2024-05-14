@@ -26,6 +26,7 @@ type Context struct {
 	ClusterDNSAddress       string
 	ClusterDomain           string
 	CRIName                 extensionsv1alpha1.CRIName
+	CRICgroupDriverName     extensionsv1alpha1.CRICgroupDriverName
 	Images                  map[string]*imagevector.Image
 	NodeLabels              map[string]string
 	KubeletCABundle         []byte

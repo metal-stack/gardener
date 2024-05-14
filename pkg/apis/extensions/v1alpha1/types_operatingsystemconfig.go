@@ -286,8 +286,11 @@ type ContainerdConfig struct {
 
 // RegistryConfig contains registry configuration options.
 type RegistryConfig struct {
+	// Upstream is the upstream name of the registry.
+	Upstream string `json:"upstream"`
 	// Server is the registry server.
-	Server string `json:"server,omitempty"`
+	// +optional
+	Server *string `json:"server,omitempty"`
 	// Hosts are the registry hosts.
 	Hosts []RegistryHost `json:"hosts,omitempty"`
 }

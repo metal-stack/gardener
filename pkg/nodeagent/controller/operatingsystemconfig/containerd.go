@@ -3,16 +3,17 @@ package operatingsystemconfig
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
 
-	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
-	toml "github.com/pelletier/go-toml"
+	"github.com/pelletier/go-toml"
+
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 )
 
+// ReconcileContainerdConfig sets required values of the given containerd configuration.
 func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Logger, criConfig *extensionsv1alpha1.CRIConfig) error {
 	if criConfig == nil {
 		return nil
@@ -65,6 +66,7 @@ func (r *Reconciler) ensureContainerdDefaultConfig(ctx context.Context) error {
 	return r.FS.WriteFile(extensionsv1alpha1.ContainerDConfigFile, output, 0644)
 }
 
+// EnsureContainerdCgroupDriver sets the configuration for the cgroup driver.
 func (r *Reconciler) EnsureContainerdCgroupDriver(criConfig *extensionsv1alpha1.CRIConfig) error {
 	config, err := r.FS.ReadFile(extensionsv1alpha1.ContainerDConfigFile)
 	if err != nil {
@@ -104,16 +106,11 @@ func (r *Reconciler) EnsureContainerdCgroupDriver(criConfig *extensionsv1alpha1.
 	return err
 }
 
+// EnsureContainerdRegistries configures containerd to use the desired image registries.
 func (r *Reconciler) EnsureContainerdRegistries(registries []extensionsv1alpha1.RegistryConfig) error {
 	for _, registryConfig := range registries {
-		u, err := url.Parse(registryConfig.Server)
-		if err != nil {
-			return fmt.Errorf("unable to parse registry server url: %w", err)
-		}
-
-		baseDir := path.Join(extensionsv1alpha1.ContainerDCertsDir, u.Host)
-		err = r.FS.MkdirAll(baseDir, defaultDirPermissions)
-		if err != nil {
+		baseDir := path.Join(extensionsv1alpha1.ContainerDCertsDir, registryConfig.Upstream)
+		if err := r.FS.MkdirAll(baseDir, defaultDirPermissions); err != nil {
 			return fmt.Errorf("unable to ensure registry config base directory: %w", err)
 		}
 
@@ -134,7 +131,7 @@ func (r *Reconciler) EnsureContainerdRegistries(registries []extensionsv1alpha1.
 				}
 
 				config struct {
-					Server string                `toml:"server" comment:"managed by gardener-node-agent"`
+					Server *string               `toml:"server,omitempty" comment:"managed by gardener-node-agent"`
 					Host   map[string]hostConfig `toml:"host,omitempty"`
 				}
 			)

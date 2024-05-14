@@ -105,14 +105,23 @@ spec:
                             server:
                               description: Server is the registry server.
                               type: string
+                            upstream:
+                              description: Upstream is the upstream name of the registry.
+                              type: string
+                          required:
+                          - upstream
                           type: object
                         type: array
                     type: object
+                  criCgroupDriver:
+                    description: CRICgroupDriver configures the CRI's cgroup driver
+                    type: string
                   name:
                     description: Name is a mandatory string containing the name of
                       the CRI library. Supported values are `containerd`.
                     type: string
                 required:
+                - criCgroupDriver
                 - name
                 type: object
               files:

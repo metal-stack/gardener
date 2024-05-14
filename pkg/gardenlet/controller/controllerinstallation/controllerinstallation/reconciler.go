@@ -49,6 +49,7 @@ import (
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
+	"github.com/gardener/gardener/pkg/utils/oci"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 )
 
@@ -63,6 +64,7 @@ type Reconciler struct {
 	GardenClient          client.Client
 	GardenConfig          *rest.Config
 	SeedClientSet         kubernetes.Interface
+	HelmRegistry          oci.Interface
 	Config                config.GardenletConfiguration
 	Clock                 clock.Clock
 	Identity              *gardencorev1beta1.Gardener
@@ -241,7 +243,17 @@ func (r *Reconciler) reconcile(
 		},
 	}
 
-	release, err := r.SeedClientSet.ChartRenderer().RenderArchive(helmDeployment.RawChart, controllerRegistration.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
+	archive := helmDeployment.RawChart
+	if len(archive) == 0 {
+		var err error
+		archive, err = r.HelmRegistry.Pull(seedCtx, helmDeployment.OCIRepository)
+		if err != nil {
+			conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "OCIChartCannotBePulled", fmt.Sprintf("chart pulling process failed: %+v", err))
+			return reconcile.Result{}, err
+		}
+	}
+
+	release, err := r.SeedClientSet.ChartRenderer().RenderArchive(archive, controllerRegistration.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
 	if err != nil {
 		conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartCannotBeRendered", fmt.Sprintf("chart rendering process failed: %+v", err))
 		return reconcile.Result{}, err

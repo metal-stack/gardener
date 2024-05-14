@@ -521,7 +521,7 @@ func (o *operatingSystemConfig) newDeployer(osc *extensionsv1alpha1.OperatingSys
 		clusterDNSAddress:       o.values.ClusterDNSAddress,
 		clusterDomain:           o.values.ClusterDomain,
 		criName:                 criName,
-		criCgroupDriver:         extensionsv1alpha1.CRICgroupDriverSystemd,
+		criCgroupDriver:         extensionsv1alpha1.CRICgroupDriverCgroupfs,
 		images:                  images,
 		kubeletCABundle:         kubeletCASecret.Data[secretsutils.DataKeyCertificateBundle],
 		kubeletConfigParameters: kubeletConfigParameters,

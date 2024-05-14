@@ -21,12 +21,17 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 
 	log.Info("Applying containerd configuration")
 
-	err := r.ensureContainerdDefaultConfig(ctx)
+	err := r.ensureContainerdConfigDirectories()
 	if err != nil {
 		return err
 	}
 
-	err = r.EnsureContainerdCgroupDriver(criConfig)
+	err = r.ensureContainerdDefaultConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = r.EnsureContainerdConfiguration(criConfig)
 	if err != nil {
 		return err
 	}
@@ -43,12 +48,22 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 	return nil
 }
 
-func (r *Reconciler) ensureContainerdDefaultConfig(ctx context.Context) error {
-	err := r.FS.MkdirAll(extensionsv1alpha1.ContainerDConfigDir, defaultDirPermissions)
-	if err != nil {
-		return fmt.Errorf("unable to ensure containerd config directory: %w", err)
+func (r *Reconciler) ensureContainerdConfigDirectories() error {
+	for _, dir := range []string{
+		extensionsv1alpha1.ContainerDBaseDir,
+		extensionsv1alpha1.ContainerDConfigDir,
+		extensionsv1alpha1.ContainerDCertsDir,
+	} {
+		err := r.FS.MkdirAll(dir, defaultDirPermissions)
+		if err != nil {
+			return fmt.Errorf("unable to ensure containerd config directory %q: %w", dir, err)
+		}
 	}
 
+	return nil
+}
+
+func (r *Reconciler) ensureContainerdDefaultConfig(ctx context.Context) error {
 	exists, err := r.fileExists(extensionsv1alpha1.ContainerDConfigFile)
 	if err != nil {
 		return err
@@ -66,8 +81,8 @@ func (r *Reconciler) ensureContainerdDefaultConfig(ctx context.Context) error {
 	return r.FS.WriteFile(extensionsv1alpha1.ContainerDConfigFile, output, 0644)
 }
 
-// EnsureContainerdCgroupDriver sets the configuration for the cgroup driver.
-func (r *Reconciler) EnsureContainerdCgroupDriver(criConfig *extensionsv1alpha1.CRIConfig) error {
+// EnsureContainerdConfiguration sets the configuration for the containerd.
+func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1.CRIConfig) error {
 	config, err := r.FS.ReadFile(extensionsv1alpha1.ContainerDConfigFile)
 	if err != nil {
 		return fmt.Errorf("unable to read containerd config.toml: %w", err)
@@ -80,14 +95,44 @@ func (r *Reconciler) EnsureContainerdCgroupDriver(criConfig *extensionsv1alpha1.
 		return fmt.Errorf("unable to decode containerd default config: %w", err)
 	}
 
-	systemdDriverEnabled := false
-	if criConfig.CRICgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd {
-		systemdDriverEnabled = true
-	}
+	for _, patch := range []struct {
+		name    string
+		path    []string
+		patchFn func(any) any
+	}{
+		{
+			name: "cgroup driver",
+			path: []string{"plugins", "io.containerd.grpc.v1.cri", "containerd", "runtimes", "runc", "options", "SystemdCgroup"},
+			patchFn: func(_ any) any {
+				return criConfig.CRICgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd
+			},
+		},
+		{
+			name: "registry config path",
+			path: []string{"plugins", "io.containerd.grpc.v1.cri", "registry", "config_path"},
+			patchFn: func(_ any) any {
+				return extensionsv1alpha1.ContainerDCertsDir
+			},
+		},
+		{
+			name: "imports paths",
+			path: []string{"imports"},
+			patchFn: func(value any) any {
+				importPath := path.Join(extensionsv1alpha1.ContainerDConfigDir, "*.toml")
 
-	patched, err := Traverse(content, systemdDriverEnabled, "plugins", "io.containerd.grpc.v1.cri", "containerd", "runtimes", "runc", "options", "SystemdCgroup")
-	if err != nil {
-		return fmt.Errorf("unable patching toml content: %w", err)
+				imports, ok := value.([]any)
+				if !ok {
+					return []string{importPath}
+				}
+
+				return append(imports, importPath)
+			},
+		},
+	} {
+		content, err = Traverse(content, patch.patchFn, patch.path...)
+		if err != nil {
+			return fmt.Errorf("unable setting %s in containerd config.toml: %w", patch.name, err)
+		}
 	}
 
 	f, err := r.FS.OpenFile(extensionsv1alpha1.ContainerDConfigFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -98,7 +143,7 @@ func (r *Reconciler) EnsureContainerdCgroupDriver(criConfig *extensionsv1alpha1.
 		err = f.Close()
 	}()
 
-	err = toml.NewEncoder(f).Encode(patched)
+	err = toml.NewEncoder(f).Encode(content)
 	if err != nil {
 		return fmt.Errorf("unable to encode hosts.toml: %w", err)
 	}
@@ -169,9 +214,12 @@ func (r *Reconciler) EnsureContainerdRegistries(registries []extensionsv1alpha1.
 	return nil
 }
 
-func Traverse(m map[string]any, value any, keys ...string) (map[string]any, error) {
+func Traverse(m map[string]any, patchFn func(value any) any, keys ...string) (map[string]any, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("at least one key for patching is required")
+	}
+	if patchFn == nil {
+		return nil, fmt.Errorf("patchFn must not be nil")
 	}
 
 	if m == nil {
@@ -181,7 +229,8 @@ func Traverse(m map[string]any, value any, keys ...string) (map[string]any, erro
 	key := keys[0]
 
 	if len(keys) == 1 {
-		m[key] = value
+		value := m[key]
+		m[key] = patchFn(value)
 		return m, nil
 	}
 
@@ -196,10 +245,10 @@ func Traverse(m map[string]any, value any, keys ...string) (map[string]any, erro
 	}
 
 	var err error
-	m[key], err = Traverse(childMap, value, keys[1:]...)
+	m[key], err = Traverse(childMap, patchFn, keys[1:]...)
 	if err != nil {
 		return nil, err
 	}
 
-	return m, err
+	return m, nil
 }

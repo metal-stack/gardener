@@ -78,14 +78,14 @@ server = "https://registry-1.docker.io"
 			assertFileOnDisk(fakeFS, "/etc/containerd/certs.d/docker.io/hosts.toml", expected, 0644)
 		})
 
-		It("should ensure the containerd cgroup configuration", func() {
+		It("should ensure the containerd configuration", func() {
 			criConfig = &extensionsv1alpha1.CRIConfig{
 				CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,
 			}
 
-			sampleContent := `
+			originalContent := `
 disabled_plugins = []
-imports = []
+imports = ["/an/existing/path/*.toml"]
 required_plugins = []
 root = "/var/lib/containerd"
 state = "/run/containerd"
@@ -127,7 +127,7 @@ version = 2
             SystemdCgroup = false
 `
 			expected := `disabled_plugins = []
-imports = []
+imports = ["/an/existing/path/*.toml", "/etc/containerd/conf.d/*.toml"]
 required_plugins = []
 root = "/var/lib/containerd"
 state = "/run/containerd"
@@ -167,10 +167,13 @@ version = 2
 
           [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
             SystemdCgroup = true
+
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
 `
 
-			Expect(fakeFS.WriteFile(extensionsv1alpha1.ContainerDConfigFile, []byte(sampleContent), 0644)).To(Succeed())
-			Expect(reconciler.EnsureContainerdCgroupDriver(criConfig)).To(Succeed())
+			Expect(fakeFS.WriteFile(extensionsv1alpha1.ContainerDConfigFile, []byte(originalContent), 0644)).To(Succeed())
+			Expect(reconciler.EnsureContainerdConfiguration(criConfig)).To(Succeed())
 			assertFileOnDisk(fakeFS, extensionsv1alpha1.ContainerDConfigFile, expected, 0644)
 		})
 	})
@@ -194,7 +197,7 @@ version = 2
 				}
 			)
 
-			got, err := operatingsystemconfig.Traverse(m, 2, "a", "b", "c")
+			got, err := operatingsystemconfig.Traverse(m, func(value any) any { return 2 }, "a", "b", "c")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(got).To(Equal(want))
 		})
@@ -211,7 +214,7 @@ version = 2
 				}
 			)
 
-			got, err := operatingsystemconfig.Traverse(m, true, "a", "b", "c")
+			got, err := operatingsystemconfig.Traverse(m, func(value any) any { return true }, "a", "b", "c")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(got).To(Equal(want))
 		})

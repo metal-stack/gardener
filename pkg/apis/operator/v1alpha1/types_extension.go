@@ -94,4 +94,6 @@ type ExtensionStatus struct {
 const (
 	// GardenConfigReconciled is a constant for a condition type indicating the extension resources in the garden cluster have reconciled and are available.
 	GardenConfigReconciled gardencorev1beta1.ConditionType = "GardenConfigReconciled"
+	// RuntimeConfigReconciled a constant for a condition type indicating the extension resources in the runtime cluster have reconciled and are available.
+	RuntimeConfigReconciled gardencorev1beta1.ConditionType = "RuntimeConfigReconciled"
 )

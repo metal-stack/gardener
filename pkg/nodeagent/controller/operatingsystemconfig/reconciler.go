@@ -156,8 +156,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("failed removing bootstrap token file %q: %w", nodeagentv1alpha1.BootstrapTokenFilePath, err)
 	}
 
-	if osc.Spec.CRIConfig != nil && osc.Spec.CRIConfig.Name == extensionsv1alpha1.CRINameContainerD {
-		err = r.ReconcileContainerdConfig(ctx, log, osc.Spec.CRIConfig)
+	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
+		err = r.ReconcileContainerdConfig(log, osc.Spec.CRIConfig)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
 		}

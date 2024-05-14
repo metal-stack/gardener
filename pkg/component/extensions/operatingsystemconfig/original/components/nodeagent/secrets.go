@@ -35,8 +35,9 @@ func OperatingSystemConfigSecret(
 	// prevent undesired changes of the computed checksum of this object.
 	operatingSystemConfig := &extensionsv1alpha1.OperatingSystemConfig{
 		Spec: extensionsv1alpha1.OperatingSystemConfigSpec{
-			Units: osc.Spec.Units,
-			Files: osc.Spec.Files,
+			CRIConfig: osc.Spec.CRIConfig,
+			Units:     osc.Spec.Units,
+			Files:     osc.Spec.Files,
 		},
 		Status: extensionsv1alpha1.OperatingSystemConfigStatus{
 			ExtensionUnits: osc.Status.ExtensionUnits,

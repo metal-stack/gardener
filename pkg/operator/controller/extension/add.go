@@ -14,6 +14,7 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
 	"github.com/gardener/gardener/pkg/operator/apis/config"
 	"github.com/gardener/gardener/pkg/operator/controller/extension/gardenerconfig"
+	"github.com/gardener/gardener/pkg/operator/controller/extension/runtimeconfig"
 )
 
 // AddToManager adds all Garden controllers to the given manager.
@@ -29,6 +30,12 @@ func AddToManager(
 	}
 
 	if err := (&gardenerconfig.Reconciler{
+		Config:          *cfg,
+		GardenClientMap: gardenClientMap,
+	}).AddToManager(mgr); err != nil {
+		return fmt.Errorf("failed adding Garden controller: %w", err)
+	}
+	if err := (&runtimeconfig.Reconciler{
 		Config:          *cfg,
 		GardenClientMap: gardenClientMap,
 	}).AddToManager(mgr); err != nil {

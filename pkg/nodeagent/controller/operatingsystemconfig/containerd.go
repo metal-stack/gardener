@@ -129,6 +129,17 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 					return []string{importPath}
 				}
 
+				for _, imp := range imports {
+					path, ok := imp.(string)
+					if !ok {
+						continue
+					}
+
+					if path == importPath {
+						return value
+					}
+				}
+
 				return append(imports, importPath)
 			},
 		},

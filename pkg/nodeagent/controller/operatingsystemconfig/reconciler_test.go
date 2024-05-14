@@ -60,12 +60,12 @@ var _ = Describe("Reconciler", func() {
 
 			expected := `server = "https://registry-1.docker.io"
 
-["host.\"https://docker-mirror.internal\""]
-  capabilities = ["pull", "resolve"]
-  ca = ["docker-mirror.crt"]
-
-["host.\"https://public-mirror.example.com\""]
-  capabilities = ["pull"]
+[host]
+  [host."https://docker-mirror.internal"]
+    capabilities = ["pull", "resolve"]
+    ca = ["docker-mirror.crt"]
+  [host."https://public-mirror.example.com"]
+    capabilities = ["pull"]
 `
 
 			Expect(reconciler.ReconcileContainerdConfig(log, containerdConfig)).To(Succeed())

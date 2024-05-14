@@ -200,15 +200,24 @@ func (r *Reconciler) ReconcileContainerdConfig(log logr.Logger, containerdConfig
 		err = func() error {
 			defer f.Close()
 
-			content := map[string]any{
-				"server": registryConfig.Server,
-			}
-
-			for _, host := range registryConfig.Hosts {
-				type hostConfig struct {
+			type (
+				hostConfig struct {
 					Capabilities []string `toml:"capabilities,omitempty"`
 					CaCerts      []string `toml:"ca,omitempty"`
 				}
+
+				config struct {
+					Server string                `toml:"server"`
+					Host   map[string]hostConfig `toml:"host"`
+				}
+			)
+
+			content := config{
+				Server: registryConfig.Server,
+				Host:   map[string]hostConfig{},
+			}
+
+			for _, host := range registryConfig.Hosts {
 
 				h := hostConfig{
 					Capabilities: []string{"pull", "resolve"},
@@ -221,7 +230,7 @@ func (r *Reconciler) ReconcileContainerdConfig(log logr.Logger, containerdConfig
 					h.CaCerts = host.CACerts
 				}
 
-				content[fmt.Sprintf("host.%q", host.URL)] = h
+				content.Host[host.URL] = h
 			}
 
 			err = toml.NewEncoder(f).Encode(content)

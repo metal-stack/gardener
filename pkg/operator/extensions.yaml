@@ -1,0 +1,141 @@
+# This file contains configuration for well-known Gardener extensions.
+# Only extensions that are open-source and actively maintained should be added here.
+# The motivation for this is to allow users to easily create `operator.gardener.cloud/v1alpha1.Extension` resources
+# without the need to specify the full Helm chart, image version, values, etc.
+# Gardener Operator takes care to deploy Controller{Registration,Deployment} resources to the virtual cluster with the
+# proper specification.
+extensions:
+- name: provider-local
+  resources:
+  - kind: BackupBucket
+    type: local
+  - kind: BackupEntry
+    type: local
+  - kind: DNSRecord
+    type: local
+  - kind: ControlPlane
+    type: local
+  - kind: Infrastructure
+    type: local
+  - kind: OperatingSystemConfig
+    type: local
+  - kind: Worker
+    type: local
+  - kind: Extension
+    type: local-ext-seed
+    lifecycle:
+      reconcile: BeforeKubeAPIServer
+      delete: AfterKubeAPIServer
+      migrate: AfterKubeAPIServer
+    workerlessSupported: true
+  - kind: Extension
+    type: local-ext-shoot
+    workerlessSupported: true
+  - kind: Extension
+    type: local-ext-shoot-after-worker
+    lifecycle:
+      reconcile: AfterWorker
+  deployment:
+    extension:
+      annotations:
+        security.gardener.cloud/pod-security-enforce: privileged
+      helm:
+        rawChart: H4sIAAAAAAAAA+09a2/bxrL9rF+xUO5F2qKkRFmSUwG5gGO7rXETR7Dd9FycHgQUuZa2pkhePuSoaf/7mdkHuXxIlORUaU+5CWBxH7PD3dnZee1ybkcu9Wlk0A8J9WMW+EYYBSvmQpYXOLbX++LJqQ/pdDTifyGV//Lf1snQGowG4zHmW+PB6fALMnp6180pjRM7IuSLKAiSbfWayv+iad44/+cLO0rMtb30Du0DJ3g8HG6c/8HJsDj/g/5g0P+C9D/li25Kf/P5t0P2jkY47xOysjp2GGaPXcvsdzsujZ2IhQnPOiM/UG9JHCQJch9EJFlQ8r0kIfIa6YVMJfmQjKI6vr2kE9JIap2V6rpvQt+dzz02f4fUvP7dwDHnwVP6aFj/ltW3Svz/9GRstev/GKnXI7fTi38Y3zGPngfhOmLzRXIHxDAhwIWH5PZsSm4vCSx12+cP9v0985idUOIEy9D211Dg5jzACfwkYrM0CaK40+t1FPzXzAHyosYVVEvYPaMRcJPQdhbUGMBSh3rzYDJHEAjaNHvi/8J2Hnoq2+DAA88D2ozonMUJ5ALFmvGCGEYYuEZMnTRiydqgPnAnh74MI7aCN5tTlxTJmphk1TfhX94X/WAvQ4/2SvQvVkhvZse0twkB3B3JK8A1DV+lzgNNJqITkXUJjdYy5+L69oY6QeTK53MBcerZPpVZV/59ZAPo1EnSSGW+DXEImD+/XccJXUKzezaXZT8F0QOMp+ChOOJT6NaeU8mnqW/PPBoTfYDjNAwDycNlJsDm7ByQi6iTkPxdSeFdO6EOvWXSf+3UzP+B2kIPaCY+WBPYW/4HznM6aOX/Y6R95v/9gnrAhmIzCffSBZrk//FoUJr/wdg6bff/Y6SPHw3i0nvmU9JFMb1LjN9/7zSL6tiOwsaPtTs6EM+eUS82QZEwH+hagOMP6YxGPgU6MlnQw64KMDaAWNleKnH6+JEw3/FSN8PUJLLhFkSqbcsIIpQJ2VBD9s97qr4F84F4fIfy5uYN9SgICeY1ILcVM5BUXBZHKVeqZqk7p4nUfAS2YeAxZ90DdUwH8cfM/z7r3+FCx9IODbYEAWAFUkIQGQHg/ghCF91oI2ha/8PxSWn9nw5HJ+36P0ZCCmP3xHyHhA5EjRP7jk/sWzWvgvYLZoIH5rsTIoTQN3bYWdLEdu3EnnQIEcp+/WqtJxzZKAbBsmYp8WzEgRCxMCc1yxnB/waZqF2QIdZW6PAe4/dFKp2Q3xDI1rcuglMr8Q9biJ8p7bf+I+r6+8uB+8t/1ungtJX/jpEOmf9sH9jRKtzA/0HWL8//cDRq5b+jpBL/l1NsCpuBK6W3PXm/BFJk642EZqhmCtg5PN8zjyKzJpDMybf90Qn5yB8wrRh95FbmyLc9LZ9AZhihwScJvvyKvHxJnidO+Dwr/z37RaMI7VTqcUFtL1kUIMGes6Ru6jyQUVwDIKK2u86e2JIbVRygqWDZ+9rETSeCN8wqAEowXAuaxmTyrTU6yXsO4iQudKxtT7klJjZjGq2YQ01scDWF7YiwGMRIg/nziMbxHBbqo702C5lmvHJM2C5jGClTiO879/Nr4NP+rh0ZRv+pfVm792U9ta/B7n0NtvSVU8N9ED0CmYMs0qOJ04OmgbfC7u+LNLW0P7yHXCeNIhQwLGCCNdActI6Sk7zIC4JQe5hrVOgFtqsV2e7M9lAz6eQgK8vn2MQfUSFYQXlY6Aa5BNoY6Qfypfn1Vz+bcth/FgP9M0wadbMHxUh+hukIUpf4c+Z/yGYqn2tZsTpxxPbjRxoRO02CmrfauEb/tLP7FC3xoP2fT7GxsxjQpP+NxmX/77h/2up/R0l/4P5vCDo5VAwgsE79IOFOh3jCSb2Lay6NHEBUwRFMoMfmPjTrTkg3iVLazWQIZ2H7c7qkGTeCGs8glzoPQZpwf4cbODEJfNiCH0kSkDSGOoskCeNJrzdnySKdwagse6rD/MfMC2a9pY2MBZ2kcS+NQY1Uq4MPAB8kc+l2j2DJOSwdsv5dGnrBegnMbTcFoGH9D09PyvafEWgF7fo/Rtpz/dthGPcyJnCREUKBCygzDS5ZaFBWCJ6sIMQhdRB6BN0zx44nxOJPK4atfgDRLYjWr9mSoRMbSmLqcduOwGhpJ87itYZiBUnu6qTztShGaQKkix9DeD2qWsAef5tGc0B7MPrvPO9H317ZzMOxE0gRkqxD+H2jA4F8tagkStrgcXzKjI8LDMi04nSZq98FK9uXYcRA2vgv806CNl/ZMZ3aINJ1N2ju3a+41Sxe2IPRGCALIxuXMQrDUxkgGCI5BbwQ5KhlkPrJrZCtzxwHn+6CBwoUc297sZIBUTizGcxxBtogdjTXOjIIZ5raM5e1FP5KJdSEThsnQTqo1+bDC26Yz9+X/52sLNOC/8Vm09TzptzUPiFX99dBMoXtBWk5k7TYCggyjqdRMKM5jiAJwhynEb1bQINF4MFKGGmluHl8TxO9AUiVMBET0hNCdrEEpOYJedF/0S9kxzDfuFZ+uLubagXMZwmzvQvq2etbCmPlAvmP9aYhjVjgZmWWXhanDmyesYa4pZUmbElhV8ya5i9VXrY55oW5y+Z3yt8J9Y2SmD8hOgAidHQn8Cbkx4vp/pAM0Otrod2db4Nm1UCDNRgxpx43HRoqPWxHqjjZkSqKipQaWiAK64W1C1F8uim3tPeUopaOsYdMNS6+w5Iugd1C09P+G6aVRPT/YUcp13bCFBHsL2thFECoYB4MkcGAJK2F7XnB41TF9lzGsDvYIkJRZze8Pzu0Z8yDRUNLmNiuW8wwyPXl3ftXV9cX728vb95dnV8Wit0oCMsNAI/CG9vuW99b34CogPFUMQ/VmRAUSXOjVeClS/oGOWRh7XAOOhX0oLG8Cp0KFm4IMDWdl7rbCLiXSecl+Lpyt2M3fuDS28Imi6noKw2AumALTD90FCAUvBLFgM+8R3ut3lb0qm0SjtI29Alw6b2desmbAKX64UAnegbjXphugzzQ9YRU9g9MYhHWFNVzvc3TsD+eG/QllQLuIba90pxumai91YxD5P9MaPs09v/+wCrHfwxHw1b+P0o6VP/PPLM1+v/ukvyfVSv++6SD1j9NHoPoQYSp7MADGta/1a/4/0Yja9Su/2MkfXHLeQU9VelR+XIXRWK3rlnyXCAzkmCzMa+i6WdqPOWWe/xlkCQQO6eR168KFjUafFXeUDia+/IkKRSgPL1jxxXtWFOMDCnKaxpMVa/YWkkoRhV8anDR5q9kHoWJQTVYTBN1OTycybt1SOXIX/JZaLnw3ywdwv+VD3XXM4FN/N8alf0/wwFktfz/COlQ+U/a+j6L3VeYVK9Bn0J7TsXAW+o6Y8aGxELZjATPlRy3ypSBLOY0KdmffNnphJz0RZ6CmrpboSrz1o5Qn5HUd4IlmtbRKZWd2+FnbmJ+bCf3dOf+GMJ8sv0YEwtX416Ie4d+mqrk0eEIsPA7e8k8aTd5Bi96NV2N859DvdZa6fFT0KJpdJHa3m1iOw+thP8nT/vw/339fipt5//WycnpaYn/n5yM2vOfR0l7O/e2hXd3dgvkRp5QCDrnzvsbZXAWgCo+sAbff+b61yK194sYx04WbL4wpA8PrcZr5cPf2LvYjFAkolGNZ1ILQ5OZ52iPFf0d5LJseJWxAH2Ag3HHowCqetUfWR/dv4+Xsvl8yWafpXiBbOYL74RHlNV7SUePFHFunQiWgD/XG+URYKhIxlgjJ6/6SmJVPC+yzjzi9JkyAis3E+IZBkzs2PqpYqANtqwLGMVehGzR1WhKgkPhAd6gu3koyh7drbqixMKAkRGErWuO++uaO7RAlmPIGlubbl6HgQHNjHgBfDo20BaQo49uQmM4PKlCLtE8aNlimQk2BaLX/+HJ7mpxttxebCDAhlWaNdMd6bA2Au7w8uw4vi6aLYQvyfg2iyWMC8726+1cma/XGud7AzMXSfrYy+dlKlV0f3q5cl6mN6v4/pVMGuJxeGNpfzDyQEojQielg361lxuCe/XWZt7ydu07sd4v9gQ0GvGD+Pt3kzVt6kN4+zmj3L8XrXFTP6xwY8D+XRXbN/bG91sjEDcSgMCY7yYbO+BN3qoWZ1mDMuxHfpXB/m8g2jVhHqhLFMRqkq6zvTurBdM8RyJA+YDJEUH8DfAlP9gfvrLm7AgfDx4YLGyClp1PqAWC0fdGfwcw+fGDzXCsHeFYDXAGO8IZVOHM+D0fM371hzRauCzaBEyvLULSL1i0FWTGuw3uzTfQZb0T9KzhGxUFUMOjomRG7cTIRPeXW45g1jUEmqGPQOAJDBK8eSyCSbbwNdHO5O2uZDMZglJhCHQGO/qDcnPviWOptZpulKN09GQ1EdOs5lrKVE3wYE6awYnIo8oWxGIUQTVDTGHQZPF5Xgrywy8gNJLuN91NsGTfdYB+kkUboJREoaJkWehLFhkzFNps10X29HKyUSrdQT5XDcWeV9enKNncZX3L5h4zKVKewC/3mwlgslwf121ta3pGcF4wNzzQbDwdDmS+xjyYGKUmdGFLDrqkrvl9EIE+WGr/Hc/UAfwS43UCOgDqr3RhS8h+ry/PLi5v3l++vjy/u3p7/f767M3l7fSsEPvEL0H4DjSRYvjTPaOee0Pvi7kyXwQcFZxwIlxgwzw0aZsK36s3Z99fvgNk3968f/vu8uanm6u7Cq4T0hOG0vzYd6/2HPi26doY/dkc3/lrsYhrbY20immfoE8tym9zTGJj1OFRUM0DSSsho2JWFV+VZpQcXClyc08mWzbrl2guKlqc1FhmcY9VBTBv8RvxpSpn9Uv3AyhI9ZF+B9L9posTVNKj/Cq0r9XbECZYy65Ez0Ke4CJHfX+HSTkbozuj1D+Lf4zR6NAnz8g1pS5B4ytGuS5ZjIw2Rp+IA3u/TzBkLyZfOvBeCVScrQlNHFdKTwYGGYLiAWp/HJAVswWgFIB/ZWrGGdhQytfDwSOGzWJHvM08CtIQn7gFgdg8qFZdmSaa6C8cE5D/+Gzlcb1455pH0aBqe98juMJCUKu5FPu4F7nsRiy1QYoH3dqh0oYIxwpRbSMpVBg4Pemrd2f62i7nKpfhhZqTt9E5J5jWJbWP/2ffuC+Vmvz/NfGf/XF7/vMo6VPHf+mG3B3dQTXuiJJtt3gHMXYVy6gxcg9iKQZHxcLCDVvAI4PF/3xna/NLaRJWxnrB4jVrKVrokcljIzws+kAjNVImuVuwmDiwD80obisu98xLDzz/zaHjPiHxBfAITIbASYYsTqeLd8FSoUGLHtXR9cy39ORIsE229vo4PBa+Aj7woJ1DY26Epz0GpvUCL1DtWePtVe/dfn9i9SeT3njYaSPP/lxpH/5fc2/dTrtAU/z/6dAqx/8ORuOW/x8jSflynpAv0RtZ56v+iljlK+DyGwrF9jAN3IuMMl5xyvjUQQP7+fIVsyyfyYW2cTprfNdP4ICXAxvTJQjM53hVNugh3f95SSxzMDb60ORcO5pm/m86o3J4zXe6OSn1hQ6+hjG+XDEHR7h4aIpviJ2S93HX2+r2Wf8RiNyHfAii6fz/qF+5/7U/btf/UZJhGIWVzefYTpNFELFfxYXfZVnwXEgkN4FXd/hn4yLfZ/lGqYfSgUEAtVxVNvJPSpTd/53SgVWjqI1Xc3ow7UmqF1C8uJ7W5OhVpTQmHzR3c02O3i5HvPSoVyq6YWvz9Oq1bshtRXpj4TAt/M6LgWPN5DAiJ8e/HovFj0dkhfxXmP1KxbUGT5muzKcelx5rsRLmnqcjuCmapIrf0vbtOXWz3CI+3a+7VeBOAPgzX19EVbh8p9v77Z7Yl8rnG6woK4VcQ1V84JsgfsGlgN+m0XwyEjWbUeYtrCfLTah0u/wPRjTKBZ0RhVBh+exv4nWirSutjYWvH+gVQqYRuFZQ0aOro5BJPHHpsXcPA+ixX9XapCvgQuInaIWR4mVZqJysJaPJ5OLJIjcrzz08Kk8lOO7mjAsPOovAqHTtl14kq9si+KjAGoH90UoGuu2QG4lhz2pUin4JZrGcJTf/0RO3ocEiTBPO1aTtXwxCKmZG9skPRavB5hdus7xUN2CxjMFy9ZNm3ZVVnF2W+tJ2FsynZmyHnH/Uzjm2bAaFt6ngJG2jHoCRgMTqAbaquqCXMvAnbe6vxMz8YXs8dCG9h2oItmAItarSRwM+IOn/AvyLCxKFUysyaO7TKCafW4J7WtpH/t/33JdKDfL/wKrc/z4Yt99/O07a+XDXJ1HhK4beXSJ70SyKgYGeyw8Ycw8yef7Pj13l3O1Ounfn0+43XSzrTnZzEv/+r+f7YcCjiyl1DREQboiTXLEhDagFxMp4FANiviljfhAuyme+DY9jDVA2+4aym0gMNMMJ9NvdckQbcBRAuzBAlYal/nDvgAY82Lu7F6b4lTC+I2WY5jFlMIQMz2xoytpOR1WOcDalePRR7oFXGHiRG6p2s0tpxyEr0R6NcXDbT0nuGJ3xuVlem7R0wP4vpf7dxYAm+/9Jf1T2/1qn7fm/o6Rt+78Skz+rJX+X2yU/9yD+hdM+638V2gd9B7rx/odxef1bp8P2+x9HSaX4MpxiefdDyeXXrRomeiurKznGO2mRmAbuWWaR2P2zUNDtjsxDCUI1eCshTD9nVswTOocWUyrsQCrUISsQp+mef61iQpbMPxPStXYXkLyyEjDFmy5ZRF3S3YyOmcMwRVPC4qxld8uL1LTMHIyZLCnEsCwYu+5UN+ZXTnY3hf5BBWFi1QdQ5IhoP03mQ9T1ymZe7z/5C1p/7dTM/1didg9h/DI18P+T4aDs/+0Px6395yhJHu6laRSE1BDhbWb4MDdduso+dYAkgZbUXiRYcpx/BEHzZBbpZsJlhqSz/artjh58gdcPd55lh6yBufze6ajDMRN0hQad7KzLhOAJFwSgTONYHXgQv1JObGFZkHvdNlBl6oqlj4f8FuLtjK+L+1y309FCkrGS7gHOthv9XKU4DZH5N7fUKbp+t1QU/tstFWrdwVt7zkIBN9SQquCWGiKi+2oKI2UNTjFQ0LTE/QTyTKde0M9LrGKJ1mZQLBlgie7TF8iokwZQtYc0LPyZBd9/tygGvMmPMnT5DckZcW9oq53M3jIAmedSXV9SPew4Ed//2Xg6Wuk3nepRwAn55786pYN9PK9kocpAPCN1Zwfw22rPiPpK5oT/VlH6oZ3GND96ystg5jncGxoGMUv4ctE+kpLb9/Sf+odSZinz3B4H3bvg3IZfuixgRzpUJ0IRcx4Ec4++z8NxRVvDXrrjoWyW2HOYuhMTqEhkrJTsw6/9//DXfiur8lYiigwXABaYptnpFOxtk3yBCsPccHgis9RBKgu/sdLpaHZp+QmC/MAXz0CG/AxaJpx78Ihm2eYbQs25SWJ1f8psTbh1PL+xBFqqDvgNYs8kW87uQFFteWHGtdWNLJJ5d9Q3HCpsPftK9aSjDw6uUFHiKZ5wD6sQWOj3uCPxbYJwXCfKpsm3rYlgHa1w2qY2talNbWpTm9rUpja1qU1talOb2tSmNrXpPyT9G8QeQtsAoAAA
+        values:
+          replicaCount: 1
+          image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local:v0.0.0
+
+- name: provider-aws
+  resources:
+  - kind: BackupBucket
+    type: aws
+  - kind: BackupEntry
+    type: aws
+  - kind: Bastion
+    type: aws
+  - kind: ControlPlane
+    type: aws
+  - kind: DNSRecord
+    type: aws-route53
+  - kind: Infrastructure
+    type: aws
+  - kind: Worker
+    type: aws
+  deployment:
+    admission:
+      helm:
+        rawChart: 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
+        image:
+          repository: europe-docker.pkg.dev/gardener-project/public/gardener/extensions/admission-aws
+          tag: v1.54.1
+        values:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 512Mi
+    extension:
+      annotations:
+        security.gardener.cloud/pod-security-enforce: privileged
+      helm:
+        rawChart: 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
+        values:
+          image:
+            repository: europe-docker.pkg.dev/gardener-project/public/gardener/extensions/provider-aws
+            tag: v1.54.1
+          controllers:
+            backupentry:
+              concurrentSyncs: 100
+            controlplane:
+              concurrentSyncs: 100
+            dnsrecord:
+              concurrentSyncs: 100
+              providerClientBurst: 1
+              providerClientQPS: 0.5
+              providerClientWaitTimeout: 50s
+            healthcheck:
+              concurrentSyncs: 100
+            infrastructure:
+              concurrentSyncs: 100
+            worker:
+              concurrentSyncs: 100
+          resources:
+            requests:
+              cpu: 30m
+              memory: 256Mi
+            limits:
+              memory: 3Gi
+
+# TODO: Add other extensions here following above scheme:
+# https://github.com/gardener/gardener-extension-provider-alicloud
+# https://github.com/gardener/gardener-extension-provider-azure
+# https://github.com/gardener/gardener-extension-provider-gcp
+# https://github.com/gardener/gardener-extension-provider-openstack
+# https://github.com/gardener/gardener-extension-provider-equinix-metal
+# https://github.com/23technologies/gardener-extension-provider-hcloud
+# https://github.com/23technologies/gardener-extension-provider-ionos
+# https://github.com/metal-stack/gardener-extension-provider-metal
+# https://github.com/gardener/gardener-extension-networking-calico
+# https://github.com/gardener/gardener-extension-networking-cilium
+# https://github.com/gardener/gardener-extension-os-gardenlinux
+# https://github.com/gardener/gardener-extension-os-suse-chost
+# https://github.com/gardener/gardener-extension-os-coreos
+# https://github.com/gardener/gardener-extension-os-ubuntu
+# https://github.com/metal-stack/os-metal-extension
+# https://github.com/gardener/gardener-extension-runtime-gvisor
+# https://github.com/23technologies/gardener-extension-runtime-kata
+# https://github.com/gardener/gardener-extension-registry-cache
+# https://github.com/gardener/gardener-extension-shoot-dns-service
+# https://github.com/gardener/gardener-extension-shoot-cert-service
+# https://github.com/gardener/gardener-extension-shoot-oidc-service
+# https://github.com/gardener/gardener-extension-shoot-lakom-service
+# https://github.com/gardener/gardener-extension-shoot-falco-service
+# https://github.com/gardener/gardener-extension-shoot-networking-problemdetector
+# https://github.com/gardener/gardener-extension-shoot-networking-filter
+# https://github.com/gardener/gardener-extension-shoot-rsyslog-relp
+# https://github.com/stackitcloud/gardener-extension-shoot-flux
+# https://github.com/metal-stack/gardener-extension-dns-powerdns
+# https://github.com/metal-stack/gardener-extension-audit
+# https://github.com/metal-stack/gardener-extension-backup-s3
+# https://github.com/stackitcloud/gardener-extension-acl

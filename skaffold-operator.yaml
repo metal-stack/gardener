@@ -148,6 +148,7 @@ build:
             - pkg/gardenlet/apis/config/v1alpha1
             - pkg/healthz
             - pkg/logger
+            - pkg/operator
             - pkg/operator/apis/config
             - pkg/operator/apis/config/v1alpha1
             - pkg/operator/apis/config/validation

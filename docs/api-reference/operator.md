@@ -727,9 +727,7 @@ ExtensionDeploymentSpec
 <td>
 <code>helm</code></br>
 <em>
-<a href="#operator.gardener.cloud/v1alpha1.Helm">
-Helm
-</a>
+github.com/gardener/gardener/pkg/apis/core/v1.HelmControllerDeployment
 </em>
 </td>
 <td>
@@ -1862,61 +1860,6 @@ string
 </td>
 <td>
 <p>Resource is the resource name.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="operator.gardener.cloud/v1alpha1.Helm">Helm
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#operator.gardener.cloud/v1alpha1.DeploymentSpec">DeploymentSpec</a>)
-</p>
-<p>
-<p>Helm is the Helm deployment configuration.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>ociRepository</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>OCIRepository is the configuration of to the OCI repository.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>rawChart</code></br>
-<em>
-[]byte
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>RawChart is the base64-encoded, gzip&rsquo;ed, tar&rsquo;ed Helm chart.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>values</code></br>
-<em>
-k8s.io/apimachinery/pkg/runtime.RawExtension
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Values are the chart values.</p>
 </td>
 </tr>
 </tbody>

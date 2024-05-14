@@ -6,7 +6,6 @@ package gardenerconfig
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -16,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,6 +22,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	gardencorev1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
@@ -73,7 +72,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("error retrieving garden object: %w", err)
 	}
 	if len(gardenList.Items) == 0 {
-		return reconcile.Result{}, fmt.Errorf("error: garden object not found")
+		// return reconcile.Result{}, fmt.Errorf("error: garden object not found")
+		// return nil
+		return reconcile.Result{}, nil
 	}
 
 	garden := &gardenList.Items[0]
@@ -166,35 +167,8 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, gardenClien
 	return conditions, nil
 }
 
-func HelmDeployer(helm *operatorv1alpha1.Helm) (*runtime.RawExtension, error) {
-	var helmDeployment struct {
-		// chart is a Helm chart tarball.
-		Chart []byte `json:"chart,omitempty"`
-		// Values is a map of values for the given chart.
-		Values map[string]interface{} `json:"values,omitempty"`
-	}
-
-	if rawChart := helm.RawChart; rawChart != nil {
-		helmDeployment.Chart = rawChart
-	}
-	if values := helm.Values; values != nil {
-		if err := json.Unmarshal(values.Raw, helm.Values); err != nil {
-			return nil, err
-		}
-	}
-
-	rawHelm, err := json.Marshal(helm)
-	if err != nil {
-		return nil, err
-	}
-
-	return &runtime.RawExtension{
-		Raw: rawHelm,
-	}, nil
-}
-
 func (r *Reconciler) reconcileControllerDeployment(ctx context.Context, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
-	ctrlDeploy := &gardencorev1beta1.ControllerDeployment{
+	ctrlDeploy := &gardencorev1.ControllerDeployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: extension.Name,
 		},
@@ -202,21 +176,7 @@ func (r *Reconciler) reconcileControllerDeployment(ctx context.Context, gardenCl
 
 	deployMutateFn := func() error {
 		ctrlDeploy.Annotations = extension.Spec.Deployment.Extension.Annotations
-		ctrlDeploy.Type = "helm"
-
-		var (
-			rawHelm *runtime.RawExtension
-			err     error
-		)
-		if helm := extension.Spec.Deployment.Extension.Helm; helm.RawChart != nil {
-			rawHelm, err = HelmDeployer(helm)
-			if err != nil {
-				return err
-			}
-
-		}
-
-		ctrlDeploy.ProviderConfig = *rawHelm
+		ctrlDeploy.Helm = extension.Spec.Deployment.Extension.Helm
 		return nil
 	}
 

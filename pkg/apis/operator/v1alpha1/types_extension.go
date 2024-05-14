@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	v1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 )
 
@@ -63,20 +64,7 @@ type Deployment struct {
 // DeploymentSpec is the specification for the deployment of a component.
 type DeploymentSpec struct {
 	// Helm is the Helm deployment configuration.
-	Helm *Helm `json:"helm,omitempty"`
-}
-
-// Helm is the Helm deployment configuration.
-type Helm struct {
-	// OCIRepository is the configuration of to the OCI repository.
-	// +optional
-	OCIRepository string `json:"ociRepository,omitempty"`
-	// RawChart is the base64-encoded, gzip'ed, tar'ed Helm chart.
-	// +optional
-	RawChart []byte `json:"rawChart,omitempty"`
-	// Values are the chart values.
-	// +optional
-	Values *runtime.RawExtension `json:"values,omitempty"`
+	Helm *v1.HelmControllerDeployment `json:"helm,omitempty"`
 }
 
 // ExtensionDeploymentSpec contains the deployment specification for an extension.

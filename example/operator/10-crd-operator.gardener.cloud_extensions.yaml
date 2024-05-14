@@ -58,17 +58,34 @@ spec:
                         description: Helm is the Helm deployment configuration.
                         properties:
                           ociRepository:
-                            description: OCIRepository is the configuration of to
-                              the OCI repository.
-                            type: string
+                            description: OCIRepository defines where to pull the chart.
+                            properties:
+                              digest:
+                                description: |-
+                                  Digest of the image to pull, takes precedence over tag.
+                                  The value should be in the format 'sha256:<HASH>'.
+                                type: string
+                              repository:
+                                description: Repository is a reference to an OCI artifact
+                                  repository.
+                                type: string
+                              tag:
+                                description: Tag is the image tag to pull.
+                                type: string
+                              url:
+                                description: URL is the full artifact URL and takes
+                                  precedence over all other fields.
+                                type: string
+                            required:
+                            - repository
+                            type: object
                           rawChart:
                             description: RawChart is the base64-encoded, gzip'ed,
-                              tar'ed Helm chart.
+                              tar'ed extension controller chart.
                             format: byte
                             type: string
                           values:
                             description: Values are the chart values.
-                            type: object
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
                     type: object
@@ -86,17 +103,34 @@ spec:
                         description: Helm is the Helm deployment configuration.
                         properties:
                           ociRepository:
-                            description: OCIRepository is the configuration of to
-                              the OCI repository.
-                            type: string
+                            description: OCIRepository defines where to pull the chart.
+                            properties:
+                              digest:
+                                description: |-
+                                  Digest of the image to pull, takes precedence over tag.
+                                  The value should be in the format 'sha256:<HASH>'.
+                                type: string
+                              repository:
+                                description: Repository is a reference to an OCI artifact
+                                  repository.
+                                type: string
+                              tag:
+                                description: Tag is the image tag to pull.
+                                type: string
+                              url:
+                                description: URL is the full artifact URL and takes
+                                  precedence over all other fields.
+                                type: string
+                            required:
+                            - repository
+                            type: object
                           rawChart:
                             description: RawChart is the base64-encoded, gzip'ed,
-                              tar'ed Helm chart.
+                              tar'ed extension controller chart.
                             format: byte
                             type: string
                           values:
                             description: Values are the chart values.
-                            type: object
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
                       policy:

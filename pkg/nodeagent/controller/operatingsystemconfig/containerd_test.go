@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io/fs"
 
-	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/afero"
+	"k8s.io/utils/ptr"
+
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig"
 )
 
 var _ = Describe("ContainerdReconciler", func() {
@@ -40,7 +42,8 @@ var _ = Describe("ContainerdReconciler", func() {
 				Containerd: &extensionsv1alpha1.ContainerdConfig{
 					Registries: []extensionsv1alpha1.RegistryConfig{
 						{
-							Server: "https://registry-1.docker.io",
+							Upstream: "docker.io",
+							Server:   ptr.To("https://registry-1.docker.io"),
 							Hosts: []extensionsv1alpha1.RegistryHost{
 								{
 									URL:          "https://public-mirror.example.com",
@@ -72,7 +75,7 @@ server = "https://registry-1.docker.io"
 `
 
 			Expect(reconciler.EnsureContainerdRegistries(criConfig.Containerd.Registries)).To(Succeed())
-			assertFileOnDisk(fakeFS, "/etc/containerd/certs.d/registry-1.docker.io/hosts.toml", expected, 0644)
+			assertFileOnDisk(fakeFS, "/etc/containerd/certs.d/docker.io/hosts.toml", expected, 0644)
 		})
 
 		It("should ensure the containerd cgroup configuration", func() {

@@ -2019,6 +2019,15 @@ Kubernetes core/v1.LoadBalancerIngress
 </tr>
 </tbody>
 </table>
+<h3 id="extensions.gardener.cloud/v1alpha1.CRICgroupDriverName">CRICgroupDriverName
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#extensions.gardener.cloud/v1alpha1.CRIConfig">CRIConfig</a>)
+</p>
+<p>
+<p>CRICgroupDriverName is a string denoting the cgroup driver for containerd</p>
+</p>
 <h3 id="extensions.gardener.cloud/v1alpha1.CRIConfig">CRIConfig
 </h3>
 <p>
@@ -2047,6 +2056,19 @@ CRIName
 </td>
 <td>
 <p>Name is a mandatory string containing the name of the CRI library. Supported values are <code>containerd</code>.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>criCgroupDriver</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.CRICgroupDriverName">
+CRICgroupDriverName
+</a>
+</em>
+</td>
+<td>
+<p>CRICgroupDriver configures the CRI&rsquo;s cgroup driver</p>
 </td>
 </tr>
 <tr>
@@ -3991,12 +4013,24 @@ TODO(rfranzke): Remove this field after v1.95 got released.</p>
 <tbody>
 <tr>
 <td>
+<code>upstream</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Upstream is the upstream name of the registry.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>server</code></br>
 <em>
 string
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>Server is the registry server.</p>
 </td>
 </tr>

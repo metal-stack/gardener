@@ -50,8 +50,8 @@ type HelmControllerDeployment struct {
 
 // OCIRepository configures where to pull an OCI Artifact, that could contain for example a Helm Chart.
 type OCIRepository struct {
-	// URL is a reference to an OCI artifact repository.
-	URL string `json:"url" protobuf:"bytes,1,name=url"`
+	// Repository is a reference to an OCI artifact repository.
+	Repository string `json:"repository" protobuf:"bytes,1,name=repository"`
 	// Tag is the image tag to pull.
 	// +optional
 	Tag string `json:"tag,omitempty" protobuf:"bytes,2,opt,name=tag"`
@@ -59,4 +59,7 @@ type OCIRepository struct {
 	// The value should be in the format 'sha256:<HASH>'.
 	// +optional
 	Digest string `json:"digest,omitempty" protobuf:"bytes,3,opt,name=digest"`
+	// URL is the full artifact URL and takes precedence over all other fields.
+	// +optional
+	URL string `json:"url" protobuf:"bytes,4,name=url"`
 }

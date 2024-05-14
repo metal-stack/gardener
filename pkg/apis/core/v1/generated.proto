@@ -53,8 +53,8 @@ message HelmControllerDeployment {
 
 // OCIRepository configures where to pull an OCI Artifact, that could contain for example a Helm Chart.
 message OCIRepository {
-  // URL is a reference to an OCI artifact repository.
-  optional string url = 1;
+  // Repository is a reference to an OCI artifact repository.
+  optional string repository = 1;
 
   // Tag is the image tag to pull.
   // +optional
@@ -64,5 +64,9 @@ message OCIRepository {
   // The value should be in the format 'sha256:<HASH>'.
   // +optional
   optional string digest = 3;
+
+  // URL is the full artifact URL and takes precedence over all other fields.
+  // +optional
+  optional string url = 4;
 }
 

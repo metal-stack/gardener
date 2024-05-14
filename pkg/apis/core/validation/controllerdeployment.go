@@ -75,8 +75,17 @@ func validateOCIRepository(oci *core.OCIRepository, fldPath *field.Path) field.E
 		return allErrs
 	}
 
-	if oci.URL == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("url"), ""))
+	if oci.URL == "" && oci.Repository == "" {
+		allErrs = append(allErrs, field.Required(fldPath, "must provide either url or repository"))
+	}
+
+	if oci.URL != "" {
+		// TODO: check that other fields are empty
+		return allErrs
+	}
+
+	if oci.Repository == "" {
+		allErrs = append(allErrs, field.Required(fldPath.Child("repository"), ""))
 	}
 	if oci.Tag == "" && oci.Digest == "" {
 		allErrs = append(allErrs, field.Required(fldPath, "must provide either tag or digest must be set"))

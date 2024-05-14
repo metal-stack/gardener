@@ -152,8 +152,8 @@ var _ = Describe("ControllerInstallation controller tests", func() {
 		BeforeEach(func() {
 			controllerDeployment.Helm = &gardencorev1.HelmControllerDeployment{
 				OCIRepository: &gardencorev1.OCIRepository{
-					URL: "test",
-					Tag: "0.1.0",
+					Repository: "test",
+					Tag:        "0.1.0",
 				},
 			}
 			mockRegistry.EXPECT().Pull(gomock.Any(), gomock.Eq(controllerDeployment.Helm.OCIRepository)).

@@ -20,8 +20,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	gardencorev1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	"github.com/gardener/gardener/pkg/utils/oci"
 )
 
 // ControllerName is the name of this controller.
@@ -37,6 +39,13 @@ func (r *Reconciler) AddToManager(ctx context.Context, mgr manager.Manager, gard
 	}
 	if r.Clock == nil {
 		r.Clock = clock.RealClock{}
+	}
+	if r.HelmRegistry == nil {
+		helmRegisty, err := oci.NewHelmRegistry()
+		if err != nil {
+			return err
+		}
+		r.HelmRegistry = helmRegisty
 	}
 
 	return builder.
@@ -110,11 +119,11 @@ func (p *helmTypePredicate) isResponsible(obj client.Object) bool {
 	}
 
 	if deploymentName := controllerInstallation.Spec.DeploymentRef; deploymentName != nil {
-		controllerDeployment := &gardencorev1beta1.ControllerDeployment{}
+		controllerDeployment := &gardencorev1.ControllerDeployment{}
 		if err := p.reader.Get(p.ctx, kubernetesutils.Key(deploymentName.Name), controllerDeployment); err != nil {
 			return false
 		}
-		return controllerDeployment.Type == "helm"
+		return controllerDeployment.Helm != nil
 	}
 
 	return false

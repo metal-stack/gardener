@@ -5138,6 +5138,62 @@ map[string]string
 </tr>
 </tbody>
 </table>
+<h3 id="core.gardener.cloud/v1beta1.HelmControllerDeployment">HelmControllerDeployment
+</h3>
+<p>
+<p>HelmControllerDeployment configures how an extension controller is deployed using helm.
+This is the legacy structure that used to be defined in gardenlet&rsquo;s ControllerInstallation controller for
+ControllerDeployment&rsquo;s with type=helm.
+While this is not a proper API type, we need to define the structure in the API package so that we can convert it
+to the internal API version in the new representation.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>chart</code></br>
+<em>
+[]byte
+</em>
+</td>
+<td>
+<p>Chart is a Helm chart tarball.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>values</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#json-v1-apiextensions-k8s-io">
+Kubernetes apiextensions/v1.JSON
+</a>
+</em>
+</td>
+<td>
+<p>Values is a map of values for the given chart.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ociRepository</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.OCIRepository">
+OCIRepository
+</a>
+</em>
+</td>
+<td>
+<p>OCIRepository defines where to pull the chart.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.gardener.cloud/v1beta1.Hibernation">Hibernation
 </h3>
 <p>
@@ -8259,6 +8315,58 @@ bool
 <em>(Optional)</em>
 <p>DisableForwardToUpstreamDNS indicates whether requests from node local DNS to upstream DNS should be disabled.
 Default, if unspecified, is to forward requests for external domains to upstream DNS</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.gardener.cloud/v1beta1.OCIRepository">OCIRepository
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.HelmControllerDeployment">HelmControllerDeployment</a>)
+</p>
+<p>
+<p>OCIRepository configures where to pull an OCI Artifact, that could contain for example a Helm Chart.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>url</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>URL is a reference to an OCI artifact repository.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>tag</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Tag is the image tag to pull.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>digest</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Digest of the image to pull, takes precedence over tag.</p>
 </td>
 </tr>
 </tbody>

@@ -7,7 +7,6 @@ package controllerinstallation
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -35,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
+	gardencorev1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
@@ -49,6 +49,7 @@ import (
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
+	"github.com/gardener/gardener/pkg/utils/oci"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 )
 
@@ -63,6 +64,7 @@ type Reconciler struct {
 	GardenClient          client.Client
 	GardenConfig          *rest.Config
 	SeedClientSet         kubernetes.Interface
+	HelmRegistry          oci.Interface
 	Config                config.GardenletConfiguration
 	Clock                 clock.Clock
 	Identity              *gardencorev1beta1.Gardener
@@ -141,25 +143,24 @@ func (r *Reconciler) reconcile(
 		return reconcile.Result{}, err
 	}
 
-	var providerConfig *runtime.RawExtension
+	var helmDeployment *gardencorev1.HelmControllerDeployment
 	if deploymentRef := controllerInstallation.Spec.DeploymentRef; deploymentRef != nil {
-		controllerDeployment := &gardencorev1beta1.ControllerDeployment{}
+		controllerDeployment := &gardencorev1.ControllerDeployment{}
 		if err := r.GardenClient.Get(gardenCtx, kubernetesutils.Key(deploymentRef.Name), controllerDeployment); err != nil {
 			return reconcile.Result{}, err
 		}
-		providerConfig = &controllerDeployment.ProviderConfig
+		if controllerDeployment.Helm == nil {
+			return reconcile.Result{}, nil
+		}
+		helmDeployment = controllerDeployment.Helm
 	}
 
-	var helmDeployment struct {
-		// chart is a Helm chart tarball.
-		Chart []byte `json:"chart,omitempty"`
-		// Values is a map of values for the given chart.
-		Values map[string]interface{} `json:"values,omitempty"`
-	}
-
-	if err := json.Unmarshal(providerConfig.Raw, &helmDeployment); err != nil {
-		conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartInformationInvalid", fmt.Sprintf("chart Information cannot be unmarshalled: %+v", err))
-		return reconcile.Result{}, err
+	var helmValues map[string]interface{}
+	if helmDeployment.Values != nil {
+		if err := yaml.Unmarshal(helmDeployment.Values.Raw, &helmValues); err != nil {
+			conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartInformationInvalid", fmt.Sprintf("chart values cannot be unmarshalled: %+v", err))
+			return reconcile.Result{}, err
+		}
 	}
 
 	namespace := getNamespaceForControllerInstallation(controllerInstallation)
@@ -242,7 +243,17 @@ func (r *Reconciler) reconcile(
 		},
 	}
 
-	release, err := r.SeedClientSet.ChartRenderer().RenderArchive(helmDeployment.Chart, controllerRegistration.Name, namespace.Name, utils.MergeMaps(helmDeployment.Values, gardenerValues))
+	archive := helmDeployment.RawChart
+	if len(archive) == 0 {
+		var err error
+		archive, err = r.HelmRegistry.Pull(seedCtx, helmDeployment.OCIRepository)
+		if err != nil {
+			conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "OCIChartCannotBePulled", fmt.Sprintf("chart pulling process failed: %+v", err))
+			return reconcile.Result{}, err
+		}
+	}
+
+	release, err := r.SeedClientSet.ChartRenderer().RenderArchive(archive, controllerRegistration.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
 	if err != nil {
 		conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartCannotBeRendered", fmt.Sprintf("chart rendering process failed: %+v", err))
 		return reconcile.Result{}, err

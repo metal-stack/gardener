@@ -7,6 +7,7 @@ package gardenerconfig
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -89,31 +90,42 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("error retrieving garden client object: %w", err)
 	}
 
-	// init relevant condition list
-	conditions := NewGardenConfigConditions(r.Clock, extension.Status)
 	var (
 		updatedConditions GardenerConfigConditions
 	)
+	conditions := NewGardenConfigConditions(r.Clock, extension.Status)
 	if extension.DeletionTimestamp != nil {
 		updatedConditions, err = r.delete(ctx, log, gardenClientSet.Client(), extension, conditions)
 	} else {
 		updatedConditions, err = r.reconcile(ctx, log, gardenClientSet.Client(), extension, conditions)
 	}
 
-	if v1beta1helper.ConditionsNeedUpdate(conditions.ConvertToSlice(), updatedConditions.ConvertToSlice()) {
-		log.Info("Updating extension status conditions")
-		patch := client.MergeFrom(extension.DeepCopy())
-		// Rebuild garden conditions to ensure that only the conditions with the
-		// correct types will be updated, and any other conditions will remain intact
-		extension.Status.Conditions = v1beta1helper.BuildConditions(extension.Status.Conditions, updatedConditions.ConvertToSlice(), conditions.ConditionTypes())
-
-		if err := r.RuntimeClientSet.Client().Status().Patch(ctx, extension, patch); err != nil {
-			log.Error(err, "Could not update extension status")
-			return reconcile.Result{}, fmt.Errorf("failed to update extension status", err)
-		}
+	errUpdate := r.updateExtensionStatus(ctx, log, extension, conditions, updatedConditions)
+	if err != nil || errUpdate != nil {
+		return reconcile.Result{}, errors.Join(err, errUpdate)
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *Reconciler) updateExtensionStatus(ctx context.Context, log logr.Logger, extension *operatorv1alpha1.Extension, conditions, updatedConditions GardenerConfigConditions) error {
+	if extension.Generation == extension.Status.ObservedGeneration && !v1beta1helper.ConditionsNeedUpdate(conditions.ConvertToSlice(), updatedConditions.ConvertToSlice()) {
+		return nil
+	}
+
+	patch := client.MergeFrom(extension.DeepCopy())
+	// Rebuild garden conditions to ensure that only the conditions with the correct types will be updated, and any other
+	// conditions will remain intact
+	extension.Status.Conditions = v1beta1helper.BuildConditions(extension.Status.Conditions, updatedConditions.ConvertToSlice(), conditions.ConditionTypes())
+	extension.Status.ObservedGeneration = extension.Generation
+
+	log.Info("Updating extension status conditions")
+	if err := r.RuntimeClientSet.Client().Status().Patch(ctx, extension, patch); err != nil {
+		log.Error(err, "Could not update extension status")
+		return err
+	}
+
+	return nil
 }
 
 func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension, conditions GardenerConfigConditions) (GardenerConfigConditions, error) {

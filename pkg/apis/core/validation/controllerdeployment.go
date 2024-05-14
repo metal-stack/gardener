@@ -6,6 +6,7 @@ package validation
 
 import (
 	"fmt"
+	"strings"
 
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -58,9 +59,30 @@ func ValidateControllerDeploymentUpdate(new, _ *core.ControllerDeployment) field
 func validateHelmControllerDeployment(helmControllerDeployment *core.HelmControllerDeployment, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	// rawChart is required as long as there is no other source (OCI sources will be added later on)
-	if len(helmControllerDeployment.RawChart) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath.Child("rawChart"), ""))
+	if len(helmControllerDeployment.RawChart) == 0 && helmControllerDeployment.OCIRepository == nil {
+		allErrs = append(allErrs, field.Required(fldPath, "must provide either rawChart or ociRepository must be set"))
+	}
+
+	allErrs = append(allErrs, validateOCIRepository(helmControllerDeployment.OCIRepository, fldPath.Child("ociRepository"))...)
+
+	return allErrs
+}
+
+func validateOCIRepository(oci *core.OCIRepository, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if oci == nil {
+		return allErrs
+	}
+
+	if oci.URL == "" {
+		allErrs = append(allErrs, field.Required(fldPath.Child("url"), ""))
+	}
+	if oci.Tag == "" && oci.Digest == "" {
+		allErrs = append(allErrs, field.Required(fldPath, "must provide either tag or digest must be set"))
+	}
+	if oci.Digest != "" && !strings.HasPrefix(oci.Digest, "sha256:") {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("digest"), oci.Digest, "must start with 'sha256:'"))
 	}
 
 	return allErrs

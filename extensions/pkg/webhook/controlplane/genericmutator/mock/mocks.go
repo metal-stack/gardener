@@ -119,17 +119,17 @@ func (mr *MockEnsurerMockRecorder) EnsureClusterAutoscalerDeployment(arg0, arg1,
 }
 
 // EnsureContainerdConfig mocks base method.
-func (m *MockEnsurer) EnsureContainerdConfig(arg0 context.Context, arg1, arg2 *v1alpha10.ContainerdConfig) error {
+func (m *MockEnsurer) EnsureContainerdConfig(arg0 context.Context, arg1 context0.GardenContext, arg2, arg3 *v1alpha10.ContainerdConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureContainerdConfig", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "EnsureContainerdConfig", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnsureContainerdConfig indicates an expected call of EnsureContainerdConfig.
-func (mr *MockEnsurerMockRecorder) EnsureContainerdConfig(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockEnsurerMockRecorder) EnsureContainerdConfig(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureContainerdConfig", reflect.TypeOf((*MockEnsurer)(nil).EnsureContainerdConfig), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureContainerdConfig", reflect.TypeOf((*MockEnsurer)(nil).EnsureContainerdConfig), arg0, arg1, arg2, arg3)
 }
 
 // EnsureETCD mocks base method.

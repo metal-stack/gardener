@@ -4626,9 +4626,10 @@ func Convert_core_NodeLocalDNS_To_v1beta1_NodeLocalDNS(in *core.NodeLocalDNS, ou
 }
 
 func autoConvert_v1beta1_OCIRepository_To_core_OCIRepository(in *OCIRepository, out *core.OCIRepository, s conversion.Scope) error {
-	out.URL = in.URL
+	out.Repository = in.Repository
 	out.Tag = in.Tag
 	out.Digest = in.Digest
+	out.URL = in.URL
 	return nil
 }
 
@@ -4638,9 +4639,10 @@ func Convert_v1beta1_OCIRepository_To_core_OCIRepository(in *OCIRepository, out 
 }
 
 func autoConvert_core_OCIRepository_To_v1beta1_OCIRepository(in *core.OCIRepository, out *OCIRepository, s conversion.Scope) error {
-	out.URL = in.URL
+	out.Repository = in.Repository
 	out.Tag = in.Tag
 	out.Digest = in.Digest
+	out.URL = in.URL
 	return nil
 }
 

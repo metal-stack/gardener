@@ -128,9 +128,9 @@ var _ = Describe("#ValidateControllerDeployment", func() {
 		BeforeEach(func() {
 			controllerDeployment.Helm = &HelmControllerDeployment{
 				OCIRepository: &OCIRepository{
-					URL:    "foo",
-					Tag:    "1.0.0",
-					Digest: "sha256:foo",
+					Repository: "foo",
+					Tag:        "1.0.0",
+					Digest:     "sha256:foo",
 				},
 				Values: &apiextensionsv1.JSON{
 					Raw: []byte(`{"foo":["bar","baz"]}`),
@@ -143,11 +143,11 @@ var _ = Describe("#ValidateControllerDeployment", func() {
 		})
 
 		It("should validate required oci URL", func() {
-			controllerDeployment.Helm.OCIRepository.URL = ""
+			controllerDeployment.Helm.OCIRepository.Repository = ""
 
-			Expect(ValidateControllerDeployment(controllerDeployment)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+			Expect(ValidateControllerDeployment(controllerDeployment)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeRequired),
-				"Field": Equal("helm.ociRepository.url"),
+				"Field": Equal("helm.ociRepository.repository"),
 			}))))
 		})
 

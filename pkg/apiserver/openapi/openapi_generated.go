@@ -941,9 +941,9 @@ func schema_pkg_apis_core_v1_OCIRepository(ref common.ReferenceCallback) common.
 				Description: "OCIRepository configures where to pull an OCI Artifact, that could contain for example a Helm Chart.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"url": {
+					"repository": {
 						SchemaProps: spec.SchemaProps{
-							Description: "URL is a reference to an OCI artifact repository.",
+							Description: "Repository is a reference to an OCI artifact repository.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -963,8 +963,16 @@ func schema_pkg_apis_core_v1_OCIRepository(ref common.ReferenceCallback) common.
 							Format:      "",
 						},
 					},
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL is the full artifact URL and takes precedence over all other fields.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"url"},
+				Required: []string{"repository"},
 			},
 		},
 	}
@@ -5843,9 +5851,9 @@ func schema_pkg_apis_core_v1beta1_OCIRepository(ref common.ReferenceCallback) co
 				Description: "OCIRepository configures where to pull an OCI Artifact, that could contain for example a Helm Chart.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"url": {
+					"repository": {
 						SchemaProps: spec.SchemaProps{
-							Description: "URL is a reference to an OCI artifact repository.",
+							Description: "Repository is a reference to an OCI artifact repository.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -5865,8 +5873,16 @@ func schema_pkg_apis_core_v1beta1_OCIRepository(ref common.ReferenceCallback) co
 							Format:      "",
 						},
 					},
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL is the full artifact URL and takes precedence over all other fields.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"url"},
+				Required: []string{"repository", "url"},
 			},
 		},
 	}

@@ -63,9 +63,9 @@ var _ = Describe("Conversion", func() {
 				BeforeEach(func() {
 					in.Helm = &HelmControllerDeployment{
 						OCIRepository: &OCIRepository{
-							URL:    "url",
-							Tag:    "1.0.0",
-							Digest: "sha256:foo",
+							Repository: "url",
+							Tag:        "1.0.0",
+							Digest:     "sha256:foo",
 						},
 						Values: &apiextensionsv1.JSON{
 							Raw: []byte(`{"foo":["bar","baz"]}`),
@@ -80,9 +80,9 @@ var _ = Describe("Conversion", func() {
 					Expect(out.ProviderConfig).To(BeNil(), "providerConfig is empty for non-custom type")
 					Expect(out.Helm).To(Equal(&core.HelmControllerDeployment{
 						OCIRepository: &core.OCIRepository{
-							URL:    "url",
-							Tag:    "1.0.0",
-							Digest: "sha256:foo",
+							Repository: "url",
+							Tag:        "1.0.0",
+							Digest:     "sha256:foo",
 						},
 						Values: &apiextensionsv1.JSON{
 							Raw: []byte(`{"foo":["bar","baz"]}`),

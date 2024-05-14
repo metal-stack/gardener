@@ -1918,14 +1918,17 @@ message NodeLocalDNS {
 
 // OCIRepository configures where to pull an OCI Artifact, that could contain for example a Helm Chart.
 message OCIRepository {
-  // URL is a reference to an OCI artifact repository.
-  optional string url = 1;
+  // Repository is a reference to an OCI artifact repository.
+  optional string repository = 1;
 
   // Tag is the image tag to pull.
   optional string tag = 2;
 
   // Digest of the image to pull, takes precedence over tag.
   optional string digest = 3;
+
+  // URL is the full artifact URL and takes precedence over all other fields.
+  optional string url = 4;
 }
 
 // OIDCConfig contains configuration settings for the OIDC provider.

@@ -149,9 +149,10 @@ func Convert_core_HelmControllerDeployment_To_v1_HelmControllerDeployment(in *co
 }
 
 func autoConvert_v1_OCIRepository_To_core_OCIRepository(in *OCIRepository, out *core.OCIRepository, s conversion.Scope) error {
-	out.URL = in.URL
+	out.Repository = in.Repository
 	out.Tag = in.Tag
 	out.Digest = in.Digest
+	out.URL = in.URL
 	return nil
 }
 
@@ -161,9 +162,10 @@ func Convert_v1_OCIRepository_To_core_OCIRepository(in *OCIRepository, out *core
 }
 
 func autoConvert_core_OCIRepository_To_v1_OCIRepository(in *core.OCIRepository, out *OCIRepository, s conversion.Scope) error {
-	out.URL = in.URL
+	out.Repository = in.Repository
 	out.Tag = in.Tag
 	out.Digest = in.Digest
+	out.URL = in.URL
 	return nil
 }
 

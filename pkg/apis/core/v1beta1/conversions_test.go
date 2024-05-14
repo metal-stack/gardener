@@ -624,9 +624,9 @@ var _ = Describe("Conversion", func() {
 				BeforeEach(func() {
 					in.Helm = &core.HelmControllerDeployment{
 						OCIRepository: &core.OCIRepository{
-							URL:    "url",
-							Tag:    "1.0.0",
-							Digest: "sha256:foo",
+							Repository: "url",
+							Tag:        "1.0.0",
+							Digest:     "sha256:foo",
 						},
 						Values: &apiextensionsv1.JSON{
 							Raw: []byte(`{"foo":["bar","baz"]}`),
@@ -639,7 +639,7 @@ var _ = Describe("Conversion", func() {
 
 					Expect(out.Type).To(Equal("helm"))
 					Expect(out.ProviderConfig).To(Equal(runtime.RawExtension{
-						Raw: []byte(`{"values":{"foo":["bar","baz"]},"ociRepository":{"url":"url","tag":"1.0.0","digest":"sha256:foo"}}`),
+						Raw: []byte(`{"values":{"foo":["bar","baz"]},"ociRepository":{"repository":"url","tag":"1.0.0","digest":"sha256:foo","url":""}}`),
 					}))
 				})
 			})

@@ -63,12 +63,15 @@ func (r *HelmRegistry) Pull(_ context.Context, oci *gardencorev1.OCIRepository) 
 }
 
 func buildRef(oci *gardencorev1.OCIRepository) string {
-	if oci.Tag != "" {
-		return oci.URL + ":" + oci.Tag
+	if oci.URL != "" {
+		return oci.URL
 	}
 	if oci.Digest != "" {
-		return oci.URL + "@" + oci.Digest
+		return oci.Repository + "@" + oci.Digest
+	}
+	if oci.Tag != "" {
+		return oci.Repository + ":" + oci.Tag
 	}
 	// should not be reachable
-	return oci.URL
+	return oci.Repository
 }

@@ -4052,9 +4052,7 @@ string
 </td>
 <td>
 <p>Capabilities determine what operations a host is
-capable of performing. Defaults to
-- pull
-- resolve</p>
+capable of performing.</p>
 </td>
 </tr>
 <tr>

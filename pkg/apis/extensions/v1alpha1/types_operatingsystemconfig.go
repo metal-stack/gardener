@@ -284,9 +284,7 @@ type RegistryHost struct {
 	// URL is the endpoint address of the registry host.
 	URL string `json:"url"`
 	// Capabilities determine what operations a host is
-	// capable of performing. Defaults to
-	//  - pull
-	//  - resolve
+	// capable of performing.
 	Capabilities []string `json:"capabilities,omitempty"`
 	// CACerts are paths to public key certificates used for TLS.
 	CACerts []string `json:"caCerts,omitempty"`

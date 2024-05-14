@@ -218,10 +218,7 @@ func (r *Reconciler) ReconcileContainerdConfig(log logr.Logger, containerdConfig
 			}
 
 			for _, host := range registryConfig.Hosts {
-
-				h := hostConfig{
-					Capabilities: []string{"pull", "resolve"},
-				}
+				h := hostConfig{}
 
 				if len(host.Capabilities) > 0 {
 					h.Capabilities = host.Capabilities

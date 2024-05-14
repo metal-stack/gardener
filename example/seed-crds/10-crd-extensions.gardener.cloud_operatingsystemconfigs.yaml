@@ -90,9 +90,7 @@ spec:
                                   capabilities:
                                     description: |-
                                       Capabilities determine what operations a host is
-                                      capable of performing. Defaults to
-                                       - pull
-                                       - resolve
+                                      capable of performing.
                                     items:
                                       type: string
                                     type: array

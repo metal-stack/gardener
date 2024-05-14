@@ -78,6 +78,15 @@ server = "https://registry-1.docker.io"
 			assertFileOnDisk(fakeFS, "/etc/containerd/certs.d/docker.io/hosts.toml", expected, 0644)
 		})
 
+		It("should ensure the containerd unit dropin configuration", func() {
+			expected := `[Service]
+Environment="PATH=$BIN_PATH:$PATH"
+`
+
+			Expect(reconciler.EnsureContainerdEnvironment()).To(Succeed())
+			assertFileOnDisk(fakeFS, "/etc/systemd/system/containerd.service.d/30-env_config.conf", expected, 0644)
+		})
+
 		It("should ensure the containerd configuration", func() {
 			criConfig = &extensionsv1alpha1.CRIConfig{
 				CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,

@@ -31,6 +31,11 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 		return err
 	}
 
+	err = r.EnsureContainerdEnvironment()
+	if err != nil {
+		return err
+	}
+
 	err = r.EnsureContainerdConfiguration(criConfig)
 	if err != nil {
 		return err
@@ -53,6 +58,7 @@ func (r *Reconciler) ensureContainerdConfigDirectories() error {
 		extensionsv1alpha1.ContainerDBaseDir,
 		extensionsv1alpha1.ContainerDConfigDir,
 		extensionsv1alpha1.ContainerDCertsDir,
+		extensionsv1alpha1.ContainerDRuntimeContainersBinFolder,
 	} {
 		err := r.FS.MkdirAll(dir, defaultDirPermissions)
 		if err != nil {
@@ -79,6 +85,31 @@ func (r *Reconciler) ensureContainerdDefaultConfig(ctx context.Context) error {
 	}
 
 	return r.FS.WriteFile(extensionsv1alpha1.ContainerDConfigFile, output, 0644)
+}
+
+func (r *Reconciler) EnsureContainerdEnvironment() error {
+	const (
+		containerdUnitDropin = "/etc/systemd/system/containerd.service.d/30-env_config.conf"
+		unitDropin           = `[Service]
+Environment="PATH=$BIN_PATH:$PATH"
+`
+	)
+
+	exists, err := r.fileExists(containerdUnitDropin)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	err = r.FS.WriteFile(containerdUnitDropin, []byte(unitDropin), 0644)
+	if err != nil {
+		return fmt.Errorf("unable to write unit dropin: %w", err)
+	}
+
+	return nil
 }
 
 // EnsureContainerdConfiguration sets the configuration for the containerd.

@@ -12,7 +12,6 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"k8s.io/utils/ptr"
 
-	"github.com/gardener/gardener/imagevector"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components"
@@ -56,8 +55,7 @@ func (initializer) Config(ctx components.Context) ([]extensionsv1alpha1.Unit, []
 
 	var script bytes.Buffer
 	if err := tplInitializer.Execute(&script, map[string]interface{}{
-		"binaryPath":          extensionsv1alpha1.ContainerDRuntimeContainersBinFolder,
-		"pauseContainerImage": ctx.Images[imagevector.ImageNamePauseContainer],
+		"binaryPath": extensionsv1alpha1.ContainerDRuntimeContainersBinFolder,
 	}); err != nil {
 		return nil, nil, err
 	}

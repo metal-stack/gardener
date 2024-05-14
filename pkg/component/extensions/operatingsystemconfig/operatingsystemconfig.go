@@ -687,10 +687,18 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 		d.osc.Spec.Files = files
 
 		if d.worker.CRI != nil {
-			d.osc.Spec.CRIConfig = &extensionsv1alpha1.CRIConfig{
+			criConfig := &extensionsv1alpha1.CRIConfig{
 				Name:            extensionsv1alpha1.CRIName(d.worker.CRI.Name),
 				CRICgroupDriver: d.criCgroupDriver,
 			}
+
+			if criConfig.Name == extensionsv1alpha1.CRINameContainerD {
+				criConfig.Containerd = &extensionsv1alpha1.ContainerdConfig{
+					SandboxImage: d.images[imagevector.ImageNamePauseContainer].String(),
+				}
+			}
+
+			d.osc.Spec.CRIConfig = criConfig
 		}
 
 		return nil

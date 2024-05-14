@@ -114,6 +114,10 @@ spec:
                           - upstream
                           type: object
                         type: array
+                      sandboxImage:
+                        description: SandboxImage configures the sandbox image for
+                          containerd.
+                        type: string
                     type: object
                   criCgroupDriver:
                     description: CRICgroupDriver configures the CRI's cgroup driver

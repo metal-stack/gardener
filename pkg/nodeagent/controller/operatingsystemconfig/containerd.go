@@ -103,7 +103,11 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 		{
 			name: "cgroup driver",
 			path: []string{"plugins", "io.containerd.grpc.v1.cri", "containerd", "runtimes", "runc", "options", "SystemdCgroup"},
-			patchFn: func(_ any) any {
+			patchFn: func(value any) any {
+				if criConfig == nil {
+					return value
+				}
+
 				return criConfig.CRICgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd
 			},
 		},
@@ -126,6 +130,17 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 				}
 
 				return append(imports, importPath)
+			},
+		},
+		{
+			name: "sandbox image",
+			path: []string{"plugins", "io.containerd.grpc.v1.cri", "sandbox_image"},
+			patchFn: func(value any) any {
+				if criConfig == nil || criConfig.Containerd == nil {
+					return value
+				}
+
+				return criConfig.Containerd.SandboxImage
 			},
 		},
 	} {

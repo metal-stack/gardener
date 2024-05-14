@@ -81,6 +81,9 @@ server = "https://registry-1.docker.io"
 		It("should ensure the containerd configuration", func() {
 			criConfig = &extensionsv1alpha1.CRIConfig{
 				CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,
+				Containerd: &extensionsv1alpha1.ContainerdConfig{
+					SandboxImage: "pause",
+				},
 			}
 
 			originalContent := `
@@ -148,6 +151,7 @@ version = 2
 
   [plugins."io.containerd.grpc.v1.cri"]
     device_ownership_from_security_context = false
+    sandbox_image = "pause"
 
     [plugins."io.containerd.grpc.v1.cri".cni]
       bin_dir = "/opt/cni/bin"

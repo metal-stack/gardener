@@ -27,6 +27,7 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	extensionsv1alpha1helper "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1/helper"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/utils"
 	"github.com/gardener/gardener/pkg/component/nodemanagement/machinecontrollermanager"
@@ -81,6 +82,9 @@ type Ensurer interface {
 	// EnsureAdditionalFiles ensures additional systemd files
 	// "old" might be "nil" and must always be checked.
 	EnsureAdditionalFiles(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *[]extensionsv1alpha1.File) error
+	// EnsureContainerdConfig ensures the containerd config.
+	// "old" might be "nil" and must always be checked.
+	EnsureContainerdConfig(ctx context.Context, new, old *extensionsv1alpha1.ContainerdConfig) error
 	// EnsureAdditionalProvisionUnits ensures additional systemd units for the 'provision' OSC
 	// "old" might be "nil" and must always be checked.
 	EnsureAdditionalProvisionUnits(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *[]extensionsv1alpha1.Unit) error
@@ -340,7 +344,22 @@ func (m *mutator) mutateOperatingSystemConfigReconcile(ctx context.Context, gctx
 		return err
 	}
 
-	return m.ensurer.EnsureAdditionalUnits(ctx, gctx, &osc.Spec.Units, oldUnits)
+	if err := m.ensurer.EnsureAdditionalUnits(ctx, gctx, &osc.Spec.Units, oldUnits); err != nil {
+		return err
+	}
+
+	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
+		var oldContainerdConfig *extensionsv1alpha1.ContainerdConfig
+		if oldOSC != nil && extensionsv1alpha1helper.IsContainerdConfigured(oldOSC.Spec.CRIConfig) {
+			oldContainerdConfig = oldOSC.Spec.CRIConfig.Containerd
+		}
+
+		if err := m.ensurer.EnsureContainerdConfig(ctx, osc.Spec.CRIConfig.Containerd, oldContainerdConfig); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *mutator) ensureKubeletServiceUnitContent(ctx context.Context, gctx extensionscontextwebhook.GardenContext, kubeletVersion *semver.Version, content, oldContent *string) error {

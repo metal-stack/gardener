@@ -104,6 +104,11 @@ func (e *NoopEnsurer) EnsureAdditionalFiles(_ context.Context, _ extensionsconte
 	return nil
 }
 
+// EnsureContainerdConfig ensures the containerd config.
+func (e *NoopEnsurer) EnsureContainerdConfig(_ context.Context, _, _ *extensionsv1alpha1.ContainerdConfig) error {
+	return nil
+}
+
 // EnsureAdditionalProvisionUnits ensures that additional required system units are added.
 func (e *NoopEnsurer) EnsureAdditionalProvisionUnits(_ context.Context, _ extensionscontextwebhook.GardenContext, _, _ *[]extensionsv1alpha1.Unit) error {
 	return nil

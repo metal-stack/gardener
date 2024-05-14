@@ -84,6 +84,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("failed extracting OSC from secret: %w", err)
 	}
 
+	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
+		err = r.ReconcileContainerdConfig(ctx, log, osc.Spec.CRIConfig)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
+		}
+	}
+
 	oscChanges, err := computeOperatingSystemConfigChanges(r.FS, osc)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed calculating the OSC changes: %w", err)
@@ -154,13 +161,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 	if err := r.FS.Remove(nodeagentv1alpha1.BootstrapTokenFilePath); err != nil && !errors.Is(err, afero.ErrFileNotFound) {
 		return reconcile.Result{}, fmt.Errorf("failed removing bootstrap token file %q: %w", nodeagentv1alpha1.BootstrapTokenFilePath, err)
-	}
-
-	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
-		err = r.ReconcileContainerdConfig(ctx, log, osc.Spec.CRIConfig)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
-		}
 	}
 
 	r.Recorder.Event(node, corev1.EventTypeNormal, "OSCApplied", "Operating system config has been applied successfully")

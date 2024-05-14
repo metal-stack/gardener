@@ -84,7 +84,7 @@ type Ensurer interface {
 	EnsureAdditionalFiles(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *[]extensionsv1alpha1.File) error
 	// EnsureContainerdConfig ensures the containerd config.
 	// "old" might be "nil" and must always be checked.
-	EnsureContainerdConfig(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *extensionsv1alpha1.ContainerdConfig) error
+	EnsureContainerdConfig(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *extensionsv1alpha1.CRIConfig) error
 	// EnsureAdditionalProvisionUnits ensures additional systemd units for the 'provision' OSC
 	// "old" might be "nil" and must always be checked.
 	EnsureAdditionalProvisionUnits(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *[]extensionsv1alpha1.Unit) error
@@ -349,12 +349,12 @@ func (m *mutator) mutateOperatingSystemConfigReconcile(ctx context.Context, gctx
 	}
 
 	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
-		var oldContainerdConfig *extensionsv1alpha1.ContainerdConfig
+		var oldCRIConfig *extensionsv1alpha1.CRIConfig
 		if oldOSC != nil && extensionsv1alpha1helper.IsContainerdConfigured(oldOSC.Spec.CRIConfig) {
-			oldContainerdConfig = oldOSC.Spec.CRIConfig.Containerd
+			oldCRIConfig = oldOSC.Spec.CRIConfig
 		}
 
-		if err := m.ensurer.EnsureContainerdConfig(ctx, gctx, osc.Spec.CRIConfig.Containerd, oldContainerdConfig); err != nil {
+		if err := m.ensurer.EnsureContainerdConfig(ctx, gctx, osc.Spec.CRIConfig, oldCRIConfig); err != nil {
 			return err
 		}
 	}

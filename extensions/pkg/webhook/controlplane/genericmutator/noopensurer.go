@@ -105,7 +105,7 @@ func (e *NoopEnsurer) EnsureAdditionalFiles(_ context.Context, _ extensionsconte
 }
 
 // EnsureContainerdConfig ensures the containerd config.
-func (e *NoopEnsurer) EnsureContainerdConfig(_ context.Context, _ extensionscontextwebhook.GardenContext, _, _ *extensionsv1alpha1.ContainerdConfig) error {
+func (e *NoopEnsurer) EnsureContainerdConfig(_ context.Context, _ extensionscontextwebhook.GardenContext, _, _ *extensionsv1alpha1.CRIConfig) error {
 	return nil
 }
 

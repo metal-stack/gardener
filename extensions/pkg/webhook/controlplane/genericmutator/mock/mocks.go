@@ -119,7 +119,7 @@ func (mr *MockEnsurerMockRecorder) EnsureClusterAutoscalerDeployment(arg0, arg1,
 }
 
 // EnsureContainerdConfig mocks base method.
-func (m *MockEnsurer) EnsureContainerdConfig(arg0 context.Context, arg1 context0.GardenContext, arg2, arg3 *v1alpha10.ContainerdConfig) error {
+func (m *MockEnsurer) EnsureContainerdConfig(arg0 context.Context, arg1 context0.GardenContext, arg2, arg3 *v1alpha10.CRIConfig) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnsureContainerdConfig", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)

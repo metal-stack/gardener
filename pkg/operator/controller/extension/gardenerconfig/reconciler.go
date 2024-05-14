@@ -12,6 +12,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +37,9 @@ import (
 
 const (
 	requeueUnhealthyVirtualKubeApiserver = 10 * time.Second
+	ConditionReconcileFailed             = "ReconcileFailed"
+	ConditionDeleteFailed                = "DeleteFailed"
+	ConditionReconcileSuccess            = "ReconcileSuccessful"
 )
 
 // Reconciler reconciles Gardens.
@@ -45,7 +49,6 @@ type Reconciler struct {
 	Config           config.OperatorConfiguration
 	Clock            clock.Clock
 	Recorder         record.EventRecorder
-	Identity         *gardencorev1beta1.Gardener
 	GardenClientMap  clientmap.ClientMap
 	GardenNamespace  string
 }
@@ -86,85 +89,69 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("error retrieving garden client object: %w", err)
 	}
 
+	// init relevant condition list
+	conditions := NewGardenConfigConditions(r.Clock, extension.Status)
+	var (
+		updatedConditions GardenerConfigConditions
+	)
 	if extension.DeletionTimestamp != nil {
-		return reconcile.Result{}, r.delete(ctx, log, gardenClientSet.Client(), extension)
+		updatedConditions, err = r.delete(ctx, log, gardenClientSet.Client(), extension, conditions)
+	} else {
+		updatedConditions, err = r.reconcile(ctx, log, gardenClientSet.Client(), extension, conditions)
 	}
 
-	return reconcile.Result{}, r.reconcile(ctx, log, gardenClientSet.Client(), extension)
+	if v1beta1helper.ConditionsNeedUpdate(conditions.ConvertToSlice(), updatedConditions.ConvertToSlice()) {
+		log.Info("Updating extension status conditions")
+		patch := client.MergeFrom(extension.DeepCopy())
+		// Rebuild garden conditions to ensure that only the conditions with the
+		// correct types will be updated, and any other conditions will remain intact
+		extension.Status.Conditions = v1beta1helper.BuildConditions(extension.Status.Conditions, updatedConditions.ConvertToSlice(), conditions.ConditionTypes())
+
+		if err := r.RuntimeClientSet.Client().Status().Patch(ctx, extension, patch); err != nil {
+			log.Error(err, "Could not update extension status")
+			return reconcile.Result{}, fmt.Errorf("failed to update extension status", err)
+		}
+	}
+
+	return reconcile.Result{}, nil
 }
 
-func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
+func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension, conditions GardenerConfigConditions) (GardenerConfigConditions, error) {
 	if extension.Spec.Deployment == nil {
-		return nil
+		return conditions, nil
 	}
 	if extension.Spec.Deployment.Extension == nil {
-		return nil
+		return conditions, nil
 	}
 
-	// TODO: adapt Kustomize
 	if extension.Spec.Deployment.Extension.Helm == nil {
-		return nil
+		return conditions, nil
 	}
 
 	log.Info("Adding finalizer")
 	if err := controllerutils.AddFinalizers(ctx, r.RuntimeClientSet.Client(), extension, operatorv1alpha1.FinalizerName); err != nil {
-		return fmt.Errorf("failed to add finalizer: %w", err)
+		err := fmt.Errorf("failed to add finalizer: %w", err)
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionReconcileFailed, err.Error())
+		return conditions, err
 	}
 
-	ctrlDeploy := &gardencorev1beta1.ControllerDeployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: extension.Name,
-		},
+	if err := r.reconcileControllerDeployment(ctx, gardenClient, extension); err != nil {
+		err := fmt.Errorf("failed to reconciler controller deployment: %w", err)
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionReconcileFailed, err.Error())
+		return conditions, err
 	}
+	r.Recorder.Event(extension, corev1.EventTypeNormal, "Reconciliation", "ControllerDeployment created successfully")
 
-	if _, err := controllerutil.CreateOrUpdate(ctx, gardenClient, ctrlDeploy, func() error {
-		ctrlDeploy.Annotations = extension.Spec.Deployment.Extension.Annotations
-		ctrlDeploy.Type = "helm"
-
-		var (
-			rawHelm *runtime.RawExtension
-			err     error
-		)
-		if helm := extension.Spec.Deployment.Extension.Helm; helm.RawChart != nil {
-			rawHelm, err = HelmDeployer(helm)
-			if err != nil {
-				return err
-			}
-
-		}
-
-		ctrlDeploy.ProviderConfig = *rawHelm
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to create or update ControllerInstallation: %w", err)
+	if err := r.reconcileControllerRegistration(ctx, gardenClient, extension); err != nil {
+		err := fmt.Errorf("failed to reconciler controller registration: %w", err)
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionReconcileFailed, err.Error())
+		return conditions, err
 	}
+	r.Recorder.Event(extension, corev1.EventTypeNormal, "Reconciliation", "ControllerRegistration created successfully")
+	r.Recorder.Event(extension, corev1.EventTypeNormal, "Reconciliation", "Successfully reconciled")
 
-	ctrlReg := &gardencorev1beta1.ControllerRegistration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: extension.Name,
-		},
-	}
-	if _, err := controllerutil.CreateOrUpdate(ctx, gardenClient, ctrlReg, func() error {
-		ctrlReg.Annotations = extension.Spec.Deployment.Extension.Annotations
-		ctrlReg.Spec = gardencorev1beta1.ControllerRegistrationSpec{
-			Resources: extension.Spec.Resources,
-			Deployment: &gardencorev1beta1.ControllerRegistrationDeployment{
-				Policy: extension.Spec.Deployment.Extension.Policy,
-				// TODO
-				SeedSelector: nil,
-				DeploymentRefs: []gardencorev1beta1.DeploymentRef{
-					{
-						Name: extension.Name,
-					},
-				},
-			},
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to create or update ControllerRegistration: %w", err)
-	}
-
-	return nil
+	conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionTrue, ConditionReconcileSuccess, fmt.Sprintf("Extension %q has been reconciled successfully", extension.Name))
+	return conditions, nil
 }
 
 func HelmDeployer(helm *operatorv1alpha1.Helm) (*runtime.RawExtension, error) {
@@ -175,7 +162,6 @@ func HelmDeployer(helm *operatorv1alpha1.Helm) (*runtime.RawExtension, error) {
 		Values map[string]interface{} `json:"values,omitempty"`
 	}
 
-	// TODO: nil checks
 	if rawChart := helm.RawChart; rawChart != nil {
 		helmDeployment.Chart = rawChart
 	}
@@ -195,9 +181,69 @@ func HelmDeployer(helm *operatorv1alpha1.Helm) (*runtime.RawExtension, error) {
 	}, nil
 }
 
-func (r *Reconciler) delete(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
-	log.Info("Deleting extension", "name", extension.Name)
+func (r *Reconciler) reconcileControllerDeployment(ctx context.Context, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
+	ctrlDeploy := &gardencorev1beta1.ControllerDeployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: extension.Name,
+		},
+	}
 
+	deployMutateFn := func() error {
+		ctrlDeploy.Annotations = extension.Spec.Deployment.Extension.Annotations
+		ctrlDeploy.Type = "helm"
+
+		var (
+			rawHelm *runtime.RawExtension
+			err     error
+		)
+		if helm := extension.Spec.Deployment.Extension.Helm; helm.RawChart != nil {
+			rawHelm, err = HelmDeployer(helm)
+			if err != nil {
+				return err
+			}
+
+		}
+
+		ctrlDeploy.ProviderConfig = *rawHelm
+		return nil
+	}
+
+	if _, err := controllerutil.CreateOrUpdate(ctx, gardenClient, ctrlDeploy, deployMutateFn); err != nil {
+		return fmt.Errorf("failed to create or update ControllerInstallation: %w", err)
+	}
+	return nil
+}
+
+func (r *Reconciler) reconcileControllerRegistration(ctx context.Context, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
+	ctrlReg := &gardencorev1beta1.ControllerRegistration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: extension.Name,
+		},
+	}
+	regMutateFn := func() error {
+		ctrlReg.Annotations = extension.Spec.Deployment.Extension.Annotations
+		ctrlReg.Spec = gardencorev1beta1.ControllerRegistrationSpec{
+			Resources: extension.Spec.Resources,
+			Deployment: &gardencorev1beta1.ControllerRegistrationDeployment{
+				Policy: extension.Spec.Deployment.Extension.Policy,
+				DeploymentRefs: []gardencorev1beta1.DeploymentRef{
+					{
+						Name: extension.Name,
+					},
+				},
+			},
+		}
+		return nil
+	}
+	if _, err := controllerutil.CreateOrUpdate(ctx, gardenClient, ctrlReg, regMutateFn); err != nil {
+		return fmt.Errorf("failed to create or update ControllerRegistration: %w", err)
+	}
+	return nil
+}
+
+func (r *Reconciler) delete(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension, conditions GardenerConfigConditions) (GardenerConfigConditions, error) {
+	log.Info("Deleting extension", "name", extension.Name)
+	r.Recorder.Event(extension, corev1.EventTypeNormal, "Deletion", "Deleting extension")
 	var (
 		ctrlDeploy = &gardencorev1beta1.ControllerDeployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -213,26 +259,62 @@ func (r *Reconciler) delete(ctx context.Context, log logr.Logger, gardenClient c
 
 	log.Info("Deleting controller deployment for extension", "extension", extension.Name)
 	if err := kubernetesutils.DeleteObject(ctx, gardenClient, ctrlReg); err != nil {
-		return nil
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionDeleteFailed, err.Error())
+		return conditions, err
 	}
 	log.Info("Deleting controller registration for extension", "extension", extension.Name)
 	if err := kubernetesutils.DeleteObject(ctx, gardenClient, ctrlDeploy); err != nil {
-		return nil
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionDeleteFailed, err.Error())
+		return conditions, err
 	}
 
 	log.Info("Waiting until controller registration is gone", "extension", extension.Name)
 	if err := kubernetesutils.WaitUntilResourceDeleted(ctx, gardenClient, ctrlReg, 5*time.Second); err != nil {
-		return err
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionDeleteFailed, err.Error())
+		return conditions, err
 	}
+	r.Recorder.Event(extension, corev1.EventTypeNormal, "Deletion", "Successfully deleted controller registration")
+
 	log.Info("Waiting until controller deployment is gone", "extension", extension.Name)
 	if err := kubernetesutils.WaitUntilResourceDeleted(ctx, gardenClient, ctrlDeploy, 5*time.Second); err != nil {
-		return err
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionDeleteFailed, err.Error())
+		return conditions, err
 	}
+	r.Recorder.Event(extension, corev1.EventTypeNormal, "Deletion", "Successfully deleted controller deployment")
 
 	log.Info("Removing finalizer")
 	if err := controllerutils.RemoveFinalizers(ctx, r.RuntimeClientSet.Client(), extension, operatorv1alpha1.FinalizerName); err != nil {
-		return fmt.Errorf("failed to add finalizer: %w", err)
+		err := fmt.Errorf("failed to add finalizer: %w", err)
+		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionDeleteFailed, err.Error())
+		return conditions, err
 	}
 
-	return nil
+	return conditions, nil
+}
+
+// GardenerConfigConditions contains all conditions of the garden status subresource.
+type GardenerConfigConditions struct {
+	gardenConfigReconciled gardencorev1beta1.Condition
+}
+
+// ConvertToSlice returns the garden conditions as a slice.
+func (g GardenerConfigConditions) ConvertToSlice() []gardencorev1beta1.Condition {
+	return []gardencorev1beta1.Condition{
+		g.gardenConfigReconciled,
+	}
+}
+
+// ConditionTypes returns all garden condition types.
+func (g GardenerConfigConditions) ConditionTypes() []gardencorev1beta1.ConditionType {
+	return []gardencorev1beta1.ConditionType{
+		g.gardenConfigReconciled.Type,
+	}
+}
+
+// NewGardenConfigConditions returns a new instance of GardenerConfigConditions.
+// All conditions are retrieved from the given 'status' or newly initialized.
+func NewGardenConfigConditions(clock clock.Clock, status operatorv1alpha1.ExtensionStatus) GardenerConfigConditions {
+	return GardenerConfigConditions{
+		gardenConfigReconciled: v1beta1helper.GetOrInitConditionWithClock(clock, status.Conditions, operatorv1alpha1.GardenConfigReconciled),
+	}
 }

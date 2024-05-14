@@ -16,6 +16,7 @@ rules:
   - gardens
   - gardens/status
   - extensions
+  - extensions/status
   verbs:
   - get
   - list

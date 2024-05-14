@@ -12,7 +12,6 @@ import (
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
-	clientmapbuilder "github.com/gardener/gardener/pkg/client/kubernetes/clientmap/builder"
 	"github.com/gardener/gardener/pkg/operator/apis/config"
 	"github.com/gardener/gardener/pkg/operator/controller/extension/gardenerconfig"
 )
@@ -25,25 +24,12 @@ func AddToManager(
 	identity *gardencorev1beta1.Gardener,
 	gardenClientMap clientmap.ClientMap,
 ) error {
-	var err error
-
 	if gardenClientMap == nil {
-		gardenClientMap, err = clientmapbuilder.
-			NewGardenClientMapBuilder().
-			WithRuntimeClient(mgr.GetClient()).
-			WithClientConnectionConfig(&cfg.VirtualClientConnection).
-			Build(mgr.GetLogger())
-		if err != nil {
-			return fmt.Errorf("failed to build garden ClientMap: %w", err)
-		}
-		if err := mgr.Add(gardenClientMap); err != nil {
-			return err
-		}
+		return fmt.Errorf("gardenClientMap cannot be nil")
 	}
 
 	if err := (&gardenerconfig.Reconciler{
 		Config:          *cfg,
-		Identity:        identity,
 		GardenClientMap: gardenClientMap,
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding Garden controller: %w", err)

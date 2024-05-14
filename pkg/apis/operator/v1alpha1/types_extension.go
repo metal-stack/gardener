@@ -102,3 +102,8 @@ type ExtensionStatus struct {
 	// +optional
 	ProviderStatus *runtime.RawExtension `json:"providerStatus,omitempty"`
 }
+
+const (
+	// GardenConfigReconciled is a constant for a condition type indicating the extension resources in the garden cluster have reconciled and are available.
+	GardenConfigReconciled gardencorev1beta1.ConditionType = "GardenConfigReconciled"
+)

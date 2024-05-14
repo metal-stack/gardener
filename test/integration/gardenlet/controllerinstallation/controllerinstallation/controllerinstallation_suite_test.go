@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -38,6 +39,7 @@ import (
 	gardenletfeatures "github.com/gardener/gardener/pkg/gardenlet/features"
 	"github.com/gardener/gardener/pkg/logger"
 	"github.com/gardener/gardener/pkg/utils"
+	ocimock "github.com/gardener/gardener/pkg/utils/oci/mock"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 	gardenerenvtest "github.com/gardener/gardener/test/envtest"
 	"github.com/gardener/gardener/test/utils/namespacefinalizer"
@@ -67,6 +69,7 @@ var (
 	testClient    client.Client
 	testClientSet kubernetes.Interface
 	mgrClient     client.Client
+	mockRegistry  *ocimock.MockInterface
 
 	seed                  *gardencorev1beta1.Seed
 	seedNamespace         *corev1.Namespace
@@ -229,8 +232,10 @@ var _ = BeforeSuite(func() {
 	// controller.
 	Expect((&namespacefinalizer.Reconciler{}).AddToManager(mgr)).To(Succeed())
 
+	mockRegistry = ocimock.NewMockInterface(gomock.NewController(GinkgoT()))
 	By("Register controller")
 	Expect((&controllerinstallation.Reconciler{
+		HelmRegistry:  mockRegistry,
 		SeedClientSet: testClientSet,
 		Config: config.GardenletConfiguration{
 			Controllers: &config.GardenletControllerConfiguration{

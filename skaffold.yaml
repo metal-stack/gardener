@@ -231,7 +231,7 @@ build:
             - plugin/pkg/utils
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-apiserver
     - image: europe-docker.pkg.dev/gardener-project/releases/gardener/controller-manager
       ko:
@@ -344,7 +344,7 @@ build:
             - third_party/gopkg.in/yaml.v2
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-controller-manager
     - image: europe-docker.pkg.dev/gardener-project/releases/gardener/scheduler
       ko:
@@ -411,7 +411,7 @@ build:
             - pkg/utils/version
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-scheduler
     - image: europe-docker.pkg.dev/gardener-project/releases/gardener/admission-controller
       ko:
@@ -489,7 +489,7 @@ build:
             - pkg/utils/version
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-admission-controller
 deploy:
   helm:
@@ -521,14 +521,14 @@ deploy:
           - example/gardener-local/controlplane/values.yaml
         namespace: garden
         setValueTemplates:
-          global.admission.image.repository: '{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}'
-          global.admission.image.tag: '{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}'
-          global.apiserver.image.repository: '{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_apiserver}}'
-          global.apiserver.image.tag: '{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_apiserver}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_apiserver}}'
-          global.controller.image.repository: '{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_controller_manager}}'
-          global.controller.image.tag: '{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_controller_manager}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_controller_manager}}'
-          global.scheduler.image.repository: '{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_scheduler}}'
-          global.scheduler.image.tag: '{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_scheduler}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_scheduler}}'
+          global.admission.image.repository: "{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}"
+          global.admission.image.tag: "{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}"
+          global.apiserver.image.repository: "{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_apiserver}}"
+          global.apiserver.image.tag: "{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_apiserver}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_apiserver}}"
+          global.controller.image.repository: "{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_controller_manager}}"
+          global.controller.image.tag: "{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_controller_manager}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_controller_manager}}"
+          global.scheduler.image.repository: "{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_scheduler}}"
+          global.scheduler.image.tag: "{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_scheduler}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_scheduler}}"
         createNamespace: true
         wait: true
 profiles:
@@ -738,8 +738,15 @@ build:
             - third_party/gopkg.in/yaml.v2
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-extension-provider-local
+    - image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local/charts/extension
+      custom:
+        buildCommand: |
+          ./hack/push-helm.sh
+      requires:
+        - image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local
+          alias: IMG
 resourceSelector:
   allow:
     # instruct skaffold to inject the built image reference into the image field in our ControllerDeployment
@@ -1082,7 +1089,7 @@ build:
             - third_party/gopkg.in/yaml.v2
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardenlet
     - image: europe-docker.pkg.dev/gardener-project/releases/gardener/resource-manager
       ko:
@@ -1186,7 +1193,7 @@ build:
             - pkg/utils/version
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-resource-manager
     - image: europe-docker.pkg.dev/gardener-project/releases/gardener/node-agent
       ko:
@@ -1280,7 +1287,7 @@ build:
             - third_party/gopkg.in/yaml.v2
             - VERSION
         ldflags:
-          - '{{.LD_FLAGS}}'
+          - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-node-agent
 deploy:
   helm:
@@ -1291,8 +1298,8 @@ deploy:
           - example/gardener-local/gardenlet/values.yaml
         namespace: garden
         setValueTemplates:
-          image.repository: '{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_gardenlet}}'
-          image.tag: '{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_gardenlet}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_gardenlet}}'
+          image.repository: "{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_gardenlet}}"
+          image.tag: "{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_gardenlet}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_gardenlet}}"
           # on a local cluster, skaffold uses a local immutable tag for artifacts,
           # overwrite our image vector to use the image that was just built
           # see https://skaffold.dev/docs/deployers/helm/#image-configuration

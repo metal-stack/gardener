@@ -8338,13 +8338,13 @@ Default, if unspecified, is to forward requests for external domains to upstream
 <tbody>
 <tr>
 <td>
-<code>url</code></br>
+<code>repository</code></br>
 <em>
 string
 </em>
 </td>
 <td>
-<p>URL is a reference to an OCI artifact repository.</p>
+<p>Repository is a reference to an OCI artifact repository.</p>
 </td>
 </tr>
 <tr>
@@ -8367,6 +8367,17 @@ string
 </td>
 <td>
 <p>Digest of the image to pull, takes precedence over tag.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>url</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>URL is the full artifact URL and takes precedence over all other fields.</p>
 </td>
 </tr>
 </tbody>

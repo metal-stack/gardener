@@ -157,7 +157,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
-		err = r.ReconcileContainerdConfig(log, osc.Spec.CRIConfig)
+		err = r.ReconcileContainerdConfig(ctx, log, osc.Spec.CRIConfig)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
 		}

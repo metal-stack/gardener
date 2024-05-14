@@ -313,8 +313,12 @@ const (
 	// ContainerDRuntimeContainersBinFolder is the folder where Container Runtime binaries should be saved for ContainerD usage
 	ContainerDRuntimeContainersBinFolder = "/var/bin/containerruntimes"
 
+	// ContainerDConfigDir is the path to the configuration directory of containerd.
+	ContainerDConfigDir = "/etc/containerd"
+	// ContainerDConfigFile is the path to the config.toml which configures containerd.
+	ContainerDConfigFile = ContainerDConfigDir + "/config.toml"
 	// ContainerDCertsDir is the certs directory of containerd.
-	ContainerDCertsDir = "/etc/containerd/certs.d"
+	ContainerDCertsDir = ContainerDConfigDir + "/certs.d"
 )
 
 // FileCodecID is the id of a FileCodec for cloud-init scripts.

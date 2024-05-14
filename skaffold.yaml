@@ -747,7 +747,8 @@ resourceSelector:
   allow:
     # instruct skaffold to inject the built image reference into the image field in our ControllerDeployment
     - groupKind: ControllerDeployment.core.gardener.cloud
-      image: [".*"]
+      image:
+        - ".helm.ociRepository.url"
 manifests:
   rawYaml:
     - example/gardener-local/gardenlet/secret-bootstrap-token.yaml

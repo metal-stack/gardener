@@ -4,7 +4,4 @@ metadata:
   name: provider-local
 helm:
   ociRepository:
-    url: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local/charts/extension
-    tag: v0.0.0
-  values:
-    image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local:v0.0.0
+    url: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local/charts/extension:v0.0.0

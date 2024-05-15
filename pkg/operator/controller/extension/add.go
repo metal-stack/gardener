@@ -35,6 +35,7 @@ func AddToManager(
 	}).AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed adding Garden controller: %w", err)
 	}
+
 	if err := (&runtimeconfig.Reconciler{
 		Config:          *cfg,
 		GardenClientMap: gardenClientMap,

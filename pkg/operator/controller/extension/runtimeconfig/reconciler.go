@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	podsecurityadmissionapi "k8s.io/pod-security-admission/api"
 	"k8s.io/utils/clock"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -30,9 +33,6 @@ import (
 	"github.com/gardener/gardener/pkg/operator/apis/config"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/gardener/gardener/pkg/utils/oci"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	podsecurityadmissionapi "k8s.io/pod-security-admission/api"
 )
 
 const (
@@ -195,7 +195,7 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 		ctx,
 		r.RuntimeClientSet.Client(),
 		v1beta1constants.GardenNamespace,
-		extension.Name,
+		"provider-"+extension.Name,
 		map[string]string{ctrlinstutils.LabelKeyControllerInstallationName: extension.Name},
 		false,
 		v1beta1constants.SeedResourceManagerClass,

@@ -48,6 +48,7 @@ controllers:
 disableControllers: []
 disableWebhooks: []
 ignoreResources: false
+priorityClassName: gardener-system-900
 
 # imageVectorOverwrite: |
 #   images:

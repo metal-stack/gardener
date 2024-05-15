@@ -205,6 +205,24 @@ func ValidateOperatingSystemConfigSpecUpdate(new, old *extensionsv1alpha1.Operat
 
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(new.Type, old.Type, fldPath.Child("type"))...)
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(new.Purpose, old.Purpose, fldPath.Child("purpose"))...)
+	allErrs = append(allErrs, ValidateCriConfigUpdate(new.CRIConfig, old.CRIConfig, fldPath.Child("criConfig"))...)
+
+	return allErrs
+}
+
+func ValidateCriConfigUpdate(new, old *extensionsv1alpha1.CRIConfig, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if old == nil && new == nil {
+		return allErrs
+	}
+	if old != nil && new == nil {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("criConfig"), "removing the cri config is not allowed"))
+		return allErrs
+	}
+
+	allErrs = append(allErrs, apivalidation.ValidateImmutableField(new.Name, old.Name, fldPath.Child("name"))...)
+	allErrs = append(allErrs, ValidateCriConfig(new, fldPath.Child("criConfig"))...)
 
 	return allErrs
 }

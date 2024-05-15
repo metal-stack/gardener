@@ -86,7 +86,11 @@ coredns:
   # ipFamilyPolicy: PreferDualStack
 gardener:
   version: ""
+  gardener-operator:
+    featureGates: { }
   gardenlet:
     featureGates: {}
+  garden:
+    isGardenCluster: false
   seed:
     provider: local

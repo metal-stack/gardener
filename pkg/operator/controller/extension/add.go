@@ -10,7 +10,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
 	"github.com/gardener/gardener/pkg/operator/apis/config"
 	"github.com/gardener/gardener/pkg/operator/controller/extension/gardenerconfig"
@@ -19,10 +18,9 @@ import (
 
 // AddToManager adds all Garden controllers to the given manager.
 func AddToManager(
-	_ context.Context,
+	ctx context.Context,
 	mgr manager.Manager,
 	cfg *config.OperatorConfiguration,
-	identity *gardencorev1beta1.Gardener,
 	gardenClientMap clientmap.ClientMap,
 ) error {
 	if gardenClientMap == nil {
@@ -39,7 +37,7 @@ func AddToManager(
 	if err := (&runtimeconfig.Reconciler{
 		Config:          *cfg,
 		GardenClientMap: gardenClientMap,
-	}).AddToManager(mgr); err != nil {
+	}).AddToManager(ctx, mgr); err != nil {
 		return fmt.Errorf("failed adding Garden controller: %w", err)
 	}
 

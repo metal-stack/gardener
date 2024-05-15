@@ -49,7 +49,7 @@ func AddToManager(ctx context.Context, mgr manager.Manager, cfg *config.Operator
 		return err
 	}
 
-	if err := extension.AddToManager(ctx, mgr, cfg, identity, gardenClientMap); err != nil {
+	if err := extension.AddToManager(ctx, mgr, cfg, gardenClientMap); err != nil {
 		return err
 	}
 

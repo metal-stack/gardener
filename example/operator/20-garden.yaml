@@ -16,11 +16,6 @@ metadata:
 type: Opaque
 ---
 apiVersion: operator.gardener.cloud/v1alpha1
-kind: Extension
-metadata:
-  name: provider-local
----
-apiVersion: operator.gardener.cloud/v1alpha1
 kind: Garden
 metadata:
   name: local

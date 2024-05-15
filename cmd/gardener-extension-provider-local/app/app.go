@@ -145,16 +145,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			Namespace: os.Getenv("WEBHOOK_CONFIG_NAMESPACE"),
 		}
 
-		controllerSwitches = ControllerSwitchOptions()
-		webhookSwitches    = WebhookSwitchOptions()
-		webhookOptions     = extensionscmdwebhook.NewAddToManagerOptions(
-			local.Name,
-			genericactuator.ShootWebhooksResourceName,
-			genericactuator.ShootWebhookNamespaceSelector(local.Type),
-			webhookServerOptions,
-			webhookSwitches,
-		)
-
+		// TODO: Consider removing some of these flags in case extension runs in garden cluster.
 		aggOption = extensionscmdcontroller.NewOptionAggregator(
 			restOpts,
 			mgrOpts,
@@ -169,9 +160,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			extensionscmdcontroller.PrefixOption("operatingsystemconfig-", operatingSystemConfigCtrlOpts),
 			extensionscmdcontroller.PrefixOption("healthcheck-", healthCheckCtrlOpts),
 			extensionscmdcontroller.PrefixOption("heartbeat-", heartbeatCtrlOptions),
-			controllerSwitches,
 			reconcileOpts,
-			webhookOptions,
 		)
 	)
 
@@ -179,8 +168,24 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 		Use: fmt.Sprintf("%s-controller-manager", local.Name),
 
 		RunE: func(_ *cobra.Command, _ []string) error {
-			seedName := os.Getenv("SEED_NAME")
+			if err := generalOpts.Complete(); err != nil {
+				return fmt.Errorf("error completing options: %w", err)
+			}
 
+			var (
+				runsInGardenCluster = generalOpts.Completed().RunsIn == "garden"
+				controllerSwitches  = ControllerSwitchOptions(runsInGardenCluster)
+				webhookSwitches     = WebhookSwitchOptions(runsInGardenCluster)
+				webhookOptions      = extensionscmdwebhook.NewAddToManagerOptions(
+					local.Name,
+					genericactuator.ShootWebhooksResourceName,
+					genericactuator.ShootWebhookNamespaceSelector(local.Type),
+					webhookServerOptions,
+					webhookSwitches,
+				)
+			)
+
+			aggOption.Register(controllerSwitches, webhookOptions)
 			if err := aggOption.Complete(); err != nil {
 				return fmt.Errorf("error completing options: %w", err)
 			}
@@ -214,24 +219,34 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			// add common meta types to schema for controller-runtime to use v1.ListOptions
 			metav1.AddToGroupVersion(scheme, machinev1alpha1.SchemeGroupVersion)
 
-			log.Info("Getting rest config for garden")
-			gardenRESTConfig, err := kubernetes.RESTConfigFromKubeconfigFile(os.Getenv("GARDEN_KUBECONFIG"), kubernetes.AuthTokenFile)
-			if err != nil {
-				return err
-			}
+			if !runsInGardenCluster {
+				log.Info("Getting rest config for garden")
+				gardenRESTConfig, err := kubernetes.RESTConfigFromKubeconfigFile(os.Getenv("GARDEN_KUBECONFIG"), kubernetes.AuthTokenFile)
+				if err != nil {
+					return err
+				}
 
-			log.Info("Setting up cluster object for garden")
-			gardenCluster, err := cluster.New(gardenRESTConfig, func(opts *cluster.Options) {
-				opts.Scheme = kubernetes.GardenScheme
-				opts.Logger = log
-			})
-			if err != nil {
-				return fmt.Errorf("failed creating garden cluster object: %w", err)
-			}
+				log.Info("Setting up cluster object for garden")
+				gardenCluster, err := cluster.New(gardenRESTConfig, func(opts *cluster.Options) {
+					opts.Scheme = kubernetes.GardenScheme
+					opts.Logger = log
+				})
+				if err != nil {
+					return fmt.Errorf("failed creating garden cluster object: %w", err)
+				}
 
-			log.Info("Adding garden cluster to manager")
-			if err := mgr.Add(gardenCluster); err != nil {
-				return fmt.Errorf("failed adding garden cluster to manager: %w", err)
+				log.Info("Adding garden cluster to manager")
+				if err := mgr.Add(gardenCluster); err != nil {
+					return fmt.Errorf("failed adding garden cluster to manager: %w", err)
+				}
+
+				localworker.DefaultAddOptions.GardenCluster = gardenCluster
+
+				if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+					return verifyGardenAccess(ctx, log, gardenCluster.GetClient(), os.Getenv("SEED_NAME"))
+				})); err != nil {
+					return fmt.Errorf("could not add garden runnable to manager: %w", err)
+				}
 			}
 
 			log.Info("Adding controllers to manager")
@@ -243,7 +258,6 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			ingressCtrlOpts.Completed().Apply(&localingress.DefaultAddOptions)
 			serviceCtrlOpts.Completed().Apply(&localservice.DefaultAddOptions)
 			workerCtrlOpts.Completed().Apply(&localworker.DefaultAddOptions.Controller)
-			localworker.DefaultAddOptions.GardenCluster = gardenCluster
 			localBackupBucketOptions.Completed().Apply(&localbackupbucket.DefaultAddOptions)
 			localBackupBucketOptions.Completed().Apply(&localbackupentry.DefaultAddOptions)
 			heartbeatCtrlOptions.Completed().Apply(&heartbeat.DefaultAddOptions)
@@ -280,14 +294,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("could not add controllers to manager: %w", err)
 			}
 
-			if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
-				return verifyGardenAccess(ctx, log, gardenCluster.GetClient(), seedName)
-			})); err != nil {
-				return fmt.Errorf("could not add garden runnable to manager: %w", err)
-			}
-
 			log.Info("Started with", "hostIP", serviceCtrlOpts.HostIP)
-
 			if err := mgr.Start(ctx); err != nil {
 				return fmt.Errorf("error running manager: %w", err)
 			}

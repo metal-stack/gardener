@@ -63,6 +63,8 @@ const (
 
 	// GardenerVersionFlag is the name of the command line flag containing the Gardener version.
 	GardenerVersionFlag = "gardener-version"
+	// RunsInFlag is the name of the command line flag containing the cluster type the extension runs in.
+	RunsInFlag = "runs-in"
 
 	// LogLevelFlag is the name of the command line flag containing the log level.
 	LogLevelFlag = "log-level"
@@ -460,6 +462,8 @@ type SwitchConfig struct {
 type GeneralOptions struct {
 	// GardenerVersion is the version of the Gardener.
 	GardenerVersion string
+	// RunsIn is the cluster type in which the extension runs.
+	RunsIn string
 
 	config *GeneralConfig
 }
@@ -468,11 +472,13 @@ type GeneralOptions struct {
 type GeneralConfig struct {
 	// GardenerVersion is the version of the Gardener.
 	GardenerVersion string
+	// RunsIn is the cluster type in which the extension runs.
+	RunsIn string
 }
 
 // Complete implements Complete.
 func (r *GeneralOptions) Complete() error {
-	r.config = &GeneralConfig{r.GardenerVersion}
+	r.config = &GeneralConfig{r.GardenerVersion, r.RunsIn}
 	return nil
 }
 
@@ -483,5 +489,6 @@ func (r *GeneralOptions) Completed() *GeneralConfig {
 
 // AddFlags implements Flagger.AddFlags.
 func (r *GeneralOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&r.GardenerVersion, GardenerVersionFlag, "", "Version of the gardenlet.")
+	fs.StringVar(&r.GardenerVersion, GardenerVersionFlag, "", "Version of the gardenlet or gardener-operator.")
+	fs.StringVar(&r.RunsIn, RunsInFlag, "seed", "Cluster type in which the extension runs")
 }

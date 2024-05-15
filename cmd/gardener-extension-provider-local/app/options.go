@@ -40,7 +40,14 @@ import (
 )
 
 // ControllerSwitchOptions are the extensionscmdcontroller.SwitchOptions for the provider controllers.
-func ControllerSwitchOptions() *extensionscmdcontroller.SwitchOptions {
+func ControllerSwitchOptions(runsInGardenCluster bool) *extensionscmdcontroller.SwitchOptions {
+	if runsInGardenCluster {
+		return extensionscmdcontroller.NewSwitchOptions(
+			extensionscmdcontroller.Switch(backupbucketcontroller.ControllerName, backupbucketcontroller.AddToManager),
+			extensionscmdcontroller.Switch(extensionsdnsrecordcontroller.ControllerName, dnsrecordcontroller.AddToManager),
+		)
+	}
+
 	return extensionscmdcontroller.NewSwitchOptions(
 		extensionscmdcontroller.Switch(backupbucketcontroller.ControllerName, backupbucketcontroller.AddToManager),
 		extensionscmdcontroller.Switch(backupentrycontroller.ControllerName, backupentrycontroller.AddToManager),
@@ -61,7 +68,11 @@ func ControllerSwitchOptions() *extensionscmdcontroller.SwitchOptions {
 }
 
 // WebhookSwitchOptions are the extensionscmdwebhook.SwitchOptions for the provider webhooks.
-func WebhookSwitchOptions() *extensionscmdwebhook.SwitchOptions {
+func WebhookSwitchOptions(runsInGardenCluster bool) *extensionscmdwebhook.SwitchOptions {
+	if runsInGardenCluster {
+		return extensionscmdwebhook.NewSwitchOptions()
+	}
+
 	return extensionscmdwebhook.NewSwitchOptions(
 		extensionscmdwebhook.Switch(extensionscontrolplanewebhook.WebhookName, controlplanewebhook.AddToManager),
 		extensionscmdwebhook.Switch(extensionsshootwebhook.WebhookName, shootwebhook.AddToManager),

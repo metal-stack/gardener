@@ -15,6 +15,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/component-base/featuregate"
 	podsecurityadmissionapi "k8s.io/pod-security-admission/api"
 	"k8s.io/utils/clock"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -29,8 +30,9 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
 	"github.com/gardener/gardener/pkg/controllerutils"
-	ctrlinstutils "github.com/gardener/gardener/pkg/gardenlet/controller/controllerinstallation/utils"
+	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/operator/apis/config"
+	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/gardener/gardener/pkg/utils/oci"
 )
@@ -182,7 +184,24 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 		}
 	}
 
-	release, err := r.RuntimeClientSet.ChartRenderer().RenderArchive(archive, extension.Name, namespace.Name, helmValues)
+	// Mix-in some standard values for garden.
+	featureToEnabled := make(map[featuregate.Feature]bool)
+	for feature := range features.DefaultFeatureGate.GetAll() {
+		featureToEnabled[feature] = features.DefaultFeatureGate.Enabled(feature)
+	}
+
+	gardenerValues := map[string]interface{}{
+		"gardener": map[string]interface{}{
+			"garden": map[string]interface{}{
+				"isGardenCluster": true,
+			},
+			"gardener-operator": map[string]interface{}{
+				"featureGates": featureToEnabled,
+			},
+		},
+	}
+
+	release, err := r.RuntimeClientSet.ChartRenderer().RenderArchive(archive, extension.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
 	if err != nil {
 		// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartCannotBeRendered", fmt.Sprintf("chart rendering process failed: %+v", err))
 		return err
@@ -195,8 +214,8 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 		ctx,
 		r.RuntimeClientSet.Client(),
 		v1beta1constants.GardenNamespace,
-		"provider-"+extension.Name,
-		map[string]string{ctrlinstutils.LabelKeyControllerInstallationName: extension.Name},
+		extension.Name,
+		map[string]string{"extension-name": extension.Name},
 		false,
 		v1beta1constants.SeedResourceManagerClass,
 		secretData,
@@ -247,7 +266,7 @@ func NewGardenConfigConditions(clock clock.Clock, status operatorv1alpha1.Extens
 func getNamespaceForExtension(extension *operatorv1alpha1.Extension) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: extension.Name,
+			Name: "extension-" + extension.Name,
 		},
 	}
 }

@@ -1,0 +1,20 @@
+apiVersion: operator.gardener.cloud/v1alpha1
+kind: Extension
+metadata:
+  name: provider-local
+spec:
+  resources:
+  - kind: BackupBucket
+    type: local
+  - kind: DNSRecord
+    type: local
+  deployment:
+    extension:
+      policy: OnDemand
+      helm:
+        ociRepository:
+          url: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local/charts/extension:v0.0.0
+          repository: "TODO-remove"
+          tag: "TODO-remove"
+        values:
+          priorityClassName: gardener-garden-system-critical

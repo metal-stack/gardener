@@ -14,6 +14,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/component-base/featuregate"
@@ -49,7 +50,7 @@ const (
 )
 
 var (
-	managedResourceLabels = map[string]string{v1beta1constants.LabelCareConditionType: string(operatorv1alpha1.VirtualComponentsHealthy)}
+	managedResourceLabels = map[string]string{v1beta1constants.LabelCareConditionType: string(operatorv1alpha1.RuntimeComponentsHealthy)}
 )
 
 // Reconciler reconciles Gardens.
@@ -75,13 +76,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 		return reconcile.Result{}, fmt.Errorf("error retrieving object from store: %w", err)
 	}
-
 	if garden.DeletionTimestamp != nil {
-		panic("deletion not implemented")
+		return reconcile.Result{}, r.cleanUp(ctx, log, garden)
 	}
 
-	err := r.reconcile(ctx, log, garden)
-	return reconcile.Result{}, err
+	return reconcile.Result{}, r.reconcile(ctx, log, garden)
 }
 
 func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, garden *operatorv1alpha1.Garden) error {
@@ -126,6 +125,52 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, garden *ope
 	return errors.Join(errs...)
 }
 
+func (r *Reconciler) cleanUp(ctx context.Context, log logr.Logger, garden *operatorv1alpha1.Garden) error {
+	extensionList := &operatorv1alpha1.ExtensionList{}
+	err := r.RuntimeClientSet.Client().List(ctx, extensionList)
+	if err != nil {
+		return fmt.Errorf("error retrieving extensions: %w", err)
+	}
+
+	knownObjects := []struct {
+		objectKind        string
+		object            client.Object
+		newObjectListFunc func() client.ObjectList
+	}{
+		{extensionsv1alpha1.BackupBucketResource, &extensionsv1alpha1.BackupBucket{}, func() client.ObjectList { return &extensionsv1alpha1.BackupBucketList{} }},
+		{extensionsv1alpha1.DNSRecordResource, &extensionsv1alpha1.DNSRecord{}, func() client.ObjectList { return &extensionsv1alpha1.DNSRecordList{} }},
+	}
+
+	for _, ext := range extensionList.Items {
+		refItems := 0
+		for _, resource := range ext.Spec.Resources {
+			for _, known := range knownObjects {
+				if known.objectKind == resource.Type {
+					listObj := known.newObjectListFunc()
+					if err := r.RuntimeClientSet.Client().List(ctx, listObj, client.MatchingFields{
+						"spec.type": resource.Type,
+					}); err != nil {
+						return fmt.Errorf("failed to list resources: %w", err)
+					}
+					refItems += meta.LenList(listObj)
+				}
+			}
+		}
+		if refItems > 0 {
+			continue
+		}
+		log.Info("Deleting managed resource", "Extension", ext.Name)
+		if err := r.RuntimeClientSet.Client().DeleteAllOf(ctx, &resourcesv1alpha1.ManagedResource{}, client.InNamespace(v1beta1constants.GardenNamespace), client.MatchingLabels{
+			ManagedByLabel:     ControllerName,
+			ExtensionNameLabel: ext.Name,
+		}); client.IgnoreNotFound(err) != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *Reconciler) computeRequiredExtensions(garden *operatorv1alpha1.Garden, extensionList *operatorv1alpha1.ExtensionList) ([]operatorv1alpha1.Extension, error) {
 	providedResources := make(map[string]map[string]operatorv1alpha1.Extension)
 
@@ -136,7 +181,7 @@ func (r *Reconciler) computeRequiredExtensions(garden *operatorv1alpha1.Garden, 
 				extensionsWithKind = make(map[string]operatorv1alpha1.Extension)
 				providedResources[res.Kind] = extensionsWithKind
 			}
-			extensionsWithKind[res.Type] = ext // TODO: may there be multiple extensions?
+			extensionsWithKind[res.Type] = ext
 		}
 	}
 

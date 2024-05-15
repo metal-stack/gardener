@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
+	"sync/atomic"
 
 	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
@@ -17,8 +19,11 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	extensionsv1alpha1helper "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1/helper"
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	"github.com/gardener/gardener/pkg/utils"
 )
 
 var decoder runtime.Decoder
@@ -68,6 +73,8 @@ type files struct {
 	deleted []extensionsv1alpha1.File
 }
 
+var containerdConfigChecksum atomic.Value
+
 func computeOperatingSystemConfigChanges(fs afero.Afero, newOSC *extensionsv1alpha1.OperatingSystemConfig) (*operatingSystemConfigChanges, error) {
 	changes := &operatingSystemConfigChanges{}
 
@@ -109,6 +116,48 @@ func computeOperatingSystemConfigChanges(fs afero.Afero, newOSC *extensionsv1alp
 		mergeUnits(newOSC.Spec.Units, newOSC.Status.ExtensionUnits),
 		changes.files,
 	)
+
+	var newContainerdConfigChecksum string
+	if extensionsv1alpha1helper.IsContainerdConfigured(newOSC.Spec.CRIConfig) {
+		// Order registries before comparing the containerd config. Different mutators might change the order.
+		slices.SortFunc(newOSC.Spec.CRIConfig.Containerd.Registries, func(a, b extensionsv1alpha1.RegistryConfig) int {
+			return strings.Compare(a.Upstream, b.Upstream)
+		})
+		newContainerdConfigChecksum = utils.ComputeChecksum(newOSC.Spec.CRIConfig.Containerd)
+	}
+
+	if extensionsv1alpha1helper.IsContainerdConfigured(oldOSC.Spec.CRIConfig) && extensionsv1alpha1helper.IsContainerdConfigured(newOSC.Spec.CRIConfig) &&
+		!slices.ContainsFunc(changes.units.changed, func(unit changedUnit) bool {
+			return unit.Name == v1beta1constants.OperatingSystemConfigUnitNameContainerDService
+		}) {
+
+		var oldContainerdConfigChecksum string
+		if val := containerdConfigChecksum.Load(); val != nil {
+			oldContainerdConfigChecksum = val.(string)
+		} else {
+			// Order registries before comparing the containerd config. Different mutators might change the order.s
+			slices.SortFunc(oldOSC.Spec.CRIConfig.Containerd.Registries, func(a, b extensionsv1alpha1.RegistryConfig) int {
+				return strings.Compare(a.Upstream, b.Upstream)
+			})
+			oldContainerdConfigChecksum = utils.ComputeChecksum(oldOSC.Spec.CRIConfig.Containerd)
+		}
+
+		if oldContainerdConfigChecksum != newContainerdConfigChecksum {
+			var systemdUnit extensionsv1alpha1.Unit
+			for _, unit := range newOSC.Spec.Units {
+				if unit.Name == v1beta1constants.OperatingSystemConfigUnitNameContainerDService {
+					systemdUnit = unit
+					break
+				}
+			}
+
+			changes.units.changed = append(changes.units.changed, changedUnit{
+				Unit: systemdUnit,
+			})
+		}
+	}
+
+	containerdConfigChecksum.Store(newContainerdConfigChecksum)
 
 	return changes, nil
 }

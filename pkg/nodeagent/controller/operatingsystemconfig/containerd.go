@@ -50,8 +50,6 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 		}
 	}
 
-	// TODO: we probably need to check if something changed and decide whether we have to restart the containerd service
-
 	return nil
 }
 

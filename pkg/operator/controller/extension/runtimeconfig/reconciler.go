@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,11 +76,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		panic("deletion not implemented")
 	}
 
-	err := r.reconcile(ctx, garden)
+	err := r.reconcile(ctx, log, garden)
 	return reconcile.Result{}, err
 }
 
-func (r *Reconciler) reconcile(ctx context.Context, garden *operatorv1alpha1.Garden) error {
+func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, garden *operatorv1alpha1.Garden) error {
 	extensionList := &operatorv1alpha1.ExtensionList{}
 	err := r.RuntimeClientSet.Client().List(ctx, extensionList)
 	if err != nil {
@@ -101,10 +102,12 @@ func (r *Reconciler) reconcile(ctx context.Context, garden *operatorv1alpha1.Gar
 
 	var errs []error
 
+	log.Info("Deploying required extensions")
 	for _, ext := range required {
-		errs = append(errs, r.deployExtension(ctx, ext))
+		errs = append(errs, r.deployExtension(ctx, log, ext))
 	}
 
+	log.Info("Cleanup managed resources for unused extensions")
 	existingManagedResourcesList := &resourcesv1alpha1.ManagedResourceList{}
 	err = r.RuntimeClientSet.Client().List(ctx, existingManagedResourcesList, client.MatchingLabels{
 		"app.kubernetes.io/managed-by": ControllerName,
@@ -113,7 +116,7 @@ func (r *Reconciler) reconcile(ctx context.Context, garden *operatorv1alpha1.Gar
 
 	for _, mr := range existingManagedResourcesList.Items {
 		mr := mr
-		errs = append(errs, r.deleteManagedResourceIfNotNeeded(ctx, &mr, required))
+		errs = append(errs, r.deleteManagedResourceIfNotNeeded(ctx, log, &mr, required))
 	}
 
 	return errors.Join(errs...)
@@ -167,7 +170,7 @@ func (r *Reconciler) computeRequiredExtensions(garden *operatorv1alpha1.Garden, 
 	return exts, nil
 }
 
-func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1alpha1.Extension) error {
+func (r *Reconciler) deployExtension(ctx context.Context, log logr.Logger, extension operatorv1alpha1.Extension) error {
 	deployment := extension.Spec.Deployment
 	if deployment == nil || deployment.Extension == nil {
 		return fmt.Errorf("no deployment found for extension %q", extension.Name)
@@ -177,6 +180,7 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 	var helmValues map[string]interface{}
 	if helmDeployment.Values != nil {
 		if err := yaml.Unmarshal(helmDeployment.Values.Raw, &helmValues); err != nil {
+			log.Error(err, "Failed to unmarshal helm deployment for extension", "extension", extension.Name)
 			// TODO
 			// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartInformationInvalid", fmt.Sprintf("chart values cannot be unmarshalled: %+v", err))
 			return err
@@ -184,6 +188,7 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 	}
 
 	namespace := getNamespaceForExtension(&extension)
+	log.Info("Creating namespace for extension", "extension", extension.Name, "namespace", namespace)
 	if _, err := controllerutils.GetAndCreateOrMergePatch(ctx, r.RuntimeClientSet.Client(), namespace, func() error {
 		if podSecurityEnforce, ok := deployment.Extension.Annotations[v1beta1constants.AnnotationPodSecurityEnforce]; ok {
 			metav1.SetMetaDataLabel(&namespace.ObjectMeta, podsecurityadmissionapi.EnforceLevelLabel, podSecurityEnforce)
@@ -192,14 +197,17 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 		}
 		return nil
 	}); err != nil {
+		log.Error(err, "Failed to create namespace for extension", "extension", extension.Name, "namespace", namespace)
 		return err
 	}
 
 	archive := helmDeployment.RawChart
 	if len(archive) == 0 {
 		var err error
+		log.Info("Pulling Helm Chart from OCI Repository", "extension", extension.Name)
 		archive, err = r.HelmRegistry.Pull(ctx, helmDeployment.OCIRepository)
 		if err != nil {
+			log.Error(err, "Failed to pull Helm Chart from OCI Repository", "extension", extension.Name, "repository", helmDeployment.OCIRepository)
 			// TODO
 			// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "OCIChartCannotBePulled", fmt.Sprintf("chart pulling process failed: %+v", err))
 			return err
@@ -223,8 +231,10 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 		},
 	}
 
+	log.Info("Rendering chart for extension", "extension", extension.Name)
 	release, err := r.RuntimeClientSet.ChartRenderer().RenderArchive(archive, extension.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
 	if err != nil {
+		log.Error(err, "Failed to render archive for extension", "extension", extension.Name)
 		// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartCannotBeRendered", fmt.Sprintf("chart rendering process failed: %+v", err))
 		return err
 	}
@@ -232,6 +242,7 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 	// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionTrue, "RegistrationValid", "chart could be rendered successfully.")
 	secretData := release.AsSecretData()
 
+	log.Info("Creating managed resource for extension", "extension", extension.Name)
 	if err := managedresources.Create(
 		ctx,
 		r.RuntimeClientSet.Client(),
@@ -248,6 +259,7 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 		nil,
 		nil,
 	); err != nil {
+		log.Error(err, "Failed to create managed resource for extension", "extension", extension.Name)
 		// conditionInstalled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionInstalled, gardencorev1beta1.ConditionFalse, "InstallationFailed", fmt.Sprintf("Creation of ManagedResource %q failed: %+v", controllerInstallation.Name, err))
 		return err
 	}
@@ -257,24 +269,26 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 	// 	// care controller will update condition based on 'ResourcesApplied' condition of ManagedResource
 	// 	conditionInstalled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionInstalled, gardencorev1beta1.ConditionFalse, "InstallationPending", fmt.Sprintf("Installation of ManagedResource %q is still pending.", controllerInstallation.Name))
 	// }
+	log.Info("Finished to deploy managed resource for extension", "extension", extension.Name)
 
 	return nil
 }
 
-func (r *Reconciler) deleteManagedResourceIfNotNeeded(ctx context.Context, mr *resourcesv1alpha1.ManagedResource, requiredExtensions []operatorv1alpha1.Extension) error {
-	extensionName, ok := mr.Labels["extension-name"]
-	if !ok {
-		// TODO: log
-		return nil
-	}
-
+func (r *Reconciler) deleteManagedResourceIfNotNeeded(ctx context.Context, log logr.Logger, mr *resourcesv1alpha1.ManagedResource, requiredExtensions []operatorv1alpha1.Extension) error {
+	extensionName := mr.Labels["extension-name"]
 	for _, ext := range requiredExtensions {
 		if ext.Name == extensionName {
 			return nil
 		}
 	}
 
-	return r.RuntimeClientSet.Client().Delete(ctx, mr)
+	log.Info("Removing managed resource for unused extension", "managed-resource", mr.Name, "extension", extensionName)
+	err := r.RuntimeClientSet.Client().Delete(ctx, mr)
+	if err != nil {
+		log.Error(err, "Failed to remove managed resource for unused extension", "managed-resource", mr.Name, "extension", extensionName)
+		return err
+	}
+	return nil
 }
 
 // RuntimeConfigConditions contains all conditions of the garden status subresource.

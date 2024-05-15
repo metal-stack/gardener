@@ -132,31 +132,13 @@ func (r *Reconciler) cleanUp(ctx context.Context, log logr.Logger, garden *opera
 		return fmt.Errorf("error retrieving extensions: %w", err)
 	}
 
-	knownObjects := []struct {
-		objectKind        string
-		object            client.Object
-		newObjectListFunc func() client.ObjectList
-	}{
-		{extensionsv1alpha1.BackupBucketResource, &extensionsv1alpha1.BackupBucket{}, func() client.ObjectList { return &extensionsv1alpha1.BackupBucketList{} }},
-		{extensionsv1alpha1.DNSRecordResource, &extensionsv1alpha1.DNSRecord{}, func() client.ObjectList { return &extensionsv1alpha1.DNSRecordList{} }},
-	}
-
 	for _, ext := range extensionList.Items {
-		refItems := 0
-		for _, resource := range ext.Spec.Resources {
-			for _, known := range knownObjects {
-				if known.objectKind == resource.Type {
-					listObj := known.newObjectListFunc()
-					if err := r.RuntimeClientSet.Client().List(ctx, listObj, client.MatchingFields{
-						"spec.type": resource.Type,
-					}); err != nil {
-						return fmt.Errorf("failed to list resources: %w", err)
-					}
-					refItems += meta.LenList(listObj)
-				}
-			}
+		ext := ext
+		ok, err := r.canManagedResourceBeDeleted(ctx, &ext)
+		if err != nil {
+			return fmt.Errorf("failed to list resources: %w", err)
 		}
-		if refItems > 0 {
+		if !ok {
 			continue
 		}
 		log.Info("Deleting managed resource", "Extension", ext.Name)
@@ -169,6 +151,32 @@ func (r *Reconciler) cleanUp(ctx context.Context, log logr.Logger, garden *opera
 	}
 
 	return nil
+}
+
+func (r *Reconciler) canManagedResourceBeDeleted(ctx context.Context, ext *operatorv1alpha1.Extension) (bool, error) {
+	knownObjects := []struct {
+		objectKind        string
+		object            client.Object
+		newObjectListFunc func() client.ObjectList
+	}{
+		{extensionsv1alpha1.BackupBucketResource, &extensionsv1alpha1.BackupBucket{}, func() client.ObjectList { return &extensionsv1alpha1.BackupBucketList{} }},
+		{extensionsv1alpha1.DNSRecordResource, &extensionsv1alpha1.DNSRecord{}, func() client.ObjectList { return &extensionsv1alpha1.DNSRecordList{} }},
+	}
+
+	for _, resource := range ext.Spec.Resources {
+		for _, known := range knownObjects {
+			if known.objectKind == resource.Type {
+				listObj := known.newObjectListFunc()
+				if err := r.RuntimeClientSet.Client().List(ctx, listObj, client.MatchingFields{
+					"spec.type": resource.Type,
+				}); err != nil {
+					return false, fmt.Errorf("failed to list resources: %w", err)
+				}
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
 
 func (r *Reconciler) computeRequiredExtensions(garden *operatorv1alpha1.Garden, extensionList *operatorv1alpha1.ExtensionList) ([]operatorv1alpha1.Extension, error) {
@@ -320,8 +328,23 @@ func (r *Reconciler) deleteManagedResourceIfNotNeeded(ctx context.Context, log l
 		}
 	}
 
+	ext := &operatorv1alpha1.Extension{}
+	err := r.RuntimeClientSet.Client().Get(ctx, client.ObjectKey{
+		Name: extensionName,
+	}, ext)
+	if err != nil {
+		return fmt.Errorf("failed to get extension %q: %w", extensionName, err)
+	}
+	ok, err := r.canManagedResourceBeDeleted(ctx, ext)
+	if err != nil {
+		return fmt.Errorf("failed to list resources: %w", err)
+	}
+	if !ok {
+		return nil
+	}
+
 	log.Info("Removing managed resource for unused extension", "managed-resource", mr.Name, "extension", extensionName)
-	err := r.RuntimeClientSet.Client().Delete(ctx, mr)
+	err = r.RuntimeClientSet.Client().Delete(ctx, mr)
 	if err != nil {
 		log.Error(err, "Failed to remove managed resource for unused extension", "managed-resource", mr.Name, "extension", extensionName)
 		return err

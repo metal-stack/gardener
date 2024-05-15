@@ -5,6 +5,8 @@
 package validation
 
 import (
+	"encoding/json"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -213,6 +216,26 @@ func ValidateCriConfig(config *extensionsv1alpha1.CRIConfig, fldPath *field.Path
 		return allErrs
 	}
 
+	if len(config.Name) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("name"), "field is required"))
+	} else {
+		switch name := config.Name; name {
+		case extensionsv1alpha1.CRINameContainerD:
+		default:
+			allErrs = append(allErrs, field.NotSupported(fldPath.Child("name"), name, []extensionsv1alpha1.CRIName{extensionsv1alpha1.CRINameContainerD}))
+		}
+	}
+
+	if len(config.CRICgroupDriver) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("criCgroupDriver"), "field is required"))
+	} else {
+		switch driver := config.CRICgroupDriver; driver {
+		case extensionsv1alpha1.CRICgroupDriverCgroupfs, extensionsv1alpha1.CRICgroupDriverSystemd:
+		default:
+			allErrs = append(allErrs, field.NotSupported(fldPath.Child("criCgroupDriver"), driver, []extensionsv1alpha1.CRICgroupDriverName{extensionsv1alpha1.CRICgroupDriverCgroupfs, extensionsv1alpha1.CRICgroupDriverSystemd}))
+		}
+	}
+
 	allErrs = append(allErrs, ValidateContainerdConfig(config.Containerd, fldPath.Child("containerd"))...)
 
 	return allErrs
@@ -225,21 +248,105 @@ func ValidateContainerdConfig(config *extensionsv1alpha1.ContainerdConfig, fldPa
 		return allErrs
 	}
 
-	// TODO: implement!
+	if len(config.SandboxImage) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("sandboxImage"), "field is required"))
+	}
 
-	// Verify cri name is set and valid
-	// Verify cgroup driver name is set and valid
+	allErrs = append(allErrs, ValidateContainerdRegistryConfigs(config.Registries, fldPath.Child("registries"))...)
 
-	// Verify registry upstream is unique
-	// Verify capabilities are valid
-	// Verify upstream is a dns hostname or "_default" for default registry configuration
-	// Verify URL is parsable URL
-	// Verify server is parsable URL
+	for i, p := range config.Plugins {
+		idxPath := fldPath.Child("plugins").Index(i)
 
-	// Verify sandbox image is set
+		if len(p.Path) == 0 {
+			allErrs = append(allErrs, field.Required(idxPath.Child("path"), "field is required"))
+		}
 
-	// Verify that path is not empty
-	// Verify that plugin values are of type map[string]any
+		if p.Values != nil && len(p.Values.Raw) > 0 {
+			values := map[string]any{}
+
+			err := json.Unmarshal(p.Values.Raw, &values)
+			if err != nil {
+				allErrs = append(allErrs, field.Invalid(idxPath.Child("values"), string(p.Values.Raw), "provided values must be a json map"))
+			}
+		}
+	}
+
+	return allErrs
+}
+
+func ValidateContainerdRegistryConfigs(registries []extensionsv1alpha1.RegistryConfig, fldPath *field.Path) field.ErrorList {
+	const form = "; desired format: https://host[:port]"
+
+	allErrs := field.ErrorList{}
+
+	duplicateUpstream := sets.Set[string]{}
+	for i, r := range registries {
+		idxPath := fldPath.Index(i)
+
+		if duplicateUpstream.Has(r.Upstream) {
+			allErrs = append(allErrs, field.Duplicate(idxPath.Child("upstream"), r.Upstream))
+		}
+		duplicateUpstream.Insert(r.Upstream)
+
+		if r.Upstream != "_default" {
+			allErrs = append(allErrs, validation.IsFullyQualifiedDomainName(idxPath.Child("upstream"), r.Upstream)...)
+		}
+
+		if r.Server != nil {
+			serverFld := idxPath.Child("server")
+
+			if u, err := url.Parse(*r.Server); err != nil {
+				allErrs = append(allErrs, field.Required(serverFld, "url must be a valid URL: "+err.Error()+form))
+			} else {
+				if u.Scheme != "http" && u.Scheme != "https" {
+					allErrs = append(allErrs, field.NotSupported(serverFld, u.Scheme, []string{"http", "https"}))
+				}
+				if len(u.Host) == 0 {
+					allErrs = append(allErrs, field.Invalid(serverFld, u.Host, "host must be provided"+form))
+				}
+				if u.User != nil {
+					allErrs = append(allErrs, field.Invalid(serverFld, u.User.String(), "user information is not permitted in the URL"+form))
+				}
+				if len(u.Fragment) != 0 {
+					allErrs = append(allErrs, field.Invalid(serverFld, u.Fragment, "fragments are not permitted in the URL"+form))
+				}
+				if len(u.RawQuery) != 0 {
+					allErrs = append(allErrs, field.Invalid(serverFld, u.RawQuery, "query parameters are not permitted in the URL"+form))
+				}
+			}
+		}
+
+		for i2, h := range r.Hosts {
+			hostFld := idxPath.Child("hosts").Index(i2)
+
+			if u, err := url.Parse(h.URL); err != nil {
+				allErrs = append(allErrs, field.Required(hostFld.Child("url"), "url must be a valid URL: "+err.Error()+form))
+			} else {
+				if len(u.Host) == 0 {
+					allErrs = append(allErrs, field.Invalid(hostFld.Child("url"), u.Host, "host must be provided"+form))
+				}
+				if u.User != nil {
+					allErrs = append(allErrs, field.Invalid(hostFld.Child("url"), u.User.String(), "user information is not permitted in the URL"+form))
+				}
+				if len(u.Fragment) != 0 {
+					allErrs = append(allErrs, field.Invalid(hostFld.Child("url"), u.Fragment, "fragments are not permitted in the URL"+form))
+				}
+				if len(u.RawQuery) != 0 {
+					allErrs = append(allErrs, field.Invalid(hostFld.Child("url"), u.RawQuery, "query parameters are not permitted in the URL"+form))
+				}
+			}
+
+			for i3, cap := range h.Capabilities {
+				capFld := hostFld.Child("capabilities").Index(i3)
+
+				switch cap {
+				case "push", "pull", "resolve":
+				default:
+					allErrs = append(allErrs, field.NotSupported(capFld, cap, []string{"push", "pull", "resolve"}))
+				}
+			}
+		}
+	}
 
 	return allErrs
 }

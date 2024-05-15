@@ -8,9 +8,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	. "github.com/gardener/gardener/pkg/apis/extensions/validation"
@@ -34,6 +36,33 @@ var _ = Describe("OperatingSystemConfig validation tests", func() {
 				},
 				Purpose:              extensionsv1alpha1.OperatingSystemConfigPurposeProvision,
 				ReloadConfigFilePath: &reloadConfigFilePath,
+				CRIConfig: &extensionsv1alpha1.CRIConfig{
+					Name:            extensionsv1alpha1.CRINameContainerD,
+					CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverCgroupfs,
+					Containerd: &extensionsv1alpha1.ContainerdConfig{
+						Registries: []extensionsv1alpha1.RegistryConfig{
+							{
+								Upstream: "docker.io",
+								Server:   ptr.To("https://docker.io"),
+								Hosts: []extensionsv1alpha1.RegistryHost{
+									{
+										URL:          "https://registry-1.docker.io",
+										Capabilities: []string{"pull", "resolve"},
+									},
+								},
+							},
+						},
+						SandboxImage: "pause",
+						Plugins: []extensionsv1alpha1.PluginConfig{
+							{
+								Path: []string{"io.containerd.grpc.v1.cri", "registry", "configs", "gcr.io", "auth"},
+								Values: &apiextensionsv1.JSON{
+									Raw: []byte(`{"username": "foo"}`),
+								},
+							},
+						},
+					},
+				},
 				Units: []extensionsv1alpha1.Unit{
 					{
 						Name: "foo",
@@ -273,6 +302,171 @@ var _ = Describe("OperatingSystemConfig validation tests", func() {
 			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeDuplicate),
 				"Field": Equal("status.extensionFiles[0].path"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs with cri name unset", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Name = ""
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":   Equal(field.ErrorTypeRequired),
+				"Field":  Equal("spec.criConfig.name"),
+				"Detail": Equal("field is required"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs invalid cri", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Name = extensionsv1alpha1.CRIName("foo")
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeNotSupported),
+				"Field": Equal("spec.criConfig.name"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs invalid cgroup driver", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.CRICgroupDriver = extensionsv1alpha1.CRICgroupDriverName("foo")
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeNotSupported),
+				"Field": Equal("spec.criConfig.criCgroupDriver"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs when sandbox image is not specified", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.SandboxImage = ""
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeRequired),
+				"Field": Equal("spec.criConfig.containerd.sandboxImage"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs when upstream registry host is duplicated", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Registries = append(oscCopy.Spec.CRIConfig.Containerd.Registries, oscCopy.Spec.CRIConfig.Containerd.Registries[0])
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":     Equal(field.ErrorTypeDuplicate),
+				"Field":    Equal("spec.criConfig.containerd.registries[1].upstream"),
+				"BadValue": Equal("docker.io"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs an invalid upstream name", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Registries = []extensionsv1alpha1.RegistryConfig{
+				{
+					Upstream: "a/b.io",
+				},
+			}
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":     Equal(field.ErrorTypeInvalid),
+				"Field":    Equal("spec.criConfig.containerd.registries[0].upstream"),
+				"BadValue": Equal("a/b.io"),
+			}))))
+		})
+
+		It("should allow OperatingSystemConfigs with _default upstream name", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Registries = []extensionsv1alpha1.RegistryConfig{
+				{
+					Upstream: "_default",
+				},
+			}
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(BeEmpty())
+		})
+
+		It("should forbid OperatingSystemConfigs an invalid server name", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Registries = []extensionsv1alpha1.RegistryConfig{
+				{
+					Upstream: "foo.bar",
+					Server:   ptr.To("ftp://foo.bar"),
+				},
+			}
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":     Equal(field.ErrorTypeNotSupported),
+				"Field":    Equal("spec.criConfig.containerd.registries[0].server"),
+				"BadValue": Equal("ftp"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs an invalid hosts url", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Registries = []extensionsv1alpha1.RegistryConfig{
+				{
+					Upstream: "foo.bar",
+					Hosts: []extensionsv1alpha1.RegistryHost{
+						{
+							URL: "1a",
+						},
+					},
+				},
+			}
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeInvalid),
+				"Field": Equal("spec.criConfig.containerd.registries[0].hosts[0].url"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs an invalid hosts capabilities", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Registries = []extensionsv1alpha1.RegistryConfig{
+				{
+					Upstream: "foo.bar",
+					Hosts: []extensionsv1alpha1.RegistryHost{
+						{
+							URL:          "http://foo.bar/us",
+							Capabilities: []string{"foo"},
+						},
+					},
+				},
+			}
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":     Equal(field.ErrorTypeNotSupported),
+				"Field":    Equal("spec.criConfig.containerd.registries[0].hosts[0].capabilities[0]"),
+				"BadValue": Equal("foo"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs an empty plugin path", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Plugins = []extensionsv1alpha1.PluginConfig{
+				{
+					Path: []string{},
+				},
+			}
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeRequired),
+				"Field": Equal("spec.criConfig.containerd.plugins[0].path"),
+			}))))
+		})
+
+		It("should forbid OperatingSystemConfigs plugin values that are not of type map", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Containerd.Plugins = []extensionsv1alpha1.PluginConfig{
+				{
+					Path: []string{"foo"},
+					Values: &apiextensionsv1.JSON{
+						Raw: []byte(`[1]`),
+					},
+				},
+			}
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeInvalid),
+				"Field": Equal("spec.criConfig.containerd.plugins[0].values"),
 			}))))
 		})
 

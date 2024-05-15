@@ -61,7 +61,7 @@ func SetDefaults_Image(obj *Image) {
 	}
 }
 
-func setDefaultsGardenlet(obj *Gardenlet, name, namespace string) {
+func setDefaultsGardenlet(obj *GardenletConfig, name, namespace string) {
 	// Set deployment defaults
 	if obj.Deployment == nil {
 		obj.Deployment = &GardenletDeployment{}

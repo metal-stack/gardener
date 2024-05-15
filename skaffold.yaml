@@ -740,6 +740,9 @@ build:
       custom:
         buildCommand: |
           ./hack/push-helm.sh
+        dependencies:
+          paths:
+            - charts/gardener/provider-local
       requires:
         - image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local
           alias: IMG
@@ -1287,6 +1290,16 @@ build:
         ldflags:
           - '{{.LD_FLAGS}}'
         main: ./cmd/gardener-node-agent
+    - image: gardenlet/chart
+      custom:
+        buildCommand: |
+          ./hack/push-helm.sh ./charts/gardener/gardenlet .image.ref
+        dependencies:
+          paths:
+            - charts/gardener/gardenlet
+      requires:
+        - image: europe-docker.pkg.dev/gardener-project/releases/gardener/gardenlet
+          alias: IMG
 deploy:
   helm:
     releases:

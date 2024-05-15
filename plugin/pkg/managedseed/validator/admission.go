@@ -34,6 +34,8 @@ import (
 	gardencorev1beta1listers "github.com/gardener/gardener/pkg/client/core/listers/core/v1beta1"
 	kubernetesclient "github.com/gardener/gardener/pkg/client/kubernetes"
 	seedmanagementclientset "github.com/gardener/gardener/pkg/client/seedmanagement/clientset/versioned"
+	seedmanagementinformers "github.com/gardener/gardener/pkg/client/seedmanagement/informers/externalversions"
+	seedmanagementv1alpha1listers "github.com/gardener/gardener/pkg/client/seedmanagement/listers/seedmanagement/v1alpha1"
 	gardenlethelper "github.com/gardener/gardener/pkg/gardenlet/apis/config/helper"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -56,11 +58,13 @@ type ManagedSeed struct {
 	secretLister         kubecorev1listers.SecretLister
 	coreClient           gardencoreclientset.Interface
 	seedManagementClient seedmanagementclientset.Interface
+	gardenletLister      seedmanagementv1alpha1listers.GardenletLister
 	readyFunc            admission.ReadyFunc
 }
 
 var (
 	_ = admissioninitializer.WantsCoreInformerFactory(&ManagedSeed{})
+	_ = admissioninitializer.WantsSeedManagementInformerFactory(&ManagedSeed{})
 	_ = admissioninitializer.WantsCoreClientSet(&ManagedSeed{})
 	_ = admissioninitializer.WantsSeedManagementClientSet(&ManagedSeed{})
 	_ = admissioninitializer.WantsKubeInformerFactory(&ManagedSeed{})
@@ -105,6 +109,14 @@ func (v *ManagedSeed) SetCoreClientSet(c gardencoreclientset.Interface) {
 	v.coreClient = c
 }
 
+// SetSeedManagementInformerFactory gets Lister from SharedInformerFactory.
+func (v *ManagedSeed) SetSeedManagementInformerFactory(f seedmanagementinformers.SharedInformerFactory) {
+	gardenletInformer := f.Seedmanagement().V1alpha1().Gardenlets()
+	v.gardenletLister = gardenletInformer.Lister()
+
+	readyFuncs = append(readyFuncs, gardenletInformer.Informer().HasSynced)
+}
+
 // SetSeedManagementClientSet sets the garden seedmanagement clientset.
 func (v *ManagedSeed) SetSeedManagementClientSet(c seedmanagementclientset.Interface) {
 	v.seedManagementClient = c
@@ -126,6 +138,10 @@ func (v *ManagedSeed) ValidateInitialization() error {
 	}
 	if v.seedManagementClient == nil {
 		return errors.New("missing garden seedmanagement client")
+	}
+
+	if v.gardenletLister == nil {
+		return errors.New("missing gardenlet lister")
 	}
 	return nil
 }
@@ -266,6 +282,12 @@ func (v *ManagedSeed) validateManagedSeedCreate(managedSeed *seedmanagement.Mana
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "gardenlet", "config", "seedConfig", "spec", "provider", "zones"), seedSpec.Provider.Zones, "cannot use zone in seed provider that is not available in referenced shoot"))
 	}
 
+	if _, err := v.gardenletLister.Gardenlets(managedSeed.Namespace).Get(managedSeed.Name); err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed checking whether Gardenlet object exists for ManagedSeed %s/%s: %w", managedSeed.Namespace, managedSeed.Name, err)
+	} else if err == nil {
+		return nil, fmt.Errorf("cannot create ManagedSeed %s/%s since there is already a Gardenlet object with the same name", managedSeed.Namespace, managedSeed.Name)
+	}
+
 	return allErrs, nil
 }
 
@@ -299,7 +321,7 @@ func (v *ManagedSeed) validateManagedSeedUpdate(oldManagedSeed, newManagedSeed *
 	return allErrs, nil
 }
 
-func (v *ManagedSeed) admitGardenlet(gardenlet *seedmanagement.Gardenlet, shoot *gardencorev1beta1.Shoot, fldPath *field.Path) (field.ErrorList, error) {
+func (v *ManagedSeed) admitGardenlet(gardenlet *seedmanagement.GardenletConfig, shoot *gardencorev1beta1.Shoot, fldPath *field.Path) (field.ErrorList, error) {
 	var allErrs field.ErrorList
 
 	if gardenlet.Config != nil {

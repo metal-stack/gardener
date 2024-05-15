@@ -86,7 +86,11 @@ spec:
           type: RuntimeDefault
       containers:
       - name: gardenlet
+        {{- if .Values.image.ref }}
+        image: {{ .Values.image.ref }}
+        {{- else }}
         image: {{ include "image" .Values.image }}
+        {{- end }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
         - --config=/etc/gardenlet/config/config.yaml

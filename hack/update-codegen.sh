@@ -11,12 +11,12 @@ set -o pipefail
 CODEGEN_GROUPS=""
 MODE="sequential"
 AVAILABLE_CODEGEN_OPTIONS=(
+  "seedmanagement_groups"
   "authentication_groups"
   "core_groups"
   "extensions_groups"
   "resources_groups"
   "operator_groups"
-  "seedmanagement_groups"
   "operations_groups"
   "settings_groups"
   "operatorconfig_groups"

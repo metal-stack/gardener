@@ -32,7 +32,7 @@ var _ = Describe("ManagedSeedSet Validation Tests", func() {
 				},
 			},
 			Spec: seedmanagement.ManagedSeedSpec{
-				Gardenlet: &seedmanagement.Gardenlet{},
+				Gardenlet: &seedmanagement.GardenletConfig{},
 			},
 		}
 		shoot = &core.Shoot{
@@ -238,7 +238,7 @@ var _ = Describe("ManagedSeedSet Validation Tests", func() {
 			managedSeedSet.Spec.Selector = *metav1.SetAsLabelSelector(labels.Set{
 				"bar": "baz",
 			})
-			managedSeedSet.Spec.Template.Spec.Gardenlet = &seedmanagement.Gardenlet{
+			managedSeedSet.Spec.Template.Spec.Gardenlet = &seedmanagement.GardenletConfig{
 				Config: gardenletConfiguration(&gardencorev1beta1.Seed{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
@@ -269,7 +269,7 @@ var _ = Describe("ManagedSeedSet Validation Tests", func() {
 		It("should forbid empty or invalid fields in template", func() {
 			managedSeedCopy := managedSeed.DeepCopy()
 			managedSeedCopy.Spec.Shoot = &seedmanagement.Shoot{}
-			managedSeedCopy.Spec.Gardenlet = &seedmanagement.Gardenlet{
+			managedSeedCopy.Spec.Gardenlet = &seedmanagement.GardenletConfig{
 				Config: gardenletConfiguration(&gardencorev1beta1.Seed{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "foo",

@@ -30,7 +30,7 @@ func ValidateControllerDeployment(controllerDeployment *core.ControllerDeploymen
 		isBuiltInType = true
 		deploymentType = "helm"
 
-		allErrs = append(allErrs, validateHelmControllerDeployment(controllerDeployment.Helm, field.NewPath("helm"))...)
+		allErrs = append(allErrs, ValidateHelmControllerDeployment(controllerDeployment.Helm, field.NewPath("helm"))...)
 	}
 
 	if isBuiltInType {
@@ -56,7 +56,8 @@ func ValidateControllerDeploymentUpdate(new, _ *core.ControllerDeployment) field
 	return ValidateControllerDeployment(new)
 }
 
-func validateHelmControllerDeployment(helmControllerDeployment *core.HelmControllerDeployment, fldPath *field.Path) field.ErrorList {
+// ValidateHelmControllerDeployment validates Helm controller deployment configs.
+func ValidateHelmControllerDeployment(helmControllerDeployment *core.HelmControllerDeployment, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if len(helmControllerDeployment.RawChart) == 0 && helmControllerDeployment.OCIRepository == nil {

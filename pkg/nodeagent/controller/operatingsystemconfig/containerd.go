@@ -47,7 +47,7 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 
 	if newCRIConfig.Containerd != nil {
 		var oldRegistries []extensionsv1alpha1.RegistryConfig
-		if oldCRIConfig.Containerd != nil {
+		if oldCRIConfig != nil && oldCRIConfig.Containerd != nil {
 			oldRegistries = oldCRIConfig.Containerd.Registries
 		}
 
@@ -60,12 +60,15 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 	return nil
 }
 
+const containerdDropinDir = "/etc/systemd/system/containerd.service.d"
+
 func (r *Reconciler) ensureContainerdConfigDirectories() error {
 	for _, dir := range []string{
 		extensionsv1alpha1.ContainerDBaseDir,
 		extensionsv1alpha1.ContainerDConfigDir,
 		extensionsv1alpha1.ContainerDCertsDir,
 		extensionsv1alpha1.ContainerDRuntimeContainersBinFolder,
+		containerdDropinDir,
 	} {
 		err := r.FS.MkdirAll(dir, defaultDirPermissions)
 		if err != nil {
@@ -95,14 +98,15 @@ func (r *Reconciler) ensureContainerdDefaultConfig(ctx context.Context) error {
 }
 
 func (r *Reconciler) EnsureContainerdEnvironment() error {
-	const (
-		containerdUnitDropin = "/etc/systemd/system/containerd.service.d/30-env_config.conf"
-		unitDropin           = `[Service]
-Environment="PATH=` + extensionsv1alpha1.ContainerDRuntimeContainersBinFolder + `:$PATH"
+	var (
+		containerdEnvFileName = "30-env_config.conf"
+		unitDropin            = `[Service]
+Environment="PATH=` + extensionsv1alpha1.ContainerDRuntimeContainersBinFolder + `:` + os.Getenv("PATH") + `"
 `
 	)
 
-	exists, err := r.fileExists(containerdUnitDropin)
+	containerdEnvFilePath := path.Join(containerdDropinDir, containerdEnvFileName)
+	exists, err := r.fileExists(containerdEnvFilePath)
 	if err != nil {
 		return err
 	}
@@ -111,7 +115,7 @@ Environment="PATH=` + extensionsv1alpha1.ContainerDRuntimeContainersBinFolder + 
 		return nil
 	}
 
-	err = r.FS.WriteFile(containerdUnitDropin, []byte(unitDropin), 0644)
+	err = r.FS.WriteFile(containerdEnvFilePath, []byte(unitDropin), 0644)
 	if err != nil {
 		return fmt.Errorf("unable to write unit dropin: %w", err)
 	}

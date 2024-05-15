@@ -7,17 +7,19 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 
 	"github.com/go-logr/logr"
 	"github.com/pelletier/go-toml"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig/mappatch"
 )
 
 // ReconcileContainerdConfig sets required values of the given containerd configuration.
-func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Logger, criConfig *extensionsv1alpha1.CRIConfig) error {
-	if criConfig == nil {
+func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Logger, oldCRIConfig, newCRIConfig *extensionsv1alpha1.CRIConfig) error {
+	if newCRIConfig == nil {
 		return nil
 	}
 
@@ -38,13 +40,18 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 		return err
 	}
 
-	err = r.EnsureContainerdConfiguration(criConfig)
+	err = r.EnsureContainerdConfiguration(newCRIConfig)
 	if err != nil {
 		return err
 	}
 
-	if criConfig.Containerd != nil {
-		err = r.EnsureContainerdRegistries(criConfig.Containerd.Registries)
+	if newCRIConfig.Containerd != nil {
+		var oldRegistries []extensionsv1alpha1.RegistryConfig
+		if oldCRIConfig.Containerd != nil {
+			oldRegistries = oldCRIConfig.Containerd.Registries
+		}
+
+		err = r.EnsureContainerdRegistries(oldRegistries, newCRIConfig.Containerd.Registries)
 		if err != nil {
 			return err
 		}
@@ -91,7 +98,7 @@ func (r *Reconciler) EnsureContainerdEnvironment() error {
 	const (
 		containerdUnitDropin = "/etc/systemd/system/containerd.service.d/30-env_config.conf"
 		unitDropin           = `[Service]
-Environment="PATH=$BIN_PATH:$PATH"
+Environment="PATH=` + extensionsv1alpha1.ContainerDRuntimeContainersBinFolder + `:$PATH"
 `
 	)
 
@@ -236,8 +243,10 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 }
 
 // EnsureContainerdRegistries configures containerd to use the desired image registries.
-func (r *Reconciler) EnsureContainerdRegistries(registries []extensionsv1alpha1.RegistryConfig) error {
-	for _, registryConfig := range registries {
+func (r *Reconciler) EnsureContainerdRegistries(oldRegistries, newRegistries []extensionsv1alpha1.RegistryConfig) error {
+	upstreamsInUse := sets.New[string]()
+
+	for _, registryConfig := range newRegistries {
 		baseDir := path.Join(extensionsv1alpha1.ContainerDCertsDir, registryConfig.Upstream)
 		if err := r.FS.MkdirAll(baseDir, defaultDirPermissions); err != nil {
 			return fmt.Errorf("unable to ensure registry config base directory: %w", err)
@@ -292,6 +301,18 @@ func (r *Reconciler) EnsureContainerdRegistries(registries []extensionsv1alpha1.
 		}()
 		if err != nil {
 			return err
+		}
+
+		upstreamsInUse.Insert(registryConfig.Upstream)
+	}
+
+	registriesToRemove := slices.DeleteFunc(oldRegistries, func(config extensionsv1alpha1.RegistryConfig) bool {
+		return upstreamsInUse.Has(config.Upstream)
+	})
+
+	for _, registryConfig := range registriesToRemove {
+		if err := r.FS.RemoveAll(path.Join(extensionsv1alpha1.ContainerDCertsDir, registryConfig.Upstream)); err != nil {
+			return fmt.Errorf("failed to cleanup obsolete registry directory: %w", err)
 		}
 	}
 

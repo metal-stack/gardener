@@ -5,13 +5,11 @@
 package operatingsystemconfig
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"sync/atomic"
 
-	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,19 +74,14 @@ type files struct {
 
 var containerdConfigChecksum atomic.Value
 
-func computeOperatingSystemConfigChanges(fs afero.Afero, newOSC *extensionsv1alpha1.OperatingSystemConfig) (*operatingSystemConfigChanges, error) {
+func computeOperatingSystemConfigChanges(oldOSC, newOSC *extensionsv1alpha1.OperatingSystemConfig) (*operatingSystemConfigChanges, error) {
 	changes := &operatingSystemConfigChanges{}
 
 	// osc.files and osc.unit.files should be changed the same way by OSC controller.
 	// The reason for assigning files to units is the detection of changes which require the restart of a unit.
 	newOSCFiles := collectAllFiles(newOSC)
 
-	oldOSCRaw, err := fs.ReadFile(lastAppliedOperatingSystemConfigFilePath)
-	if err != nil {
-		if !errors.Is(err, afero.ErrFileNotFound) {
-			return nil, fmt.Errorf("error reading last applied OSC from file path %s: %w", lastAppliedOperatingSystemConfigFilePath, err)
-		}
-
+	if oldOSC == nil {
 		var unitChanges []changedUnit
 		for _, unit := range mergeUnits(newOSC.Spec.Units, newOSC.Status.ExtensionUnits) {
 			unitChanges = append(unitChanges, changedUnit{
@@ -100,11 +93,6 @@ func computeOperatingSystemConfigChanges(fs afero.Afero, newOSC *extensionsv1alp
 		changes.files.changed = newOSCFiles
 		changes.units.changed = unitChanges
 		return changes, nil
-	}
-
-	oldOSC := &extensionsv1alpha1.OperatingSystemConfig{}
-	if err := runtime.DecodeInto(decoder, oldOSCRaw, oldOSC); err != nil {
-		return nil, fmt.Errorf("unable to decode the old OSC read from file path %s: %w", lastAppliedOperatingSystemConfigFilePath, err)
 	}
 
 	oldOSCFiles := collectAllFiles(oldOSC)

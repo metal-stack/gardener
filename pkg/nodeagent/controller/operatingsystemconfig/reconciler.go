@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
@@ -84,14 +85,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("failed extracting OSC from secret: %w", err)
 	}
 
+	var oldOSC *extensionsv1alpha1.OperatingSystemConfig
+	oldOSCRaw, err := r.FS.ReadFile(lastAppliedOperatingSystemConfigFilePath)
+	if err != nil {
+		if !errors.Is(err, afero.ErrFileNotFound) {
+			return reconcile.Result{}, fmt.Errorf("error reading last applied OSC from file path %s: %w", lastAppliedOperatingSystemConfigFilePath, err)
+		}
+	} else {
+		oldOSC = &extensionsv1alpha1.OperatingSystemConfig{}
+		if err := runtime.DecodeInto(decoder, oldOSCRaw, oldOSC); err != nil {
+			return reconcile.Result{}, fmt.Errorf("unable to decode the old OSC read from file path %s: %w", lastAppliedOperatingSystemConfigFilePath, err)
+		}
+	}
+
 	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
-		err = r.ReconcileContainerdConfig(ctx, log, osc.Spec.CRIConfig)
+		var oldCRIConfig *extensionsv1alpha1.CRIConfig
+		if oldOSC != nil && extensionsv1alpha1helper.IsContainerdConfigured(oldOSC.Spec.CRIConfig) {
+			oldCRIConfig = oldOSC.Spec.CRIConfig
+		}
+		err = r.ReconcileContainerdConfig(ctx, log, oldCRIConfig, osc.Spec.CRIConfig)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
 		}
 	}
 
-	oscChanges, err := computeOperatingSystemConfigChanges(r.FS, osc)
+	oscChanges, err := computeOperatingSystemConfigChanges(oldOSC, osc)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed calculating the OSC changes: %w", err)
 	}

@@ -232,6 +232,7 @@ func ValidateContainerdConfig(config *extensionsv1alpha1.ContainerdConfig, fldPa
 
 	// Verify registry upstream is unique
 	// Verify capabilities are valid
+	// Verify upstream is a dns hostname or "_default" for default registry configuration
 	// Verify URL is parsable URL
 	// Verify server is parsable URL
 

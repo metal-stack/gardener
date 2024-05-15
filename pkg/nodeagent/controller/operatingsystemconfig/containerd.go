@@ -12,6 +12,7 @@ import (
 	"github.com/pelletier/go-toml"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig/mappatch"
 )
 
 // ReconcileContainerdConfig sets required values of the given containerd configuration.
@@ -127,18 +128,21 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 		return fmt.Errorf("unable to decode containerd default config: %w", err)
 	}
 
-	type patch struct {
-		name    string
-		path    []string
-		patchFn func(any) (any, error)
-	}
-	type patches []patch
+	type (
+		patch struct {
+			name  string
+			path  mappatch.MapPath
+			setFn mappatch.SetFn
+		}
+
+		patches []patch
+	)
 
 	ps := patches{
 		{
 			name: "cgroup driver",
-			path: []string{"plugins", "io.containerd.grpc.v1.cri", "containerd", "runtimes", "runc", "options", "SystemdCgroup"},
-			patchFn: func(value any) (any, error) {
+			path: mappatch.MapPath{"plugins", "io.containerd.grpc.v1.cri", "containerd", "runtimes", "runc", "options", "SystemdCgroup"},
+			setFn: func(value any) (any, error) {
 				if criConfig == nil {
 					return value, nil
 				}
@@ -148,15 +152,15 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 		},
 		{
 			name: "registry config path",
-			path: []string{"plugins", "io.containerd.grpc.v1.cri", "registry", "config_path"},
-			patchFn: func(_ any) (any, error) {
+			path: mappatch.MapPath{"plugins", "io.containerd.grpc.v1.cri", "registry", "config_path"},
+			setFn: func(_ any) (any, error) {
 				return extensionsv1alpha1.ContainerDCertsDir, nil
 			},
 		},
 		{
 			name: "imports paths",
-			path: []string{"imports"},
-			patchFn: func(value any) (any, error) {
+			path: mappatch.MapPath{"imports"},
+			setFn: func(value any) (any, error) {
 				importPath := path.Join(extensionsv1alpha1.ContainerDConfigDir, "*.toml")
 
 				imports, ok := value.([]any)
@@ -180,8 +184,8 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 		},
 		{
 			name: "sandbox image",
-			path: []string{"plugins", "io.containerd.grpc.v1.cri", "sandbox_image"},
-			patchFn: func(value any) (any, error) {
+			path: mappatch.MapPath{"plugins", "io.containerd.grpc.v1.cri", "sandbox_image"},
+			setFn: func(value any) (any, error) {
 				if criConfig == nil || criConfig.Containerd == nil {
 					return value, nil
 				}
@@ -195,8 +199,8 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 		for _, pluginConfig := range criConfig.Containerd.Plugins {
 			ps = append(ps, patch{
 				name: "plugin configuration",
-				path: append([]string{"plugins"}, pluginConfig.Path...),
-				patchFn: func(any) (any, error) {
+				path: append(mappatch.MapPath{"plugins"}, pluginConfig.Path...),
+				setFn: func(any) (any, error) {
 					values := map[string]any{}
 
 					err := json.Unmarshal(pluginConfig.Values.Raw, &values)
@@ -211,7 +215,7 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 	}
 
 	for _, p := range ps {
-		content, err = Traverse(content, p.patchFn, p.path...)
+		content, err = mappatch.SetMapEntry(content, p.path, p.setFn)
 		if err != nil {
 			return fmt.Errorf("unable setting %s in containerd config.toml: %w", p.name, err)
 		}
@@ -294,49 +298,4 @@ func (r *Reconciler) EnsureContainerdRegistries(registries []extensionsv1alpha1.
 	}
 
 	return nil
-}
-
-func Traverse(m map[string]any, patchFn func(value any) (any, error), keys ...string) (map[string]any, error) {
-	if len(keys) == 0 {
-		return nil, fmt.Errorf("at least one key for patching is required")
-	}
-	if patchFn == nil {
-		return nil, fmt.Errorf("patchFn must not be nil")
-	}
-
-	if m == nil {
-		m = map[string]any{}
-	}
-
-	var (
-		key = keys[0]
-		err error
-	)
-
-	if len(keys) == 1 {
-		value := m[key]
-		m[key], err = patchFn(value)
-		if err != nil {
-			return nil, fmt.Errorf("error patching value: %w", err)
-		}
-
-		return m, nil
-	}
-
-	entry, ok := m[key]
-	if !ok {
-		entry = map[string]any{}
-	}
-
-	childMap, ok := entry.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("unable to traverse into data structure because existing value is not a map at %q", key)
-	}
-
-	m[key], err = Traverse(childMap, patchFn, keys[1:]...)
-	if err != nil {
-		return nil, err
-	}
-
-	return m, nil
 }

@@ -5,7 +5,6 @@
 package operatingsystemconfig_test
 
 import (
-	"fmt"
 	"io/fs"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -211,55 +210,12 @@ version = 2
 			assertFileOnDisk(fakeFS, extensionsv1alpha1.ContainerDConfigFile, expected, 0644)
 		})
 	})
-
-	Describe("Traverse", func() {
-		It("should set the value into a existing map", func() {
-			var (
-				m = map[string]any{
-					"a": map[string]any{
-						"b": map[string]any{
-							"c": 1,
-						},
-					},
-				}
-				want = map[string]any{
-					"a": map[string]any{
-						"b": map[string]any{
-							"c": 2,
-						},
-					},
-				}
-			)
-
-			got, err := operatingsystemconfig.Traverse(m, func(value any) (any, error) { return 2, nil }, "a", "b", "c")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(got).To(Equal(want))
-		})
-
-		It("should populate a nil map", func() {
-			var (
-				m    map[string]any
-				want = map[string]any{
-					"a": map[string]any{
-						"b": map[string]any{
-							"c": true,
-						},
-					},
-				}
-			)
-
-			got, err := operatingsystemconfig.Traverse(m, func(value any) (any, error) { return true, nil }, "a", "b", "c")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(got).To(Equal(want))
-		})
-	})
 })
 
 func assertFileOnDisk(fakeFS afero.Afero, path, expectedContent string, fileMode uint32) {
 	description := "file path " + path
 
 	content, err := fakeFS.ReadFile(path)
-	fmt.Println(string(content))
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), description)
 	ExpectWithOffset(1, string(content)).To(Equal(expectedContent), description)
 

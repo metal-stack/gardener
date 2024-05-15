@@ -61,6 +61,7 @@ func ValidateOperatingSystemConfigSpec(spec *extensionsv1alpha1.OperatingSystemC
 		}
 	}
 
+	allErrs = append(allErrs, ValidateCriConfig(spec.CRIConfig, fldPath.Child("criConfig"))...)
 	allErrs = append(allErrs, ValidateUnits(spec.Units, pathsFromFiles, fldPath.Child("units"))...)
 	allErrs = append(allErrs, ValidateFiles(spec.Files, fldPath.Child("files"))...)
 
@@ -201,6 +202,43 @@ func ValidateOperatingSystemConfigSpecUpdate(new, old *extensionsv1alpha1.Operat
 
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(new.Type, old.Type, fldPath.Child("type"))...)
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(new.Purpose, old.Purpose, fldPath.Child("purpose"))...)
+
+	return allErrs
+}
+
+func ValidateCriConfig(config *extensionsv1alpha1.CRIConfig, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if config == nil {
+		return allErrs
+	}
+
+	allErrs = append(allErrs, ValidateContainerdConfig(config.Containerd, fldPath.Child("containerd"))...)
+
+	return allErrs
+}
+
+func ValidateContainerdConfig(config *extensionsv1alpha1.ContainerdConfig, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if config == nil {
+		return allErrs
+	}
+
+	// TODO: implement!
+
+	// Verify cri name is set and valid
+	// Verify cgroup driver name is set and valid
+
+	// Verify registry upstream is unique
+	// Verify capabilities are valid
+	// Verify URL is parsable URL
+	// Verify server is parsable URL
+
+	// Verify sandbox image is set
+
+	// Verify that path is not empty
+	// Verify that plugin values are of type map[string]any
 
 	return allErrs
 }

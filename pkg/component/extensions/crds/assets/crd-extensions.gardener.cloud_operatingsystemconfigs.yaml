@@ -70,6 +70,27 @@ spec:
                   containerd:
                     description: ContainerdConfig is the containerd configuration.
                     properties:
+                      plugins:
+                        description: Plugins configures configuration beneath the
+                          containerd config.toml plugins section.
+                        items:
+                          description: PluginConfig is a configuration put beneath
+                            the containerd config.toml plugins section.
+                          properties:
+                            path:
+                              description: Path in the configuration that is constructed
+                                by the given path elements.
+                              items:
+                                type: string
+                              type: array
+                            values:
+                              description: Values are the values configured at the
+                                given path.
+                              x-kubernetes-preserve-unknown-fields: true
+                          required:
+                          - path
+                          type: object
+                        type: array
                       registries:
                         description: Registries configures the registry hosts for
                           containerd.

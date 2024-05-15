@@ -2455,6 +2455,20 @@ string
 <p>SandboxImage configures the sandbox image for containerd.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>plugins</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.PluginConfig">
+[]PluginConfig
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Plugins configures configuration beneath the containerd config.toml plugins section.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="extensions.gardener.cloud/v1alpha1.ControlPlaneSpec">ControlPlaneSpec
@@ -3992,6 +4006,48 @@ TODO(rfranzke): Remove this field after v1.95 got released.</p>
 written to the host&rsquo;s file system.
 Deprecated: This field is deprecated and has no further usage.
 TODO(rfranzke): Remove this field after v1.95 got released.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="extensions.gardener.cloud/v1alpha1.PluginConfig">PluginConfig
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#extensions.gardener.cloud/v1alpha1.ContainerdConfig">ContainerdConfig</a>)
+</p>
+<p>
+<p>PluginConfig is a configuration put beneath the containerd config.toml plugins section.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>path</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>Path in the configuration that is constructed by the given path elements.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>values</code></br>
+<em>
+k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1.JSON
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Values are the values configured at the given path.</p>
 </td>
 </tr>
 </tbody>

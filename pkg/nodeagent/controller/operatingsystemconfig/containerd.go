@@ -2,6 +2,7 @@ package operatingsystemconfig
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -126,38 +127,41 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 		return fmt.Errorf("unable to decode containerd default config: %w", err)
 	}
 
-	for _, patch := range []struct {
+	type patch struct {
 		name    string
 		path    []string
-		patchFn func(any) any
-	}{
+		patchFn func(any) (any, error)
+	}
+	type patches []patch
+
+	ps := patches{
 		{
 			name: "cgroup driver",
 			path: []string{"plugins", "io.containerd.grpc.v1.cri", "containerd", "runtimes", "runc", "options", "SystemdCgroup"},
-			patchFn: func(value any) any {
+			patchFn: func(value any) (any, error) {
 				if criConfig == nil {
-					return value
+					return value, nil
 				}
 
-				return criConfig.CRICgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd
+				return criConfig.CRICgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd, nil
 			},
 		},
 		{
 			name: "registry config path",
 			path: []string{"plugins", "io.containerd.grpc.v1.cri", "registry", "config_path"},
-			patchFn: func(_ any) any {
-				return extensionsv1alpha1.ContainerDCertsDir
+			patchFn: func(_ any) (any, error) {
+				return extensionsv1alpha1.ContainerDCertsDir, nil
 			},
 		},
 		{
 			name: "imports paths",
 			path: []string{"imports"},
-			patchFn: func(value any) any {
+			patchFn: func(value any) (any, error) {
 				importPath := path.Join(extensionsv1alpha1.ContainerDConfigDir, "*.toml")
 
 				imports, ok := value.([]any)
 				if !ok {
-					return []string{importPath}
+					return []string{importPath}, nil
 				}
 
 				for _, imp := range imports {
@@ -167,28 +171,49 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 					}
 
 					if path == importPath {
-						return value
+						return value, nil
 					}
 				}
 
-				return append(imports, importPath)
+				return append(imports, importPath), nil
 			},
 		},
 		{
 			name: "sandbox image",
 			path: []string{"plugins", "io.containerd.grpc.v1.cri", "sandbox_image"},
-			patchFn: func(value any) any {
+			patchFn: func(value any) (any, error) {
 				if criConfig == nil || criConfig.Containerd == nil {
-					return value
+					return value, nil
 				}
 
-				return criConfig.Containerd.SandboxImage
+				return criConfig.Containerd.SandboxImage, nil
 			},
 		},
-	} {
-		content, err = Traverse(content, patch.patchFn, patch.path...)
+	}
+
+	if criConfig.Containerd != nil {
+		for _, pluginConfig := range criConfig.Containerd.Plugins {
+			ps = append(ps, patch{
+				name: "plugin configuration",
+				path: append([]string{"plugins"}, pluginConfig.Path...),
+				patchFn: func(any) (any, error) {
+					values := map[string]any{}
+
+					err := json.Unmarshal(pluginConfig.Values.Raw, &values)
+					if err != nil {
+						return nil, err
+					}
+
+					return values, nil
+				},
+			})
+		}
+	}
+
+	for _, p := range ps {
+		content, err = Traverse(content, p.patchFn, p.path...)
 		if err != nil {
-			return fmt.Errorf("unable setting %s in containerd config.toml: %w", patch.name, err)
+			return fmt.Errorf("unable setting %s in containerd config.toml: %w", p.name, err)
 		}
 	}
 
@@ -271,7 +296,7 @@ func (r *Reconciler) EnsureContainerdRegistries(registries []extensionsv1alpha1.
 	return nil
 }
 
-func Traverse(m map[string]any, patchFn func(value any) any, keys ...string) (map[string]any, error) {
+func Traverse(m map[string]any, patchFn func(value any) (any, error), keys ...string) (map[string]any, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("at least one key for patching is required")
 	}
@@ -283,11 +308,18 @@ func Traverse(m map[string]any, patchFn func(value any) any, keys ...string) (ma
 		m = map[string]any{}
 	}
 
-	key := keys[0]
+	var (
+		key = keys[0]
+		err error
+	)
 
 	if len(keys) == 1 {
 		value := m[key]
-		m[key] = patchFn(value)
+		m[key], err = patchFn(value)
+		if err != nil {
+			return nil, fmt.Errorf("error patching value: %w", err)
+		}
+
 		return m, nil
 	}
 
@@ -301,7 +333,6 @@ func Traverse(m map[string]any, patchFn func(value any) any, keys ...string) (ma
 		return nil, fmt.Errorf("unable to traverse into data structure because existing value is not a map at %q", key)
 	}
 
-	var err error
 	m[key], err = Traverse(childMap, patchFn, keys[1:]...)
 	if err != nil {
 		return nil, err

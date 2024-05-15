@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/afero"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/utils/ptr"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -88,10 +89,25 @@ Environment="PATH=$BIN_PATH:$PATH"
 		})
 
 		It("should ensure the containerd configuration", func() {
+			values := &apiextensionsv1.JSON{
+				Raw: []byte(`
+				{
+					"runtime_type": "io.containerd.runsc.v1",
+					"bool":         true,
+					"list":         ["a"]
+				}
+				`),
+			}
 			criConfig = &extensionsv1alpha1.CRIConfig{
 				CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,
 				Containerd: &extensionsv1alpha1.ContainerdConfig{
 					SandboxImage: "pause",
+					Plugins: []extensionsv1alpha1.PluginConfig{
+						{
+							Path:   []string{"io.containerd.grpc.v1.cri", "containerd", "runtimes", "gvisor"},
+							Values: values,
+						},
+					},
 				},
 			}
 
@@ -175,6 +191,11 @@ version = 2
 
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
 
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.gvisor]
+          bool = true
+          list = ["a"]
+          runtime_type = "io.containerd.runsc.v1"
+
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
           base_runtime_spec = ""
 
@@ -210,7 +231,7 @@ version = 2
 				}
 			)
 
-			got, err := operatingsystemconfig.Traverse(m, func(value any) any { return 2 }, "a", "b", "c")
+			got, err := operatingsystemconfig.Traverse(m, func(value any) (any, error) { return 2, nil }, "a", "b", "c")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(got).To(Equal(want))
 		})
@@ -227,7 +248,7 @@ version = 2
 				}
 			)
 
-			got, err := operatingsystemconfig.Traverse(m, func(value any) any { return true }, "a", "b", "c")
+			got, err := operatingsystemconfig.Traverse(m, func(value any) (any, error) { return true, nil }, "a", "b", "c")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(got).To(Equal(want))
 		})

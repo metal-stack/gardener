@@ -73,8 +73,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("error retrieving garden object: %w", err)
 	}
 	if len(gardenList.Items) == 0 {
-		// return reconcile.Result{}, fmt.Errorf("error: garden object not found")
-		// return nil
 		return reconcile.Result{}, nil
 	}
 

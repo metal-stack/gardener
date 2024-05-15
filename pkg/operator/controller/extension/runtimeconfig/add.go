@@ -19,16 +19,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
+	"github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/controllerutils/mapper"
 	"github.com/gardener/gardener/pkg/utils/oci"
 )
 
 // ControllerName is the name of this controller.
-const ControllerName = "extensions-runtime-config"
+const (
+	ControllerName     = "extensions-runtime-config"
+	ManagedByLabel     = "app.kubernetes.io/managed-by"
+	ExtensionNameLabel = "extension-name"
+)
 
 // AddToManager adds Reconciler to the given manager.
 func (r *Reconciler) AddToManager(ctx context.Context, mgr manager.Manager) error {
@@ -69,23 +73,32 @@ func (r *Reconciler) AddToManager(ctx context.Context, mgr manager.Manager) erro
 		r.Recorder = mgr.GetEventRecorderFor(ControllerName + "-controller")
 	}
 
-	c, err := builder.
+	managedResourceLabelPredicate, err := predicate.LabelSelectorPredicate(metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			ManagedByLabel: ControllerName,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	// c, err := builder.
+	return builder.
 		ControllerManagedBy(mgr).
 		Named(ControllerName).
 		For(&operatorv1alpha1.Garden{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: ptr.Deref(r.Config.Controllers.ExtensionGardenConfig.ConcurrentSyncs, 0),
 		}).
-		Build(r)
-	if err != nil {
-		return err
-	}
-
-	return c.Watch(
-		source.Kind(mgr.GetCache(), &operatorv1alpha1.Extension{}),
-		mapper.EnqueueRequestsFrom(ctx, mgr.GetCache(), mapper.MapFunc(r.MapToAllGardens), mapper.UpdateWithNew, c.GetLogger()),
-		predicate.GenerationChangedPredicate{},
-	)
+		Watches(
+			&v1alpha1.ManagedResource{},
+			mapper.EnqueueRequestsFrom(ctx, mgr.GetCache(), mapper.MapFunc(r.MapToAllGardens), mapper.UpdateWithNew, mgr.GetLogger()),
+			builder.WithPredicates(managedResourceLabelPredicate)).
+		Watches(
+			&operatorv1alpha1.Extension{},
+			mapper.EnqueueRequestsFrom(ctx, mgr.GetCache(), mapper.MapFunc(r.MapToAllGardens), mapper.UpdateWithNew, mgr.GetLogger()),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
+		).
+		Complete(r)
 }
 
 // MapToAllGardens returns reconcile.Request objects for all existing gardens in the system.
@@ -99,3 +112,21 @@ func (r *Reconciler) MapToAllGardens(ctx context.Context, log logr.Logger, reade
 
 	return mapper.ObjectListToRequests(gardenList)
 }
+
+// // MapToExtension returns reconcile.Request objects for the extension that own a particular managed resource.
+// func (r *Reconciler) MapToExtension(ctx context.Context, log logr.Logger, reader client.Reader, obj client.Object) []reconcile.Request {
+// 	if _, ok := obj.GetLabels()[ExtensionNameLabel]; !ok {
+// 		return nil
+// 	}
+//
+// 	ext := &operatorv1alpha1.Extension{}
+// 	err := reader.Get(ctx, types.NamespacedName{Name: obj.GetLabels()[ExtensionNameLabel]}, ext)
+// 	if err != nil {
+// 		log.Error(err, "Failed to get required extension")
+// 		return nil
+// 	}
+//
+// 	return []reconcile.Request{
+// 		{types.NamespacedName{Name: obj.GetLabels()[ExtensionNameLabel]}},
+// 	}
+// }

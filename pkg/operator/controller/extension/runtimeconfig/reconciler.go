@@ -48,6 +48,10 @@ const (
 	ConditionReconcileSuccess            = "ReconcileSuccessful"
 )
 
+var (
+	managedResourceLabels = map[string]string{v1beta1constants.LabelCareConditionType: string(operatorv1alpha1.VirtualComponentsHealthy)}
+)
+
 // Reconciler reconciles Gardens.
 type Reconciler struct {
 	RuntimeClientSet kubernetes.Interface
@@ -242,35 +246,24 @@ func (r *Reconciler) deployExtension(ctx context.Context, log logr.Logger, exten
 	// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionTrue, "RegistrationValid", "chart could be rendered successfully.")
 	secretData := release.AsSecretData()
 
+	extensionLabels := map[string]string{
+		ManagedByLabel:     ControllerName,
+		ExtensionNameLabel: extension.Name,
+	}
+
 	log.Info("Creating managed resource for extension", "extension", extension.Name)
-	if err := managedresources.Create(
+	if err := managedresources.CreateForSeedWithLabels(
 		ctx,
 		r.RuntimeClientSet.Client(),
 		v1beta1constants.GardenNamespace,
 		extension.Name,
-		map[string]string{
-			"app.kubernetes.io/managed-by": ControllerName,
-			"extension-name":               extension.Name,
-		},
 		false,
-		v1beta1constants.SeedResourceManagerClass,
-		secretData,
-		nil,
-		nil,
-		nil,
-	); err != nil {
-		log.Error(err, "Failed to create managed resource for extension", "extension", extension.Name)
-		// conditionInstalled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionInstalled, gardencorev1beta1.ConditionFalse, "InstallationFailed", fmt.Sprintf("Creation of ManagedResource %q failed: %+v", controllerInstallation.Name, err))
+		utils.MergeStringMaps(managedResourceLabels, extensionLabels),
+		secretData); err != nil {
 		return err
 	}
 
-	// if conditionInstalled.Status == gardencorev1beta1.ConditionUnknown {
-	// 	// initially set condition to Pending
-	// 	// care controller will update condition based on 'ResourcesApplied' condition of ManagedResource
-	// 	conditionInstalled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionInstalled, gardencorev1beta1.ConditionFalse, "InstallationPending", fmt.Sprintf("Installation of ManagedResource %q is still pending.", controllerInstallation.Name))
-	// }
 	log.Info("Finished to deploy managed resource for extension", "extension", extension.Name)
-
 	return nil
 }
 
@@ -310,7 +303,7 @@ func (g RuntimeConfigConditions) ConditionTypes() []gardencorev1beta1.ConditionT
 	}
 }
 
-// NewGardenConfigConditions returns a new instance of GardenerConfigConditions.
+// NewGardenConfigConditions returns a new instance of RuntimeConfigConditions.
 // All conditions are retrieved from the given 'status' or newly initialized.
 func NewGardenConfigConditions(clock clock.Clock, status operatorv1alpha1.ExtensionStatus) RuntimeConfigConditions {
 	return RuntimeConfigConditions{

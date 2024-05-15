@@ -49,8 +49,9 @@ func extractOSCFromSecret(secret *corev1.Secret) (*extensionsv1alpha1.OperatingS
 }
 
 type operatingSystemConfigChanges struct {
-	units units
-	files files
+	units                 units
+	files                 files
+	mustRestartContainerd bool
 }
 
 type units struct {
@@ -143,17 +144,7 @@ func computeOperatingSystemConfigChanges(fs afero.Afero, newOSC *extensionsv1alp
 		}
 
 		if oldContainerdConfigChecksum != newContainerdConfigChecksum {
-			var systemdUnit extensionsv1alpha1.Unit
-			for _, unit := range newOSC.Spec.Units {
-				if unit.Name == v1beta1constants.OperatingSystemConfigUnitNameContainerDService {
-					systemdUnit = unit
-					break
-				}
-			}
-
-			changes.units.changed = append(changes.units.changed, changedUnit{
-				Unit: systemdUnit,
-			})
+			changes.mustRestartContainerd = true
 		}
 	}
 

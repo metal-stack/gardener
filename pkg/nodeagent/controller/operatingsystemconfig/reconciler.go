@@ -122,7 +122,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	log.Info("Executing unit commands (start/stop)")
-	mustRestartGardenerNodeAgent, err := r.executeUnitCommands(ctx, log, node, oscChanges.units.changed)
+	mustRestartGardenerNodeAgent, err := r.executeUnitCommands(ctx, log, node, oscChanges)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed executing unit commands: %w", err)
 	}
@@ -373,13 +373,13 @@ func (r *Reconciler) removeDeletedUnits(ctx context.Context, log logr.Logger, no
 	return nil
 }
 
-func (r *Reconciler) executeUnitCommands(ctx context.Context, log logr.Logger, node client.Object, units []changedUnit) (bool, error) {
+func (r *Reconciler) executeUnitCommands(ctx context.Context, log logr.Logger, node client.Object, changes *operatingSystemConfigChanges) (bool, error) {
 	var (
 		mustRestartGardenerNodeAgent bool
 		fns                          []flow.TaskFn
 	)
 
-	for _, u := range units {
+	for _, u := range changes.units.changed {
 		unit := u
 
 		if unit.Name == nodeagentv1alpha1.UnitName {
@@ -400,6 +400,16 @@ func (r *Reconciler) executeUnitCommands(ctx context.Context, log logr.Logger, n
 				log.Info("Successfully restarted unit", "unitName", unit.Name)
 			}
 
+			return nil
+		})
+	}
+
+	if changes.mustRestartContainerd {
+		fns = append(fns, func(ctx context.Context) error {
+			if err := r.DBus.Restart(ctx, r.Recorder, node, v1beta1constants.OperatingSystemConfigUnitNameContainerDService); err != nil {
+				return fmt.Errorf("unable to restart unit %q: %w", v1beta1constants.OperatingSystemConfigUnitNameContainerDService, err)
+			}
+			log.Info("Successfully restarted unit", "unitName", v1beta1constants.OperatingSystemConfigUnitNameContainerDService)
 			return nil
 		})
 	}

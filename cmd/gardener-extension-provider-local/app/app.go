@@ -285,9 +285,11 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			localcontrolplane.DefaultAddOptions.ShootWebhookConfig = atomicShootWebhookConfig
 			localcontrolplane.DefaultAddOptions.WebhookServerNamespace = webhookOptions.Server.Namespace
 
-			// Send empty patches on start-up to trigger webhooks
-			if err := mgr.Add(&webhookTriggerer{client: mgr.GetClient()}); err != nil {
-				return fmt.Errorf("error adding runnable for triggering DNS config webhook: %w", err)
+			if !runsInGardenCluster {
+				// Send empty patches on start-up to trigger webhooks
+				if err := mgr.Add(&webhookTriggerer{client: mgr.GetClient()}); err != nil {
+					return fmt.Errorf("error adding runnable for triggering DNS config webhook: %w", err)
+				}
 			}
 
 			if err := controllerSwitches.Completed().AddToManager(ctx, mgr); err != nil {

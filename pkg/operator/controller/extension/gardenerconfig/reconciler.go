@@ -31,6 +31,7 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap/keys"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/controllerutils/reconciler"
+	"github.com/gardener/gardener/pkg/operator"
 	"github.com/gardener/gardener/pkg/operator/apis/config"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
@@ -130,6 +131,22 @@ func (r *Reconciler) updateExtensionStatus(ctx context.Context, log logr.Logger,
 }
 
 func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension, conditions GardenerConfigConditions) (GardenerConfigConditions, error) {
+	if !controllerutil.ContainsFinalizer(extension, operatorv1alpha1.FinalizerName) {
+		log.Info("Adding finalizer")
+		if err := controllerutils.AddFinalizers(ctx, r.RuntimeClientSet.Client(), extension, operatorv1alpha1.FinalizerName); err != nil {
+			err := fmt.Errorf("failed to add finalizer: %w", err)
+			conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionReconcileFailed, err.Error())
+			return conditions, err
+		}
+	}
+
+	// merge extensions with defaults
+	var err error
+	extension.Spec, err = operator.MergeExtensionSpecs(extension.Name, extension.Spec)
+	if err != nil {
+		return conditions, fmt.Errorf("error merging extension spec: %w", err)
+	}
+
 	if extension.Spec.Deployment == nil {
 		return conditions, nil
 	}
@@ -139,13 +156,6 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, gardenClien
 
 	if extension.Spec.Deployment.Extension.Helm == nil {
 		return conditions, nil
-	}
-
-	log.Info("Adding finalizer")
-	if err := controllerutils.AddFinalizers(ctx, r.RuntimeClientSet.Client(), extension, operatorv1alpha1.FinalizerName); err != nil {
-		err := fmt.Errorf("failed to add finalizer: %w", err)
-		conditions.gardenConfigReconciled = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditions.gardenConfigReconciled, gardencorev1beta1.ConditionFalse, ConditionReconcileFailed, err.Error())
-		return conditions, err
 	}
 
 	if err := r.reconcileControllerDeployment(ctx, gardenClient, extension); err != nil {
@@ -192,6 +202,7 @@ func (r *Reconciler) reconcileControllerRegistration(ctx context.Context, garden
 			Name: extension.Name,
 		},
 	}
+
 	regMutateFn := func() error {
 		ctrlReg.Annotations = extension.Spec.Deployment.Extension.Annotations
 		ctrlReg.Spec = gardencorev1beta1.ControllerRegistrationSpec{

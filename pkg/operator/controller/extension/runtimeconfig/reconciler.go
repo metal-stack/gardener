@@ -31,6 +31,7 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/features"
+	"github.com/gardener/gardener/pkg/operator"
 	"github.com/gardener/gardener/pkg/operator/apis/config"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
@@ -81,6 +82,14 @@ func (r *Reconciler) reconcile(ctx context.Context, garden *operatorv1alpha1.Gar
 	err := r.RuntimeClientSet.Client().List(ctx, extensionList)
 	if err != nil {
 		return fmt.Errorf("error retrieving extensions: %w", err)
+	}
+
+	// merge extensions with defaults
+	for i, extension := range extensionList.Items {
+		extensionList.Items[i].Spec, err = operator.MergeExtensionSpecs(extension.Name, extension.Spec)
+		if err != nil {
+			return fmt.Errorf("error merging extension spec for name %s: %w", extension.Name, err)
+		}
 	}
 
 	required, err := r.computeRequiredExtensions(garden, extensionList)

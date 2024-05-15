@@ -7,9 +7,10 @@ package operator_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/utils/ptr"
 
+	gardencorev1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
 	. "github.com/gardener/gardener/pkg/operator"
@@ -41,13 +42,13 @@ var _ = Describe("Extensions", func() {
 		It("should correctly merge the extension spec", func() {
 			spec := operatorv1alpha1.ExtensionSpec{
 				Deployment: &operatorv1alpha1.Deployment{
-					Admission: &operatorv1alpha1.DeploymentSpec{Helm: &operatorv1alpha1.Helm{}},
+					Admission: &operatorv1alpha1.DeploymentSpec{Helm: &gardencorev1.HelmControllerDeployment{}},
 					Extension: &operatorv1alpha1.ExtensionDeploymentSpec{
 						Policy:      ptr.To(gardencorev1beta1.ControllerDeploymentPolicyAlwaysExceptNoShoots),
 						Annotations: map[string]string{"another": "annotation"},
 						DeploymentSpec: operatorv1alpha1.DeploymentSpec{
-							Helm: &operatorv1alpha1.Helm{
-								Values: &runtime.RawExtension{Raw: []byte(`{
+							Helm: &gardencorev1.HelmControllerDeployment{
+								Values: &apiextensionsv1.JSON{Raw: []byte(`{
   "foo": "bar",
   "image": "overwritten"
 }`)},
@@ -72,7 +73,7 @@ var _ = Describe("Extensions", func() {
 				{Kind: "Extension", Type: "local-ext-shoot-after-worker", Lifecycle: &gardencorev1beta1.ControllerResourceLifecycle{Reconcile: ptr.To(gardencorev1beta1.AfterWorker)}},
 			}))
 			Expect(result.Deployment).To(DeepDerivativeEqual(&operatorv1alpha1.Deployment{
-				Admission: &operatorv1alpha1.DeploymentSpec{Helm: &operatorv1alpha1.Helm{}},
+				Admission: &operatorv1alpha1.DeploymentSpec{Helm: &gardencorev1.HelmControllerDeployment{}},
 				Extension: &operatorv1alpha1.ExtensionDeploymentSpec{
 					Policy: ptr.To(gardencorev1beta1.ControllerDeploymentPolicyAlwaysExceptNoShoots),
 					Annotations: map[string]string{
@@ -80,8 +81,8 @@ var _ = Describe("Extensions", func() {
 						"security.gardener.cloud/pod-security-enforce": "privileged",
 					},
 					DeploymentSpec: operatorv1alpha1.DeploymentSpec{
-						Helm: &operatorv1alpha1.Helm{
-							Values: &runtime.RawExtension{Raw: []byte(`{"foo":"bar","image":"overwritten","replicaCount":1}`)},
+						Helm: &gardencorev1.HelmControllerDeployment{
+							Values: &apiextensionsv1.JSON{Raw: []byte(`{"foo":"bar","image":"overwritten","logLevel":"debug"}`)},
 						},
 					},
 				},

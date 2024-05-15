@@ -87,7 +87,7 @@ coredns:
 gardener:
   version: ""
   gardener-operator:
-    featureGates: { }
+    featureGates: {}
   gardenlet:
     featureGates: {}
   garden:

@@ -18,6 +18,7 @@ import (
 	"k8s.io/component-base/featuregate"
 	podsecurityadmissionapi "k8s.io/pod-security-admission/api"
 	"k8s.io/utils/clock"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
@@ -27,6 +28,7 @@ import (
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
 	"github.com/gardener/gardener/pkg/controllerutils"
@@ -98,15 +100,26 @@ func (r *Reconciler) reconcile(ctx context.Context, garden *operatorv1alpha1.Gar
 	}
 
 	var errs []error
+
 	for _, ext := range required {
 		errs = append(errs, r.deployExtension(ctx, ext))
+	}
+
+	existingManagedResourcesList := &resourcesv1alpha1.ManagedResourceList{}
+	err = r.RuntimeClientSet.Client().List(ctx, existingManagedResourcesList, client.MatchingLabels{
+		"app.kubernetes.io/managed-by": ControllerName,
+	})
+	errs = append(errs, err)
+
+	for _, mr := range existingManagedResourcesList.Items {
+		mr := mr
+		errs = append(errs, r.deleteManagedResourceIfNotNeeded(ctx, &mr, required))
 	}
 
 	return errors.Join(errs...)
 }
 
 func (r *Reconciler) computeRequiredExtensions(garden *operatorv1alpha1.Garden, extensionList *operatorv1alpha1.ExtensionList) ([]operatorv1alpha1.Extension, error) {
-
 	providedResources := make(map[string]map[string]operatorv1alpha1.Extension)
 
 	for _, ext := range extensionList.Items {
@@ -224,7 +237,10 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 		r.RuntimeClientSet.Client(),
 		v1beta1constants.GardenNamespace,
 		extension.Name,
-		map[string]string{"extension-name": extension.Name},
+		map[string]string{
+			"app.kubernetes.io/managed-by": ControllerName,
+			"extension-name":               extension.Name,
+		},
 		false,
 		v1beta1constants.SeedResourceManagerClass,
 		secretData,
@@ -243,6 +259,22 @@ func (r *Reconciler) deployExtension(ctx context.Context, extension operatorv1al
 	// }
 
 	return nil
+}
+
+func (r *Reconciler) deleteManagedResourceIfNotNeeded(ctx context.Context, mr *resourcesv1alpha1.ManagedResource, requiredExtensions []operatorv1alpha1.Extension) error {
+	extensionName, ok := mr.Labels["extension-name"]
+	if !ok {
+		// TODO: log
+		return nil
+	}
+
+	for _, ext := range requiredExtensions {
+		if ext.Name == extensionName {
+			return nil
+		}
+	}
+
+	return r.RuntimeClientSet.Client().Delete(ctx, mr)
 }
 
 // RuntimeConfigConditions contains all conditions of the garden status subresource.

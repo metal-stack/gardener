@@ -82,6 +82,24 @@ func (r *Reconciler) AddToManager(ctx context.Context, mgr manager.Manager) erro
 		return err
 	}
 
+	// Some CRDs for specific kinds only exist in Seeds, not in the Garden cluster. But Extensions still do include them in their resources.
+	unavailableKinds := []string{
+		extensionsv1alpha1.BackupEntryResource,
+		extensionsv1alpha1.BastionResource,
+		extensionsv1alpha1.ContainerRuntimeResource,
+		extensionsv1alpha1.ControlPlaneResource,
+		extensionsv1alpha1.ExtensionResource,
+		extensionsv1alpha1.InfrastructureResource,
+		extensionsv1alpha1.NetworkResource,
+		extensionsv1alpha1.OperatingSystemConfigResource,
+		extensionsv1alpha1.WorkerResource,
+	}
+	r.Lock.Lock()
+	for _, objectKind := range unavailableKinds {
+		r.KindToRequiredTypes[objectKind] = sets.New[string]()
+	}
+	r.Lock.Unlock()
+
 	for _, obj := range []struct {
 		objectKind        string
 		object            client.Object

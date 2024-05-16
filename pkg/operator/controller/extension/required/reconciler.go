@@ -86,7 +86,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		if !allKindsCalculated {
 			// if required wasn't set yet then but not all kinds were calculated then the it's not possible to
 			// decide yet whether it's required or not
-			log.Info("not calculated")
 			return reconcile.Result{}, nil
 		}
 

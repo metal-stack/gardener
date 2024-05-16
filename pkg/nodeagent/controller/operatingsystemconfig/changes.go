@@ -92,6 +92,7 @@ func computeOperatingSystemConfigChanges(oldOSC, newOSC *extensionsv1alpha1.Oper
 
 		changes.files.changed = newOSCFiles
 		changes.units.changed = unitChanges
+		changes.mustRestartContainerd = true
 		return changes, nil
 	}
 

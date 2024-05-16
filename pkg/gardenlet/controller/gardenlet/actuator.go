@@ -310,7 +310,7 @@ func (a *actuator) createBootstrapKubeconfig(ctx context.Context, objectMeta met
 
 	var (
 		tokenID          = gardenletbootstraputil.TokenID(objectMeta)
-		tokenDescription = gardenletbootstraputil.Description(gardenletbootstraputil.KindManagedSeed, objectMeta.Namespace, objectMeta.Name)
+		tokenDescription = gardenletbootstraputil.Description(gardenletbootstraputil.KindGardenlet, objectMeta.Namespace, objectMeta.Name)
 		tokenValidity    = 24 * time.Hour
 	)
 

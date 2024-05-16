@@ -235,7 +235,7 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 }
 
 // EnsureContainerdRegistries configures containerd to use the desired image registries.
-func (r *Reconciler) EnsureContainerdRegistries(ctx context.Context, newRegistries []extensionsv1alpha1.RegistryConfig) error {
+func (r *Reconciler) EnsureContainerdRegistries(ctx context.Context, log logr.Logger, newRegistries []extensionsv1alpha1.RegistryConfig) error {
 	var (
 		fns        = make([]flow.TaskFn, 0, len(newRegistries))
 		httpClient = http.Client{Timeout: 1 * time.Second}
@@ -258,6 +258,7 @@ func (r *Reconciler) EnsureContainerdRegistries(ctx context.Context, newRegistri
 			// This is especially required when registries run within the cluster and during bootstrap,
 			// the Kubernetes deployments are not ready yet.
 			if !exists {
+				log.Info("Probing endpoints for image registry", "upstream", registryConfig.Upstream)
 				if err := retry.Until(ctx, 2*time.Second, func(ctx context.Context) (done bool, err error) {
 					for _, registryHosts := range registryConfig.Hosts {
 						req, err := http.NewRequestWithContext(ctx, http.MethodGet, registryHosts.URL, nil)
@@ -274,6 +275,8 @@ func (r *Reconciler) EnsureContainerdRegistries(ctx context.Context, newRegistri
 				}); err != nil {
 					return err
 				}
+
+				log.Info("Probing endpoints for image registry succeeded", "upstream", registryConfig.Upstream)
 			}
 
 			f, err := r.FS.OpenFile(hostsTomlFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -363,11 +366,11 @@ func (r *Reconciler) finalizeContainerdHandling(
 	}
 
 	var oldRegistries []extensionsv1alpha1.RegistryConfig
-	if oldCRIConfig.Containerd != nil {
+	if oldCRIConfig != nil && oldCRIConfig.Containerd != nil {
 		oldRegistries = oldCRIConfig.Containerd.Registries
 	}
 
-	if err := r.EnsureContainerdRegistries(ctx, newCRIConfig.Containerd.Registries); err != nil {
+	if err := r.EnsureContainerdRegistries(ctx, log, newCRIConfig.Containerd.Registries); err != nil {
 		return err
 	}
 	if err := r.CleanupUnusedContainerdRegistries(log, oldRegistries, newCRIConfig.Containerd.Registries); err != nil {

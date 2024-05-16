@@ -64,6 +64,8 @@ type ControllerConfiguration struct {
 	ExtensionGardenConfig ExtensionGardenConfigControllerConfiguration
 	// ExtensionRuntimeConfig defines the configuration of the RuntimeExtension controller.
 	ExtensionRuntimeConfig ExtensionRuntimeConfigControllerConfiguration
+	// ExtensionRequiredConfig defines the configuration of the RequiredExtension controller.
+	ExtensionRequiredConfig ExtensionRequiredControllerConfiguration
 }
 
 // ExtensionGardenConfigControllerConfiguration defines the configuration of the GardenExtension controller.
@@ -74,6 +76,12 @@ type ExtensionGardenConfigControllerConfiguration struct {
 
 // ExtensionRuntimeConfigControllerConfiguration defines the configuration of the RuntimeExtension controller.
 type ExtensionRuntimeConfigControllerConfiguration struct {
+	// ConcurrentSyncs is the number of concurrent worker routines for this controller.
+	ConcurrentSyncs *int
+}
+
+// ExtensionRequiredControllerConfiguration defines the configuration of the RequiredExtension controller.
+type ExtensionRequiredControllerConfiguration struct {
 	// ConcurrentSyncs is the number of concurrent worker routines for this controller.
 	ConcurrentSyncs *int
 }

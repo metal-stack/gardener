@@ -4114,6 +4114,17 @@ string
 <p>Hosts are the registry hosts.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>probeHosts</code></br>
+<em>
+bool
+</em>
+</td>
+<td>
+<p>ProbeHosts determines if host registry endpoints should be probed before they are added to containerd.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="extensions.gardener.cloud/v1alpha1.RegistryHost">RegistryHost

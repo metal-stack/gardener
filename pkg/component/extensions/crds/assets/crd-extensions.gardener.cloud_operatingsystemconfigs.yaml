@@ -125,6 +125,11 @@ spec:
                                 - url
                                 type: object
                               type: array
+                            probeHosts:
+                              description: ProbeHosts determines if host registry
+                                endpoints should be probed before they are added to
+                                containerd.
+                              type: boolean
                             server:
                               description: Server is the registry server.
                               type: string
@@ -132,6 +137,7 @@ spec:
                               description: Upstream is the upstream name of the registry.
                               type: string
                           required:
+                          - probeHosts
                           - upstream
                           type: object
                         type: array

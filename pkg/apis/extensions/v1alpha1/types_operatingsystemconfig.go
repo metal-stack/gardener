@@ -308,6 +308,8 @@ type RegistryConfig struct {
 	Server *string `json:"server,omitempty"`
 	// Hosts are the registry hosts.
 	Hosts []RegistryHost `json:"hosts,omitempty"`
+	// ProbeHosts determines if host registry endpoints should be probed before they are added to containerd.
+	ProbeHosts bool `json:"probeHosts"`
 }
 
 // RegistryHost contains configuration values for a registry host.

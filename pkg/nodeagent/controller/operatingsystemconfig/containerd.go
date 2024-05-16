@@ -257,7 +257,7 @@ func (r *Reconciler) EnsureContainerdRegistries(ctx context.Context, log logr.Lo
 			// Check if registry endpoints are reachable if the config is new.
 			// This is especially required when registries run within the cluster and during bootstrap,
 			// the Kubernetes deployments are not ready yet.
-			if !exists {
+			if !exists && registryConfig.ProbeHosts {
 				log.Info("Probing endpoints for image registry", "upstream", registryConfig.Upstream)
 				if err := retry.Until(ctx, 2*time.Second, func(ctx context.Context) (done bool, err error) {
 					for _, registryHosts := range registryConfig.Hosts {

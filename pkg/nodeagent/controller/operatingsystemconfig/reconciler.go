@@ -98,6 +98,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
+	oscChanges, err := computeOperatingSystemConfigChanges(oldOSC, osc)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed calculating the OSC changes: %w", err)
+	}
+
+	if node != nil && node.Annotations[nodeagentv1alpha1.AnnotationKeyChecksumAppliedOperatingSystemConfig] == oscChecksum {
+		log.Info("Configuration on this node is up to date, nothing to be done")
+		return reconcile.Result{}, nil
+	}
+
 	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
 		var oldCRIConfig *extensionsv1alpha1.CRIConfig
 		if oldOSC != nil && extensionsv1alpha1helper.IsContainerdConfigured(oldOSC.Spec.CRIConfig) {
@@ -107,16 +117,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
 		}
-	}
-
-	oscChanges, err := computeOperatingSystemConfigChanges(oldOSC, osc)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed calculating the OSC changes: %w", err)
-	}
-
-	if node != nil && node.Annotations[nodeagentv1alpha1.AnnotationKeyChecksumAppliedOperatingSystemConfig] == oscChecksum {
-		log.Info("Configuration on this node is up to date, nothing to be done")
-		return reconcile.Result{}, nil
 	}
 
 	log.Info("Applying new or changed files")

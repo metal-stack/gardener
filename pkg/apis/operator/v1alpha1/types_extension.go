@@ -96,4 +96,7 @@ const (
 	GardenConfigReconciled gardencorev1beta1.ConditionType = "GardenConfigReconciled"
 	// RuntimeConfigReconciled a constant for a condition type indicating the extension resources in the runtime cluster have reconciled and are available.
 	RuntimeConfigReconciled gardencorev1beta1.ConditionType = "RuntimeConfigReconciled"
+	// ExtensionRequired is a condition type for indicating that the respective extension controller is
+	// still required on the seed cluster as corresponding extension resources still exist.
+	ExtensionRequired gardencorev1beta1.ConditionType = "Required"
 )

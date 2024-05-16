@@ -97,34 +97,34 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, garden *ope
 		}
 	}
 
-	required, err := r.computeRequiredExtensions(garden, extensionList)
+	usedExts, err := r.computeUsedExtensions(garden, extensionList)
 	if err != nil {
 		return err
 	}
 
 	var errs []error
 
-	log.Info("Deploying required extensions")
-	for _, ext := range required {
+	log.Info("Deploying used extensions")
+	for _, ext := range usedExts {
 		errs = append(errs, r.deployExtension(ctx, log, ext))
 	}
 
 	log.Info("Cleanup managed resources for unused extensions")
 	existingManagedResourcesList := &resourcesv1alpha1.ManagedResourceList{}
 	err = r.RuntimeClientSet.Client().List(ctx, existingManagedResourcesList, client.MatchingLabels{
-		"app.kubernetes.io/managed-by": ControllerName,
+		ManagedByLabel: ControllerName,
 	})
 	errs = append(errs, err)
 
 	for _, mr := range existingManagedResourcesList.Items {
 		mr := mr
-		errs = append(errs, r.deleteManagedResourceIfNotNeeded(ctx, log, &mr, required))
+		errs = append(errs, r.deleteManagedResourceIfNotNeeded(ctx, log, &mr, usedExts))
 	}
 
 	return errors.Join(errs...)
 }
 
-func (r *Reconciler) cleanUp(ctx context.Context, log logr.Logger, garden *operatorv1alpha1.Garden) error {
+func (r *Reconciler) cleanUp(ctx context.Context, log logr.Logger, _ *operatorv1alpha1.Garden) error {
 	extensionList := &operatorv1alpha1.ExtensionList{}
 	err := r.RuntimeClientSet.Client().List(ctx, extensionList)
 	if err != nil {
@@ -133,11 +133,8 @@ func (r *Reconciler) cleanUp(ctx context.Context, log logr.Logger, garden *opera
 
 	for _, ext := range extensionList.Items {
 		ext := ext
-		ok, err := r.canManagedResourceBeDeleted(ctx, &ext)
-		if err != nil {
-			return fmt.Errorf("failed to list resources: %w", err)
-		}
-		if !ok {
+		requiredCondition := v1beta1helper.GetCondition(ext.Status.Conditions, operatorv1alpha1.ExtensionRequired)
+		if requiredCondition.Status == gardencorev1beta1.ConditionTrue {
 			continue
 		}
 		log.Info("Deleting managed resource", "Extension", ext.Name)
@@ -152,33 +149,7 @@ func (r *Reconciler) cleanUp(ctx context.Context, log logr.Logger, garden *opera
 	return nil
 }
 
-func (r *Reconciler) canManagedResourceBeDeleted(ctx context.Context, ext *operatorv1alpha1.Extension) (bool, error) {
-	knownObjects := []struct {
-		objectKind        string
-		object            client.Object
-		newObjectListFunc func() client.ObjectList
-	}{
-		{extensionsv1alpha1.BackupBucketResource, &extensionsv1alpha1.BackupBucket{}, func() client.ObjectList { return &extensionsv1alpha1.BackupBucketList{} }},
-		{extensionsv1alpha1.DNSRecordResource, &extensionsv1alpha1.DNSRecord{}, func() client.ObjectList { return &extensionsv1alpha1.DNSRecordList{} }},
-	}
-
-	for _, resource := range ext.Spec.Resources {
-		for _, known := range knownObjects {
-			if known.objectKind == resource.Type {
-				listObj := known.newObjectListFunc()
-				if err := r.RuntimeClientSet.Client().List(ctx, listObj, client.MatchingFields{
-					"spec.type": resource.Type,
-				}); err != nil {
-					return false, fmt.Errorf("failed to list resources: %w", err)
-				}
-				return false, nil
-			}
-		}
-	}
-	return true, nil
-}
-
-func (r *Reconciler) computeRequiredExtensions(garden *operatorv1alpha1.Garden, extensionList *operatorv1alpha1.ExtensionList) ([]operatorv1alpha1.Extension, error) {
+func (r *Reconciler) computeUsedExtensions(garden *operatorv1alpha1.Garden, extensionList *operatorv1alpha1.ExtensionList) ([]operatorv1alpha1.Extension, error) {
 	providedResources := make(map[string]map[string]operatorv1alpha1.Extension)
 
 	for _, ext := range extensionList.Items {
@@ -237,8 +208,6 @@ func (r *Reconciler) deployExtension(ctx context.Context, log logr.Logger, exten
 	if helmDeployment.Values != nil {
 		if err := yaml.Unmarshal(helmDeployment.Values.Raw, &helmValues); err != nil {
 			log.Error(err, "Failed to unmarshal helm deployment for extension", "extension", extension.Name)
-			// TODO
-			// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartInformationInvalid", fmt.Sprintf("chart values cannot be unmarshalled: %+v", err))
 			return err
 		}
 	}
@@ -264,8 +233,6 @@ func (r *Reconciler) deployExtension(ctx context.Context, log logr.Logger, exten
 		archive, err = r.HelmRegistry.Pull(ctx, helmDeployment.OCIRepository)
 		if err != nil {
 			log.Error(err, "Failed to pull Helm Chart from OCI Repository", "extension", extension.Name, "repository", helmDeployment.OCIRepository)
-			// TODO
-			// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "OCIChartCannotBePulled", fmt.Sprintf("chart pulling process failed: %+v", err))
 			return err
 		}
 	}
@@ -291,11 +258,9 @@ func (r *Reconciler) deployExtension(ctx context.Context, log logr.Logger, exten
 	release, err := r.RuntimeClientSet.ChartRenderer().RenderArchive(archive, extension.Name, namespace.Name, utils.MergeMaps(helmValues, gardenerValues))
 	if err != nil {
 		log.Error(err, "Failed to render archive for extension", "extension", extension.Name)
-		// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartCannotBeRendered", fmt.Sprintf("chart rendering process failed: %+v", err))
 		return err
 	}
 
-	// conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionTrue, "RegistrationValid", "chart could be rendered successfully.")
 	secretData := release.AsSecretData()
 
 	extensionLabels := map[string]string{
@@ -319,9 +284,9 @@ func (r *Reconciler) deployExtension(ctx context.Context, log logr.Logger, exten
 	return nil
 }
 
-func (r *Reconciler) deleteManagedResourceIfNotNeeded(ctx context.Context, log logr.Logger, mr *resourcesv1alpha1.ManagedResource, requiredExtensions []operatorv1alpha1.Extension) error {
+func (r *Reconciler) deleteManagedResourceIfNotNeeded(ctx context.Context, log logr.Logger, mr *resourcesv1alpha1.ManagedResource, usedExtensions []operatorv1alpha1.Extension) error {
 	extensionName := mr.Labels["extension-name"]
-	for _, ext := range requiredExtensions {
+	for _, ext := range usedExtensions {
 		if ext.Name == extensionName {
 			return nil
 		}
@@ -334,11 +299,8 @@ func (r *Reconciler) deleteManagedResourceIfNotNeeded(ctx context.Context, log l
 	if err != nil {
 		return fmt.Errorf("failed to get extension %q: %w", extensionName, err)
 	}
-	ok, err := r.canManagedResourceBeDeleted(ctx, ext)
-	if err != nil {
-		return fmt.Errorf("failed to list resources: %w", err)
-	}
-	if !ok {
+	requiredCondition := v1beta1helper.GetCondition(ext.Status.Conditions, operatorv1alpha1.ExtensionRequired)
+	if requiredCondition.Status == gardencorev1beta1.ConditionTrue {
 		return nil
 	}
 

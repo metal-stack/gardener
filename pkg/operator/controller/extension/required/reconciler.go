@@ -45,10 +45,11 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := logf.FromContext(ctx)
 
+	log.Info("Reconciles", "request", request)
 	extension := &operatorv1alpha1.Extension{}
 	if err := r.RuntimeClientSet.Client().Get(ctx, request.NamespacedName, extension); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.V(1).Info("Object is gone, stop reconciling")
+			log.Info("Object is gone, stop reconciling")
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, fmt.Errorf("error retrieving object from store: %w", err)
@@ -85,28 +86,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		if !allKindsCalculated {
 			// if required wasn't set yet then but not all kinds were calculated then the it's not possible to
 			// decide yet whether it's required or not
+			log.Info("not calculated")
 			return reconcile.Result{}, nil
 		}
 
-		// if required wasn't set yet then but all kinds were calculated then the installation is no longer required
+		// if required wasn't set yet then but all kinds were calculated then the extension is no longer required
 		required = ptr.To(false)
 		message = "no extension objects exist having the kind/type combinations the controller is responsible for"
 	} else if *required {
 		message = fmt.Sprintf("extension objects still exist: %+v", requiredKindTypes.UnsortedList())
 	}
 
+	log.Info("Updating required condition for extension", "extension", extension, "required", *required, "message", message)
 	if err := updateExtensionRequiredCondition(ctx, r.RuntimeClientSet.Client(), r.Clock, extension, *required, message); err != nil {
 		log.Error(err, "Failed updating required condition for extension", "extension", extension, "required", *required)
 		return reconcile.Result{}, err
 	}
-	log.Info("Updated required condition for extension", "extension", extension, "required", *required)
+	log.Info("Updated required condition for extension", "extension", extension, "required", *required, "message", message)
 
 	return reconcile.Result{}, nil
 }
 
 func updateExtensionRequiredCondition(ctx context.Context, c client.StatusClient, clock clock.Clock, extension *operatorv1alpha1.Extension, required bool, message string) error {
 	var (
-		conditionRequired = v1beta1helper.GetOrInitConditionWithClock(clock, extension.Status.Conditions, ExtensionRequired)
+		conditionRequired = v1beta1helper.GetOrInitConditionWithClock(clock, extension.Status.Conditions, operatorv1alpha1.ExtensionRequired)
 
 		status = gardencorev1beta1.ConditionTrue
 		reason = "ExtensionObjectsExist"

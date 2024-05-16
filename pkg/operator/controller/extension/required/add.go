@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/gardener/gardener/pkg/api/extensions"
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
@@ -36,13 +35,7 @@ import (
 )
 
 // ControllerName is the name of this controller.
-const (
-	ControllerName = "extensions-required"
-
-	// ExtensionRequired is a condition type for indicating that the respective extension controller is
-	// still required on the seed cluster as corresponding extension resources still exist.
-	ExtensionRequired gardencorev1beta1.ConditionType = "Required"
-)
+const ControllerName = "extensions-required"
 
 // AddToManager adds Reconciler to the given manager.
 func (r *Reconciler) AddToManager(ctx context.Context, mgr manager.Manager) error {
@@ -192,6 +185,7 @@ func (r *Reconciler) MapObjectKindToExtensions(objectKind string, newObjectListF
 
 		// if there is no difference compared to before then exit early
 		if kindCalculated && oldRequiredTypes.Equal(newRequiredTypes) {
+			log.Info("No changes detected, skip")
 			return nil
 		}
 
@@ -210,6 +204,7 @@ func (r *Reconciler) MapObjectKindToExtensions(objectKind string, newObjectListF
 		for i, ext := range extensionList.Items {
 			mergedSpec, err := operator.MergeExtensionSpecs(ext.Name, ext.Spec)
 			if err != nil {
+				log.Error(err, "Failed to merge extension with defaults")
 				return nil
 			}
 			extensionList.Items[i].Spec = mergedSpec

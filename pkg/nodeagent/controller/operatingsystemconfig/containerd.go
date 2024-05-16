@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"slices"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pelletier/go-toml"
@@ -15,6 +17,8 @@ import (
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig/mappatch"
+	"github.com/gardener/gardener/pkg/utils/flow"
+	"github.com/gardener/gardener/pkg/utils/retry"
 )
 
 // ReconcileContainerdConfig sets required values of the given containerd configuration.
@@ -51,8 +55,10 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 			oldRegistries = oldCRIConfig.Containerd.Registries
 		}
 
-		err = r.EnsureContainerdRegistries(oldRegistries, newCRIConfig.Containerd.Registries)
-		if err != nil {
+		if err := r.EnsureContainerdRegistries(ctx, newCRIConfig.Containerd.Registries); err != nil {
+			return err
+		}
+		if err := r.CleanupUnusedContainerdRegistries(log, oldRegistries, newCRIConfig.Containerd.Registries); err != nil {
 			return err
 		}
 	}
@@ -247,21 +253,52 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 }
 
 // EnsureContainerdRegistries configures containerd to use the desired image registries.
-func (r *Reconciler) EnsureContainerdRegistries(oldRegistries, newRegistries []extensionsv1alpha1.RegistryConfig) error {
-	upstreamsInUse := sets.New[string]()
+func (r *Reconciler) EnsureContainerdRegistries(ctx context.Context, newRegistries []extensionsv1alpha1.RegistryConfig) error {
+	var (
+		fns        = make([]flow.TaskFn, 0, len(newRegistries))
+		httpClient = http.Client{Timeout: 1 * time.Second}
+	)
 
 	for _, registryConfig := range newRegistries {
-		baseDir := path.Join(extensionsv1alpha1.ContainerDCertsDir, registryConfig.Upstream)
-		if err := r.FS.MkdirAll(baseDir, defaultDirPermissions); err != nil {
-			return fmt.Errorf("unable to ensure registry config base directory: %w", err)
-		}
+		fns = append(fns, func(ctx context.Context) error {
+			baseDir := path.Join(extensionsv1alpha1.ContainerDCertsDir, registryConfig.Upstream)
+			if err := r.FS.MkdirAll(baseDir, defaultDirPermissions); err != nil {
+				return fmt.Errorf("unable to ensure registry config base directory: %w", err)
+			}
 
-		f, err := r.FS.OpenFile(path.Join(baseDir, "hosts.toml"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			return fmt.Errorf("unable to open hosts.toml: %w", err)
-		}
+			hostsTomlFilePath := path.Join(baseDir, "hosts.toml")
+			exists, err := r.FS.Exists(hostsTomlFilePath)
+			if err != nil {
+				return fmt.Errorf("unable to check if registry config file exists: %w", err)
+			}
 
-		err = func() error {
+			// Check if registry endpoints are reachable if the config is new.
+			// This is especially required when registries run within the cluster and during bootstrap,
+			// the Kubernetes deployments are not ready yet.
+			if !exists {
+				if err := retry.Until(ctx, 2*time.Second, func(ctx context.Context) (done bool, err error) {
+					for _, registryHosts := range registryConfig.Hosts {
+						req, err := http.NewRequestWithContext(ctx, http.MethodGet, registryHosts.URL, nil)
+						if err != nil {
+							return false, fmt.Errorf("failed to construct http request %s for upstream %s: %w", registryHosts.URL, registryConfig.Upstream, err)
+						}
+
+						_, err = httpClient.Do(req)
+						if err != nil {
+							return false, fmt.Errorf("failed to reach registry %s for upstream %s: %w", registryHosts.URL, registryConfig.Upstream, err)
+						}
+					}
+					return true, nil
+				}); err != nil {
+					return err
+				}
+			}
+
+			f, err := r.FS.OpenFile(hostsTomlFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				return fmt.Errorf("unable to open hosts.toml: %w", err)
+			}
+
 			defer func() {
 				err = f.Close()
 			}()
@@ -302,11 +339,17 @@ func (r *Reconciler) EnsureContainerdRegistries(oldRegistries, newRegistries []e
 			}
 
 			return err
-		}()
-		if err != nil {
-			return err
-		}
+		})
 
+	}
+
+	return flow.Parallel(fns...)(ctx)
+}
+
+// CleanupUnusedContainerdRegistries removes unused containerd registries them from the file system.
+func (r *Reconciler) CleanupUnusedContainerdRegistries(log logr.Logger, oldRegistries, newRegistries []extensionsv1alpha1.RegistryConfig) error {
+	upstreamsInUse := sets.New[string]()
+	for _, registryConfig := range newRegistries {
 		upstreamsInUse.Insert(registryConfig.Upstream)
 	}
 
@@ -315,6 +358,7 @@ func (r *Reconciler) EnsureContainerdRegistries(oldRegistries, newRegistries []e
 	})
 
 	for _, registryConfig := range registriesToRemove {
+		log.Info("Removing obsolete registry directory", "upstream", registryConfig.Upstream)
 		if err := r.FS.RemoveAll(path.Join(extensionsv1alpha1.ContainerDCertsDir, registryConfig.Upstream)); err != nil {
 			return fmt.Errorf("failed to cleanup obsolete registry directory: %w", err)
 		}

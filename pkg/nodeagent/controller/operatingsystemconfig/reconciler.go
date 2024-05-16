@@ -109,11 +109,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
-		var oldCRIConfig *extensionsv1alpha1.CRIConfig
-		if oldOSC != nil && extensionsv1alpha1helper.IsContainerdConfigured(oldOSC.Spec.CRIConfig) {
-			oldCRIConfig = oldOSC.Spec.CRIConfig
-		}
-		err = r.ReconcileContainerdConfig(ctx, log, oldCRIConfig, osc.Spec.CRIConfig)
+		log.Info("Applying containerd configuration")
+		err = r.ReconcileContainerdConfig(ctx, osc.Spec.CRIConfig)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed reconciling containerd configuration: %w", err)
 		}
@@ -143,6 +140,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	mustRestartGardenerNodeAgent, err := r.executeUnitCommands(ctx, log, node, oscChanges)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed executing unit commands: %w", err)
+	}
+
+	if extensionsv1alpha1helper.IsContainerdConfigured(osc.Spec.CRIConfig) {
+		var oldCRIConfig *extensionsv1alpha1.CRIConfig
+		if oldOSC != nil && extensionsv1alpha1helper.IsContainerdConfigured(oldOSC.Spec.CRIConfig) {
+			oldCRIConfig = oldOSC.Spec.CRIConfig
+		}
+
+		log.Info("Finalize containerd configuration")
+		if err := r.finalizeContainerdHandling(ctx, log, oldCRIConfig, osc.Spec.CRIConfig, node, oscChanges.mustRestartContainerd); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed finalizing containerd handling: %w", err)
+		}
 	}
 
 	log.Info("Removing no longer needed files")
@@ -418,16 +427,6 @@ func (r *Reconciler) executeUnitCommands(ctx context.Context, log logr.Logger, n
 				log.Info("Successfully restarted unit", "unitName", unit.Name)
 			}
 
-			return nil
-		})
-	}
-
-	if changes.mustRestartContainerd {
-		fns = append(fns, func(ctx context.Context) error {
-			if err := r.DBus.Restart(ctx, r.Recorder, node, v1beta1constants.OperatingSystemConfigUnitNameContainerDService); err != nil {
-				return fmt.Errorf("unable to restart unit %q: %w", v1beta1constants.OperatingSystemConfigUnitNameContainerDService, err)
-			}
-			log.Info("Successfully restarted unit", "unitName", v1beta1constants.OperatingSystemConfigUnitNameContainerDService)
 			return nil
 		})
 	}

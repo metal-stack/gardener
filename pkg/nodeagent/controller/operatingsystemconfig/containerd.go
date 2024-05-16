@@ -13,8 +13,10 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pelletier/go-toml"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/nodeagent/controller/operatingsystemconfig/mappatch"
 	"github.com/gardener/gardener/pkg/utils/flow"
@@ -22,13 +24,7 @@ import (
 )
 
 // ReconcileContainerdConfig sets required values of the given containerd configuration.
-func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Logger, oldCRIConfig, newCRIConfig *extensionsv1alpha1.CRIConfig) error {
-	if newCRIConfig == nil {
-		return nil
-	}
-
-	log.Info("Applying containerd configuration")
-
+func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, criConfig *extensionsv1alpha1.CRIConfig) error {
 	err := r.ensureContainerdConfigDirectories()
 	if err != nil {
 		return err
@@ -44,23 +40,9 @@ func (r *Reconciler) ReconcileContainerdConfig(ctx context.Context, log logr.Log
 		return err
 	}
 
-	err = r.EnsureContainerdConfiguration(newCRIConfig)
+	err = r.EnsureContainerdConfiguration(criConfig)
 	if err != nil {
 		return err
-	}
-
-	if newCRIConfig.Containerd != nil {
-		var oldRegistries []extensionsv1alpha1.RegistryConfig
-		if oldCRIConfig != nil && oldCRIConfig.Containerd != nil {
-			oldRegistries = oldCRIConfig.Containerd.Registries
-		}
-
-		if err := r.EnsureContainerdRegistries(ctx, newCRIConfig.Containerd.Registries); err != nil {
-			return err
-		}
-		if err := r.CleanupUnusedContainerdRegistries(log, oldRegistries, newCRIConfig.Containerd.Registries); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -362,6 +344,41 @@ func (r *Reconciler) CleanupUnusedContainerdRegistries(log logr.Logger, oldRegis
 		if err := r.FS.RemoveAll(path.Join(extensionsv1alpha1.ContainerDCertsDir, registryConfig.Upstream)); err != nil {
 			return fmt.Errorf("failed to cleanup obsolete registry directory: %w", err)
 		}
+	}
+
+	return nil
+}
+
+func (r *Reconciler) finalizeContainerdHandling(
+	ctx context.Context,
+	log logr.Logger,
+	oldCRIConfig *extensionsv1alpha1.CRIConfig,
+	newCRIConfig *extensionsv1alpha1.CRIConfig,
+	node *corev1.Node,
+	mustRestartConainerd bool,
+) error {
+	containerdConfig := newCRIConfig.Containerd
+	if containerdConfig == nil {
+		containerdConfig = &extensionsv1alpha1.ContainerdConfig{}
+	}
+
+	var oldRegistries []extensionsv1alpha1.RegistryConfig
+	if oldCRIConfig.Containerd != nil {
+		oldRegistries = oldCRIConfig.Containerd.Registries
+	}
+
+	if err := r.EnsureContainerdRegistries(ctx, newCRIConfig.Containerd.Registries); err != nil {
+		return err
+	}
+	if err := r.CleanupUnusedContainerdRegistries(log, oldRegistries, newCRIConfig.Containerd.Registries); err != nil {
+		return err
+	}
+
+	if mustRestartConainerd {
+		if err := r.DBus.Restart(ctx, r.Recorder, node, v1beta1constants.OperatingSystemConfigUnitNameContainerDService); err != nil {
+			return fmt.Errorf("unable to restart unit %q: %w", v1beta1constants.OperatingSystemConfigUnitNameContainerDService, err)
+		}
+		log.Info("Successfully restarted unit", "unitName", v1beta1constants.OperatingSystemConfigUnitNameContainerDService)
 	}
 
 	return nil

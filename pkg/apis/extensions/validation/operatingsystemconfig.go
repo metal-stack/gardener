@@ -239,6 +239,9 @@ func ValidateCriConfig(config *extensionsv1alpha1.CRIConfig, fldPath *field.Path
 	} else {
 		switch name := config.Name; name {
 		case extensionsv1alpha1.CRINameContainerD:
+			if config.Containerd == nil {
+				allErrs = append(allErrs, field.Invalid(fldPath.Child("containerd"), nil, "if containerd runtime is configured, containerd configuration needs to be provided"))
+			}
 		default:
 			allErrs = append(allErrs, field.NotSupported(fldPath.Child("name"), name, []extensionsv1alpha1.CRIName{extensionsv1alpha1.CRINameContainerD}))
 		}

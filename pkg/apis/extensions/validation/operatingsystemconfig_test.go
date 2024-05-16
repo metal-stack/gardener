@@ -316,6 +316,18 @@ var _ = Describe("OperatingSystemConfig validation tests", func() {
 			}))))
 		})
 
+		It("should forbid OperatingSystemConfigs missing containerd configuration when cri name is containerd", func() {
+			oscCopy := osc.DeepCopy()
+			oscCopy.Spec.CRIConfig.Name = extensionsv1alpha1.CRINameContainerD
+			oscCopy.Spec.CRIConfig.Containerd = nil
+
+			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":   Equal(field.ErrorTypeInvalid),
+				"Field":  Equal("spec.criConfig.containerd"),
+				"Detail": Equal("if containerd runtime is configured, containerd configuration needs to be provided"),
+			}))))
+		})
+
 		It("should forbid OperatingSystemConfigs invalid cri", func() {
 			oscCopy := osc.DeepCopy()
 			oscCopy.Spec.CRIConfig.Name = extensionsv1alpha1.CRIName("foo")

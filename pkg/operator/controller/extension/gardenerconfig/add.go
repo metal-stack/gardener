@@ -91,7 +91,7 @@ func (r *Reconciler) AddToManager(ctx context.Context, mgr manager.Manager) erro
 		Watches(
 			&operatorv1alpha1.Garden{},
 			mapper.EnqueueRequestsFrom(ctx, mgr.GetCache(), mapper.MapFunc(r.MapToAllExtensions), mapper.UpdateWithNew, mgr.GetLogger()),
-			builder.WithPredicates(care.GardenPredicate()),
+			builder.WithPredicates(care.GardenPredicate(), predicate.GenerationChangedPredicate{}),
 		).
 		Complete(r)
 }

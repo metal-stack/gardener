@@ -105,6 +105,7 @@ type SwitchOptions struct {
 
 	nameToWebhookFactory     map[string]func(manager.Manager) (*extensionswebhook.Webhook, error)
 	webhookFactoryAggregator FactoryAggregator
+	Predicate                func(string) bool
 }
 
 // Register registers the given NameToWebhookFuncs in the options.
@@ -130,7 +131,7 @@ func (w *SwitchOptions) Complete() error {
 	}
 
 	for name, addToManager := range w.nameToWebhookFactory {
-		if !disabled.Has(name) {
+		if !disabled.Has(name) && w.Predicate(name) {
 			w.webhookFactoryAggregator.Register(addToManager)
 		}
 	}
@@ -156,8 +157,8 @@ func Switch(name string, f func(manager.Manager) (*extensionswebhook.Webhook, er
 }
 
 // NewSwitchOptions creates new SwitchOptions with the given initial pairs.
-func NewSwitchOptions(pairs ...NameToFactory) *SwitchOptions {
-	opts := SwitchOptions{nameToWebhookFactory: map[string]func(manager.Manager) (*extensionswebhook.Webhook, error){}, webhookFactoryAggregator: FactoryAggregator{}}
+func NewSwitchOptions(predicate func(string) bool, pairs ...NameToFactory) *SwitchOptions {
+	opts := SwitchOptions{nameToWebhookFactory: map[string]func(manager.Manager) (*extensionswebhook.Webhook, error){}, webhookFactoryAggregator: FactoryAggregator{}, Predicate: predicate}
 	opts.Register(pairs...)
 	return &opts
 }

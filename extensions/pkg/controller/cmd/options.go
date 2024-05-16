@@ -387,7 +387,8 @@ func (r *RESTOptions) AddFlags(fs *pflag.FlagSet) {
 
 // SwitchOptions are options to build an AddToManager function that filters the disabled controllers.
 type SwitchOptions struct {
-	Disabled []string
+	Disabled  []string
+	Predicate func(string) bool
 
 	nameToAddToManager  map[string]func(context.Context, manager.Manager) error
 	addToManagerBuilder extensionscontroller.AddToManagerBuilder
@@ -415,8 +416,8 @@ func Switch(name string, f func(context.Context, manager.Manager) error) NameToA
 }
 
 // NewSwitchOptions creates new SwitchOptions with the given initial pairs.
-func NewSwitchOptions(pairs ...NameToAddToManagerFunc) *SwitchOptions {
-	opts := SwitchOptions{nameToAddToManager: make(map[string]func(context.Context, manager.Manager) error)}
+func NewSwitchOptions(predicate func(string) bool, pairs ...NameToAddToManagerFunc) *SwitchOptions {
+	opts := SwitchOptions{nameToAddToManager: make(map[string]func(context.Context, manager.Manager) error), Predicate: predicate}
 	opts.Register(pairs...)
 	return &opts
 }
@@ -441,7 +442,7 @@ func (d *SwitchOptions) Complete() error {
 	}
 
 	for name, addToManager := range d.nameToAddToManager {
-		if !disabled.Has(name) {
+		if !disabled.Has(name) && d.Predicate(name) {
 			d.addToManagerBuilder.Register(addToManager)
 		}
 	}

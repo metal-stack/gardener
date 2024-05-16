@@ -5,6 +5,8 @@
 package app
 
 import (
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionscontrolplanecontroller "github.com/gardener/gardener/extensions/pkg/controller/controlplane"
 	extensionsdnsrecordcontroller "github.com/gardener/gardener/extensions/pkg/controller/dnsrecord"
@@ -39,16 +41,20 @@ import (
 	shootwebhook "github.com/gardener/gardener/pkg/provider-local/webhook/shoot"
 )
 
-// ControllerSwitchOptions are the extensionscmdcontroller.SwitchOptions for the provider controllers.
-func ControllerSwitchOptions(runsInGardenCluster bool) *extensionscmdcontroller.SwitchOptions {
-	if runsInGardenCluster {
-		return extensionscmdcontroller.NewSwitchOptions(
-			extensionscmdcontroller.Switch(backupbucketcontroller.ControllerName, backupbucketcontroller.AddToManager),
-			extensionscmdcontroller.Switch(extensionsdnsrecordcontroller.ControllerName, dnsrecordcontroller.AddToManager),
-		)
-	}
+var RunsInGardenCluster *bool
 
+// ControllerSwitchOptions are the extensionscmdcontroller.SwitchOptions for the provider controllers.
+func ControllerSwitchOptions() *extensionscmdcontroller.SwitchOptions {
 	return extensionscmdcontroller.NewSwitchOptions(
+		func(name string) bool {
+			if !*RunsInGardenCluster {
+				return true
+			}
+			if sets.New[string](backupbucketcontroller.ControllerName, extensionsdnsrecordcontroller.ControllerName).Has(name) {
+				return true
+			}
+			return false
+		},
 		extensionscmdcontroller.Switch(backupbucketcontroller.ControllerName, backupbucketcontroller.AddToManager),
 		extensionscmdcontroller.Switch(backupentrycontroller.ControllerName, backupentrycontroller.AddToManager),
 		extensionscmdcontroller.Switch(extensionscontrolplanecontroller.ControllerName, controlplanecontroller.AddToManager),
@@ -68,12 +74,14 @@ func ControllerSwitchOptions(runsInGardenCluster bool) *extensionscmdcontroller.
 }
 
 // WebhookSwitchOptions are the extensionscmdwebhook.SwitchOptions for the provider webhooks.
-func WebhookSwitchOptions(runsInGardenCluster bool) *extensionscmdwebhook.SwitchOptions {
-	if runsInGardenCluster {
-		return extensionscmdwebhook.NewSwitchOptions()
-	}
-
+func WebhookSwitchOptions() *extensionscmdwebhook.SwitchOptions {
 	return extensionscmdwebhook.NewSwitchOptions(
+		func(_ string) bool {
+			if !*RunsInGardenCluster {
+				return true
+			}
+			return false
+		},
 		extensionscmdwebhook.Switch(extensionscontrolplanewebhook.WebhookName, controlplanewebhook.AddToManager),
 		extensionscmdwebhook.Switch(extensionsshootwebhook.WebhookName, shootwebhook.AddToManager),
 		extensionscmdwebhook.Switch(dnsconfigwebhook.WebhookName, dnsconfigwebhook.AddToManager),

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -145,7 +146,16 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			Namespace: os.Getenv("WEBHOOK_CONFIG_NAMESPACE"),
 		}
 
-		// TODO: Consider removing some of these flags in case extension runs in garden cluster.
+		controllerSwitches = ControllerSwitchOptions()
+		webhookSwitches    = WebhookSwitchOptions()
+		webhookOptions     = extensionscmdwebhook.NewAddToManagerOptions(
+			local.Name,
+			genericactuator.ShootWebhooksResourceName,
+			genericactuator.ShootWebhookNamespaceSelector(local.Type),
+			webhookServerOptions,
+			webhookSwitches,
+		)
+
 		aggOption = extensionscmdcontroller.NewOptionAggregator(
 			restOpts,
 			mgrOpts,
@@ -160,7 +170,9 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			extensionscmdcontroller.PrefixOption("operatingsystemconfig-", operatingSystemConfigCtrlOpts),
 			extensionscmdcontroller.PrefixOption("healthcheck-", healthCheckCtrlOpts),
 			extensionscmdcontroller.PrefixOption("heartbeat-", heartbeatCtrlOptions),
+			controllerSwitches,
 			reconcileOpts,
+			webhookOptions,
 		)
 	)
 
@@ -171,21 +183,9 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			if err := generalOpts.Complete(); err != nil {
 				return fmt.Errorf("error completing options: %w", err)
 			}
+			runsInGardenCluster := generalOpts.Completed().RunsIn == "garden"
+			RunsInGardenCluster = pointer.Bool(runsInGardenCluster)
 
-			var (
-				runsInGardenCluster = generalOpts.Completed().RunsIn == "garden"
-				controllerSwitches  = ControllerSwitchOptions(runsInGardenCluster)
-				webhookSwitches     = WebhookSwitchOptions(runsInGardenCluster)
-				webhookOptions      = extensionscmdwebhook.NewAddToManagerOptions(
-					local.Name,
-					genericactuator.ShootWebhooksResourceName,
-					genericactuator.ShootWebhookNamespaceSelector(local.Type),
-					webhookServerOptions,
-					webhookSwitches,
-				)
-			)
-
-			aggOption.Register(controllerSwitches, webhookOptions)
 			if err := aggOption.Complete(); err != nil {
 				return fmt.Errorf("error completing options: %w", err)
 			}

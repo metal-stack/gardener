@@ -559,6 +559,7 @@ func (r *Reconciler) deployEtcdMainBackupBucket(ctx context.Context, garden *ope
 			DefaultSpec: extensionsv1alpha1.DefaultSpec{
 				Type:           garden.Spec.VirtualCluster.ETCD.Main.Backup.Provider,
 				ProviderConfig: garden.Spec.VirtualCluster.ETCD.Main.Backup.ProviderConfig,
+				Class:          v1beta1constants.GardenExtensionClassGarden,
 			},
 			Region: *garden.Spec.RuntimeCluster.Provider.Region,
 			SecretRef: corev1.SecretReference{
@@ -852,6 +853,7 @@ func (r *Reconciler) reconcileDNSRecords(ctx context.Context, log logr.Logger, g
 					Values:                       []string{istioIngressGatewayLoadBalancerAddress},
 					RecordType:                   extensionsv1alpha1helper.GetDNSRecordType(istioIngressGatewayLoadBalancerAddress),
 					Type:                         *garden.Spec.VirtualCluster.DNS.Provider,
+					Class:                        v1beta1constants.GardenExtensionClassGarden,
 					SecretName:                   garden.Spec.VirtualCluster.DNS.SecretRef.Name,
 					ReconcileOnlyOnChangeOrError: true,
 				},

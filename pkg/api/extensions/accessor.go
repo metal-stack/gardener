@@ -113,6 +113,11 @@ func (u unstructuredSpecAccessor) GetProviderConfig() *runtime.RawExtension {
 	return nestedRawExtension(u.UnstructuredContent(), "spec", "providerConfig")
 }
 
+// GetProviderConfig implements Spec.
+func (u unstructuredSpecAccessor) GetExtensionClass() string {
+	return nestedString(u.UnstructuredContent(), "spec", "class")
+}
+
 // GetExtensionStatus implements Object.
 func (u unstructuredAccessor) GetExtensionStatus() extensionsv1alpha1.Status {
 	return unstructuredStatusAccessor(u)

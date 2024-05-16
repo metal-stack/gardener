@@ -79,6 +79,8 @@ type Values struct {
 	TTL *int64
 	// IPStack is the indication of the IP stack used for the DNSRecord. It can be ipv4, ipv6 or dual-stack.
 	IPStack string
+	// Class TODO
+	Class string
 }
 
 // New creates a new instance that implements component.DeployMigrateWaiter.
@@ -161,7 +163,8 @@ func (d *dnsRecord) deploy(ctx context.Context, operation string) (extensionsv1a
 
 		d.dnsRecord.Spec = extensionsv1alpha1.DNSRecordSpec{
 			DefaultSpec: extensionsv1alpha1.DefaultSpec{
-				Type: d.values.Type,
+				Type:  d.values.Type,
+				Class: d.values.Class,
 			},
 			SecretRef:  secretRef,
 			Zone:       d.values.Zone,

@@ -478,7 +478,10 @@ type GeneralConfig struct {
 
 // Complete implements Complete.
 func (r *GeneralOptions) Complete() error {
-	r.config = &GeneralConfig{r.GardenerVersion, r.RunsIn}
+	r.config = &GeneralConfig{
+		GardenerVersion: r.GardenerVersion,
+		RunsIn:          r.RunsIn,
+	}
 	return nil
 }
 
@@ -490,5 +493,5 @@ func (r *GeneralOptions) Completed() *GeneralConfig {
 // AddFlags implements Flagger.AddFlags.
 func (r *GeneralOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&r.GardenerVersion, GardenerVersionFlag, "", "Version of the gardenlet or gardener-operator.")
-	fs.StringVar(&r.RunsIn, RunsInFlag, "seed", "Cluster type in which the extension runs")
+	fs.StringVar(&r.RunsIn, RunsInFlag, "seed", "Cluster type in which the extension runs.")
 }

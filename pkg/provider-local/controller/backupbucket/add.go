@@ -41,6 +41,7 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts back
 		ControllerOptions: opts.Controller,
 		Predicates:        backupbucket.DefaultPredicates(opts.IgnoreOperationAnnotation),
 		Type:              local.Type,
+		Class:             opts.Class,
 	})
 }
 

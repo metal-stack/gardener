@@ -36,6 +36,8 @@ type AddOptions struct {
 	Controller controller.Options
 	// IgnoreOperationAnnotation specifies whether to ignore the operation annotation or not.
 	IgnoreOperationAnnotation bool
+	// Class TODO
+	Class string
 }
 
 // AddFlags implements Flagger.AddFlags.

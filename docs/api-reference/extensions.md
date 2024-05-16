@@ -2795,6 +2795,18 @@ k8s.io/apimachinery/pkg/runtime.RawExtension
 <p>ProviderConfig is the provider specific configuration.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>class</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Class holds the resource class used to control the responsibility for multiple resource manager instances</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="extensions.gardener.cloud/v1alpha1.DefaultStatus">DefaultStatus

@@ -268,6 +268,9 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			reconcileOpts.Completed().Apply(&localoperatingsystemconfig.DefaultAddOptions.IgnoreOperationAnnotation)
 			reconcileOpts.Completed().Apply(&localworker.DefaultAddOptions.IgnoreOperationAnnotation)
 
+			reconcileOpts.Completed().ApplyClass(&localdnsrecord.DefaultAddOptions.Class)
+			reconcileOpts.Completed().ApplyClass(&localbackupbucket.DefaultAddOptions.Class)
+
 			if err := mgr.AddReadyzCheck("informer-sync", gardenerhealthz.NewCacheSyncHealthz(mgr.GetCache())); err != nil {
 				return fmt.Errorf("could not add readycheck for informers: %w", err)
 			}

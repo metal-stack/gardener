@@ -39,6 +39,8 @@ type AddArgs struct {
 	Predicates []predicate.Predicate
 	// Type is the type of the resource considered for reconciliation.
 	Type string
+	// Class foo
+	Class string
 	// IgnoreOperationAnnotation specifies whether to ignore the operation annotation or not.
 	// If the annotation is not ignored, the extension controller will only reconcile
 	// with a present operation annotation typically set during a reconcile (e.g in the maintenance time) by the
@@ -56,6 +58,7 @@ func DefaultPredicates(ignoreOperationAnnotation bool) []predicate.Predicate {
 func Add(ctx context.Context, mgr manager.Manager, args AddArgs) error {
 	args.ControllerOptions.Reconciler = NewReconciler(mgr, args.Actuator)
 	predicates := extensionspredicate.AddTypePredicate(args.Predicates, args.Type)
+	predicates = extensionspredicate.AddClassPredicate(predicates, args.Class)
 	return add(ctx, mgr, args, predicates)
 }
 

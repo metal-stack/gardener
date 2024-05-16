@@ -938,4 +938,9 @@ const (
 
 	// GardenPurposeMachineClass is a constant for the 'machineclass' value in a label.
 	GardenPurposeMachineClass = "machineclass"
+
+	// GardenExtensionClassGarden TODO
+	GardenExtensionClassGarden = "garden"
+	// GardenExtensionClassSeed TODO
+	GardenExtensionClassSeed = "seed"
 )

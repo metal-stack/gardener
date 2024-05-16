@@ -31,6 +31,21 @@ func HasType(typeName string) predicate.Predicate {
 	})
 }
 
+func HasClass(className string) predicate.Predicate {
+	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		// if no className is provided by the extension, reconcile everything (to be backwards compatible).
+		// if className == "" {
+		// 	return true
+		// }
+		acc, err := extensions.Accessor(obj)
+		if err != nil {
+			return false
+		}
+
+		return acc.GetExtensionSpec().GetExtensionClass() == className
+	})
+}
+
 // AddTypePredicate returns a new slice which contains a type predicate and the given `predicates`.
 // if more than one extensionTypes is given all given types are or combined
 func AddTypePredicate(predicates []predicate.Predicate, extensionTypes ...string) []predicate.Predicate {
@@ -45,6 +60,24 @@ func AddTypePredicate(predicates []predicate.Predicate, extensionTypes ...string
 	orPreds := make([]predicate.Predicate, 0, len(extensionTypes))
 	for _, extensionType := range extensionTypes {
 		orPreds = append(orPreds, HasType(extensionType))
+	}
+
+	return append(resultPredicates, predicate.Or(orPreds...))
+}
+
+// AddClassPredicate TODO
+func AddClassPredicate(predicates []predicate.Predicate, extensionClasses ...string) []predicate.Predicate {
+	resultPredicates := make([]predicate.Predicate, 0, len(predicates)+1)
+	resultPredicates = append(resultPredicates, predicates...)
+
+	if len(extensionClasses) == 1 {
+		resultPredicates = append(resultPredicates, HasClass(extensionClasses[0]))
+		return resultPredicates
+	}
+
+	orPreds := make([]predicate.Predicate, 0, len(extensionClasses))
+	for _, class := range extensionClasses {
+		orPreds = append(orPreds, HasClass(class))
 	}
 
 	return append(resultPredicates, predicate.Or(orPreds...))

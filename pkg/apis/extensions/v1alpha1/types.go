@@ -53,6 +53,8 @@ type Spec interface {
 	GetExtensionPurpose() *string
 	// GetProviderConfig retrieves the provider config.
 	GetProviderConfig() *runtime.RawExtension
+	// GetExtensionClass retrieves the extension class.
+	GetExtensionClass() string
 }
 
 // Object is an extension object resource.

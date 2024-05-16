@@ -19,6 +19,9 @@ type DefaultSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +optional
 	ProviderConfig *runtime.RawExtension `json:"providerConfig,omitempty"`
+	// Class holds the resource class used to control the responsibility for multiple resource manager instances
+	// +optional
+	Class string `json:"class"`
 }
 
 // GetExtensionType implements Spec.
@@ -34,6 +37,11 @@ func (d *DefaultSpec) GetExtensionPurpose() *string {
 // GetProviderConfig implements Spec.
 func (d *DefaultSpec) GetProviderConfig() *runtime.RawExtension {
 	return d.ProviderConfig
+}
+
+// GetExtensionClass implements Spec.
+func (d *DefaultSpec) GetExtensionClass() string {
+	return d.Class
 }
 
 // DefaultStatus contains common status fields for every extension resource.

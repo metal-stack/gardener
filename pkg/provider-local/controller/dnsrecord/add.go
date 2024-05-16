@@ -25,6 +25,8 @@ type AddOptions struct {
 	Controller controller.Options
 	// IgnoreOperationAnnotation specifies whether to ignore the operation annotation or not.
 	IgnoreOperationAnnotation bool
+	// Class TODO
+	Class string
 }
 
 // AddToManagerWithOptions adds a controller with the given Options to the given manager.
@@ -35,6 +37,7 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts AddO
 		ControllerOptions: opts.Controller,
 		Predicates:        dnsrecord.DefaultPredicates(ctx, mgr, opts.IgnoreOperationAnnotation),
 		Type:              local.Type,
+		Class:             opts.Class,
 	})
 }
 

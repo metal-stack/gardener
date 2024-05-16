@@ -38,6 +38,8 @@ type AddArgs struct {
 	Predicates []predicate.Predicate
 	// Type is the type of the resource considered for reconciliation.
 	Type string
+	// Type is the type of the resource considered for reconciliation.
+	Class string
 	// IgnoreOperationAnnotation specifies whether to ignore the operation annotation or not.
 	// If the annotation is not ignored, the extension controller will only reconcile
 	// with a present operation annotation typically set during a reconcile (e.g in the maintenance time) by the Gardenlet
@@ -68,6 +70,8 @@ func Add(ctx context.Context, mgr manager.Manager, args AddArgs) error {
 	}
 
 	predicates := extensionspredicate.AddTypePredicate(args.Predicates, args.Type)
+	predicates = extensionspredicate.AddClassPredicate(predicates, args.Class)
+
 	if args.IgnoreOperationAnnotation {
 		if err := ctrl.Watch(
 			source.Kind(mgr.GetCache(), &extensionsv1alpha1.Cluster{}),

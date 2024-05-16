@@ -3,8 +3,8 @@ kind: Kustomization
 
 resources:
 - cloudprofile.yaml
-- controllerregistration.yaml
-- controllerdeployment.yaml
+# - controllerregistration.yaml
+# - controllerdeployment.yaml
 - project.yaml
 - secret-backup.yaml
 - secretbinding.yaml

@@ -807,8 +807,6 @@ deploy:
             - name: gardener-admission-controller
               repository: '{{.IMAGE_REPO_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}'
               tag: '{{.IMAGE_TAG_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}@{{.IMAGE_DIGEST_europe_docker_pkg_dev_gardener_project_releases_gardener_admission_controller}}'
-          hostAliases[0].ip: "10.2.10.2"
-          hostAliases[0].hostnames[0]: api.virtual-garden.local.gardener.cloud
           replicaCount: 2
           nodeToleration:
             defaultNotReadyTolerationSeconds: 60

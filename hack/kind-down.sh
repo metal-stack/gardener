@@ -38,5 +38,7 @@ kind delete cluster \
 rm -f  "$PATH_KUBECONFIG"
 
 if [[ "$KEEP_BACKUPBUCKETS_DIRECTORY" == "false" ]]; then
+  # We need root privileges to clean the backup bucket directory, see https://github.com/gardener/gardener/issues/6752
+  docker run --user root:root -v "$(dirname "$0")/../dev/local-backupbuckets:/dev/local-backupbuckets" alpine sh -c 'rm -rf /dev/local-backupbuckets/*'
   rm -rf "$(dirname "$0")/../dev/local-backupbuckets"
 fi

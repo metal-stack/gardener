@@ -5,8 +5,10 @@
 package operatingsystemconfig_test
 
 import (
+	"context"
 	"io/fs"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/afero"
@@ -25,6 +27,8 @@ var _ = Describe("ContainerdReconciler", func() {
 			reconciler *operatingsystemconfig.Reconciler
 
 			criConfig *extensionsv1alpha1.CRIConfig
+
+			logger = logr.Discard()
 		)
 
 		BeforeEach(func() {
@@ -74,15 +78,16 @@ server = "https://registry-1.docker.io"
     capabilities = ["pull"]
 `
 
-			Expect(reconciler.EnsureContainerdRegistries(criConfig.Containerd.Registries)).To(Succeed())
+			Expect(reconciler.EnsureContainerdRegistries(context.Background(), logger, criConfig.Containerd.Registries)).To(Succeed())
 			assertFileOnDisk(fakeFS, "/etc/containerd/certs.d/docker.io/hosts.toml", expected, 0644)
 		})
 
 		It("should ensure the containerd unit dropin configuration", func() {
 			expected := `[Service]
-Environment="PATH=$BIN_PATH:$PATH"
+Environment="PATH=/var/bin/containerruntimes:/i/am/foo"
 `
 
+			te.Setenv("PATH", "/i/am/foo")
 			Expect(reconciler.EnsureContainerdEnvironment()).To(Succeed())
 			assertFileOnDisk(fakeFS, "/etc/systemd/system/containerd.service.d/30-env_config.conf", expected, 0644)
 		})
@@ -98,7 +103,7 @@ Environment="PATH=$BIN_PATH:$PATH"
 				`),
 			}
 			criConfig = &extensionsv1alpha1.CRIConfig{
-				CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,
+				CgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,
 				Containerd: &extensionsv1alpha1.ContainerdConfig{
 					SandboxImage: "pause",
 					Plugins: []extensionsv1alpha1.PluginConfig{

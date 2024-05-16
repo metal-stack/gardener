@@ -688,8 +688,8 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 
 		if d.worker.CRI != nil {
 			criConfig := &extensionsv1alpha1.CRIConfig{
-				Name:            extensionsv1alpha1.CRIName(d.worker.CRI.Name),
-				CRICgroupDriver: d.criCgroupDriver,
+				Name:         extensionsv1alpha1.CRIName(d.worker.CRI.Name),
+				CgroupDriver: d.criCgroupDriver,
 			}
 
 			if criConfig.Name == extensionsv1alpha1.CRINameContainerD {

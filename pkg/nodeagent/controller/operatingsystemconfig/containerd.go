@@ -144,7 +144,7 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 					return value, nil
 				}
 
-				return criConfig.CRICgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd, nil
+				return criConfig.CgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd, nil
 			},
 		},
 		{

@@ -2060,7 +2060,7 @@ CRIName
 </tr>
 <tr>
 <td>
-<code>criCgroupDriver</code></br>
+<code>cgroupDriver</code></br>
 <em>
 <a href="#extensions.gardener.cloud/v1alpha1.CRICgroupDriverName">
 CRICgroupDriverName
@@ -2068,7 +2068,7 @@ CRICgroupDriverName
 </em>
 </td>
 <td>
-<p>CRICgroupDriver configures the CRI&rsquo;s cgroup driver</p>
+<p>CgroupDriver configures the CRI&rsquo;s cgroup driver</p>
 </td>
 </tr>
 <tr>

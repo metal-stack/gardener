@@ -260,8 +260,8 @@ const (
 type CRIConfig struct {
 	// Name is a mandatory string containing the name of the CRI library. Supported values are `containerd`.
 	Name CRIName `json:"name"`
-	// CRICgroupDriver configures the CRI's cgroup driver
-	CRICgroupDriver CRICgroupDriverName `json:"criCgroupDriver"`
+	// CgroupDriver configures the CRI's cgroup driver
+	CgroupDriver CRICgroupDriverName `json:"cgroupDriver"`
 	// ContainerdConfig is the containerd configuration.
 	// +optional
 	Containerd *ContainerdConfig `json:"containerd,omitempty"`

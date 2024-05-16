@@ -247,10 +247,10 @@ func ValidateCriConfig(config *extensionsv1alpha1.CRIConfig, fldPath *field.Path
 		}
 	}
 
-	if len(config.CRICgroupDriver) == 0 {
+	if len(config.CgroupDriver) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("criCgroupDriver"), "field is required"))
 	} else {
-		switch driver := config.CRICgroupDriver; driver {
+		switch driver := config.CgroupDriver; driver {
 		case extensionsv1alpha1.CRICgroupDriverCgroupfs, extensionsv1alpha1.CRICgroupDriverSystemd:
 		default:
 			allErrs = append(allErrs, field.NotSupported(fldPath.Child("criCgroupDriver"), driver, []extensionsv1alpha1.CRICgroupDriverName{extensionsv1alpha1.CRICgroupDriverCgroupfs, extensionsv1alpha1.CRICgroupDriverSystemd}))

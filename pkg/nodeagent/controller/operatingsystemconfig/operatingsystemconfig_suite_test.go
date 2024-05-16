@@ -11,7 +11,12 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+var (
+	te *testing.T
+)
+
 func TestOperatingSystemConfig(t *testing.T) {
+	te = t
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "NodeAgent Controller OperatingSystemConfig Suite")
 }

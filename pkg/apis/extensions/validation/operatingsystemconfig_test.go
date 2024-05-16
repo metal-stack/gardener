@@ -37,8 +37,8 @@ var _ = Describe("OperatingSystemConfig validation tests", func() {
 				Purpose:              extensionsv1alpha1.OperatingSystemConfigPurposeProvision,
 				ReloadConfigFilePath: &reloadConfigFilePath,
 				CRIConfig: &extensionsv1alpha1.CRIConfig{
-					Name:            extensionsv1alpha1.CRINameContainerD,
-					CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverCgroupfs,
+					Name:         extensionsv1alpha1.CRINameContainerD,
+					CgroupDriver: extensionsv1alpha1.CRICgroupDriverCgroupfs,
 					Containerd: &extensionsv1alpha1.ContainerdConfig{
 						Registries: []extensionsv1alpha1.RegistryConfig{
 							{
@@ -340,7 +340,7 @@ var _ = Describe("OperatingSystemConfig validation tests", func() {
 
 		It("should forbid OperatingSystemConfigs invalid cgroup driver", func() {
 			oscCopy := osc.DeepCopy()
-			oscCopy.Spec.CRIConfig.CRICgroupDriver = extensionsv1alpha1.CRICgroupDriverName("foo")
+			oscCopy.Spec.CRIConfig.CgroupDriver = extensionsv1alpha1.CRICgroupDriverName("foo")
 
 			Expect(ValidateOperatingSystemConfig(oscCopy)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 				"Type":  Equal(field.ErrorTypeNotSupported),

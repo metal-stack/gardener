@@ -169,8 +169,8 @@ var _ = Describe("OperatingSystemConfig", func() {
 				if worker.CRI != nil {
 					criName = extensionsv1alpha1.CRIName(worker.CRI.Name)
 					criConfig = &extensionsv1alpha1.CRIConfig{
-						Name:            extensionsv1alpha1.CRIName(worker.CRI.Name),
-						CRICgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,
+						Name:         extensionsv1alpha1.CRIName(worker.CRI.Name),
+						CgroupDriver: extensionsv1alpha1.CRICgroupDriverSystemd,
 					}
 				}
 

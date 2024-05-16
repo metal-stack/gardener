@@ -65,6 +65,9 @@ spec:
                 description: CRI config is a structure contains configurations of
                   the CRI library
                 properties:
+                  cgroupDriver:
+                    description: CgroupDriver configures the CRI's cgroup driver
+                    type: string
                   containerd:
                     description: ContainerdConfig is the containerd configuration.
                     properties:
@@ -144,15 +147,12 @@ spec:
                           containerd.
                         type: string
                     type: object
-                  criCgroupDriver:
-                    description: CRICgroupDriver configures the CRI's cgroup driver
-                    type: string
                   name:
                     description: Name is a mandatory string containing the name of
                       the CRI library. Supported values are `containerd`.
                     type: string
                 required:
-                - criCgroupDriver
+                - cgroupDriver
                 - name
                 type: object
               files:

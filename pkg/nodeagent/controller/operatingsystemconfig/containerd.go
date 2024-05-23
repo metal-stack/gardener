@@ -138,17 +138,6 @@ func (r *Reconciler) EnsureContainerdConfiguration(criConfig *extensionsv1alpha1
 	ps := patches{
 		{
 			name: "cgroup driver",
-			path: mappatch.MapPath{"plugins", "io.containerd.grpc.v1.cri", "systemd_cgroup"},
-			setFn: func(value any) (any, error) {
-				if criConfig == nil {
-					return value, nil
-				}
-
-				return criConfig.CgroupDriver == extensionsv1alpha1.CRICgroupDriverSystemd, nil
-			},
-		},
-		{
-			name: "cgroup driver",
 			path: mappatch.MapPath{"plugins", "io.containerd.grpc.v1.cri", "containerd", "runtimes", "runc", "options", "SystemdCgroup"},
 			setFn: func(value any) (any, error) {
 				if criConfig == nil {

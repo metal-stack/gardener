@@ -182,7 +182,7 @@ version = 2
   [plugins."io.containerd.grpc.v1.cri"]
     device_ownership_from_security_context = false
     sandbox_image = "pause"
-    systemd_cgroup = true
+    systemd_cgroup = false
 
     [plugins."io.containerd.grpc.v1.cri".cni]
       bin_dir = "/opt/cni/bin"

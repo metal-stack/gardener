@@ -98,10 +98,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
-	oscChanges, err := computeOperatingSystemConfigChanges(oldOSC, osc)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed calculating the OSC changes: %w", err)
-	}
+	oscChanges := computeOperatingSystemConfigChanges(oldOSC, osc)
 
 	if node != nil && node.Annotations[nodeagentv1alpha1.AnnotationKeyChecksumAppliedOperatingSystemConfig] == oscChecksum {
 		log.Info("Configuration on this node is up to date, nothing to be done")

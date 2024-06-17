@@ -6,11 +6,13 @@ package mappatch
 import "fmt"
 
 type (
+	// MapPath is the path to a TOML config element
 	MapPath []string
-
+	// SetFn is the function to set a config element
 	SetFn func(value any) (any, error)
 )
 
+// SetMapEntry sets an entry in the patch map to a setter function.
 func SetMapEntry(m map[string]any, path MapPath, setFn SetFn) (map[string]any, error) {
 	if setFn == nil {
 		return nil, fmt.Errorf("setter function must not be nil")

@@ -210,6 +210,7 @@ func ValidateOperatingSystemConfigSpecUpdate(new, old *extensionsv1alpha1.Operat
 	return allErrs
 }
 
+// ValidateCriConfigUpdate validates the spec of a CRIConfig object before an update.
 func ValidateCriConfigUpdate(new, old *extensionsv1alpha1.CRIConfig, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
@@ -227,6 +228,7 @@ func ValidateCriConfigUpdate(new, old *extensionsv1alpha1.CRIConfig, fldPath *fi
 	return allErrs
 }
 
+// ValidateCriConfig validates the spec of a CRIConfig object.
 func ValidateCriConfig(config *extensionsv1alpha1.CRIConfig, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
@@ -262,6 +264,7 @@ func ValidateCriConfig(config *extensionsv1alpha1.CRIConfig, fldPath *field.Path
 	return allErrs
 }
 
+// ValidateContainerdConfig validates the spec of a ContainerdConfig object.
 func ValidateContainerdConfig(config *extensionsv1alpha1.ContainerdConfig, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
@@ -295,6 +298,7 @@ func ValidateContainerdConfig(config *extensionsv1alpha1.ContainerdConfig, fldPa
 	return allErrs
 }
 
+// ValidateContainerdRegistryConfigs validates the spec of a RegistryConfig object.
 func ValidateContainerdRegistryConfigs(registries []extensionsv1alpha1.RegistryConfig, fldPath *field.Path) field.ErrorList {
 	const form = "; desired format: https://host[:port]"
 

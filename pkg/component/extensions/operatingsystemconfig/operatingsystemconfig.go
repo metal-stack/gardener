@@ -693,8 +693,9 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 			}
 
 			if criConfig.Name == extensionsv1alpha1.CRINameContainerD {
-				criConfig.Containerd = &extensionsv1alpha1.ContainerdConfig{
-					SandboxImage: d.images[imagevector.ImageNamePauseContainer].String(),
+				criConfig.Containerd = &extensionsv1alpha1.ContainerdConfig{}
+				if d.images[imagevector.ImageNamePauseContainer] != nil {
+					criConfig.Containerd.SandboxImage = d.images[imagevector.ImageNamePauseContainer].String()
 				}
 			}
 

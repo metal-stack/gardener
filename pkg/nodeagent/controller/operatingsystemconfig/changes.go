@@ -74,7 +74,7 @@ type files struct {
 
 var containerdConfigChecksum atomic.Value
 
-func computeOperatingSystemConfigChanges(oldOSC, newOSC *extensionsv1alpha1.OperatingSystemConfig) (*operatingSystemConfigChanges, error) {
+func computeOperatingSystemConfigChanges(oldOSC, newOSC *extensionsv1alpha1.OperatingSystemConfig) *operatingSystemConfigChanges {
 	changes := &operatingSystemConfigChanges{}
 
 	// osc.files and osc.unit.files should be changed the same way by OSC controller.
@@ -93,7 +93,7 @@ func computeOperatingSystemConfigChanges(oldOSC, newOSC *extensionsv1alpha1.Oper
 		changes.files.changed = newOSCFiles
 		changes.units.changed = unitChanges
 		changes.mustRestartContainerd = true
-		return changes, nil
+		return changes
 	}
 
 	oldOSCFiles := collectAllFiles(oldOSC)
@@ -120,7 +120,6 @@ func computeOperatingSystemConfigChanges(oldOSC, newOSC *extensionsv1alpha1.Oper
 		!slices.ContainsFunc(changes.units.changed, func(unit changedUnit) bool {
 			return unit.Name == v1beta1constants.OperatingSystemConfigUnitNameContainerDService
 		}) {
-
 		var oldContainerdConfigChecksum string
 		if val := containerdConfigChecksum.Load(); val != nil {
 			oldContainerdConfigChecksum = val.(string)
@@ -139,7 +138,7 @@ func computeOperatingSystemConfigChanges(oldOSC, newOSC *extensionsv1alpha1.Oper
 
 	containerdConfigChecksum.Store(newContainerdConfigChecksum)
 
-	return changes, nil
+	return changes
 }
 
 func computeUnitDiffs(oldUnits, newUnits []extensionsv1alpha1.Unit, fileDiffs files) units {

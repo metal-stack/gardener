@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package operatingsystemconfig
 
 import (
@@ -85,6 +89,7 @@ func (r *Reconciler) ensureContainerdDefaultConfig(ctx context.Context) error {
 	return r.FS.WriteFile(extensionsv1alpha1.ContainerDConfigFile, output, 0644)
 }
 
+// EnsureContainerdEnvironment ensures the containerd environment
 func (r *Reconciler) EnsureContainerdEnvironment() error {
 	var (
 		containerdEnvFileName = "30-env_config.conf"
@@ -325,7 +330,6 @@ func (r *Reconciler) EnsureContainerdRegistries(ctx context.Context, log logr.Lo
 
 			return err
 		})
-
 	}
 
 	return flow.Parallel(fns...)(ctx)
@@ -370,10 +374,10 @@ func (r *Reconciler) finalizeContainerdHandling(
 		oldRegistries = oldCRIConfig.Containerd.Registries
 	}
 
-	if err := r.EnsureContainerdRegistries(ctx, log, newCRIConfig.Containerd.Registries); err != nil {
+	if err := r.EnsureContainerdRegistries(ctx, log, containerdConfig.Registries); err != nil {
 		return err
 	}
-	if err := r.CleanupUnusedContainerdRegistries(log, oldRegistries, newCRIConfig.Containerd.Registries); err != nil {
+	if err := r.CleanupUnusedContainerdRegistries(log, oldRegistries, containerdConfig.Registries); err != nil {
 		return err
 	}
 

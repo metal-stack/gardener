@@ -234,6 +234,17 @@ spec:
                   - path
                   type: object
                 type: array
+              hugePageConfig:
+                description: HugePageConfig is a structure that contains the HugePage
+                  configuration for an operating system.
+                properties:
+                  hugePages1G:
+                    description: HugePages1G sets the number of 1G hugepages
+                    type: integer
+                  hugePages2M:
+                    description: HugePages2M sets the number of 2M hugepages
+                    type: integer
+                type: object
               providerConfig:
                 description: ProviderConfig is the provider specific configuration.
                 type: object

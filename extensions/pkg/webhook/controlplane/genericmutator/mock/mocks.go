@@ -146,6 +146,20 @@ func (mr *MockEnsurerMockRecorder) EnsureETCD(arg0, arg1, arg2, arg3 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureETCD", reflect.TypeOf((*MockEnsurer)(nil).EnsureETCD), arg0, arg1, arg2, arg3)
 }
 
+// EnsureHugepageConfig mocks base method.
+func (m *MockEnsurer) EnsureHugepageConfig(arg0 context.Context, arg1 context0.GardenContext, arg2, arg3 *v1alpha10.HugePageConfig) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureHugepageConfig", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnsureHugepageConfig indicates an expected call of EnsureHugepageConfig.
+func (mr *MockEnsurerMockRecorder) EnsureHugepageConfig(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureHugepageConfig", reflect.TypeOf((*MockEnsurer)(nil).EnsureHugepageConfig), arg0, arg1, arg2, arg3)
+}
+
 // EnsureKubeAPIServerDeployment mocks base method.
 func (m *MockEnsurer) EnsureKubeAPIServerDeployment(arg0 context.Context, arg1 context0.GardenContext, arg2, arg3 *v1.Deployment) error {
 	m.ctrl.T.Helper()

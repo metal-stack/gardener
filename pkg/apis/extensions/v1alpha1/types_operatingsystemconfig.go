@@ -68,6 +68,9 @@ type OperatingSystemConfigSpec struct {
 	// CRI config is a structure contains configurations of the CRI library
 	// +optional
 	CRIConfig *CRIConfig `json:"criConfig,omitempty"`
+	// HugePageConfig is a structure that contains the HugePage configuration for an operating system.
+	// +optional
+	HugePageConfig *HugePageConfig `json:"hugePageConfig,omitempty"`
 	// DefaultSpec is a structure containing common fields used by all extension resources.
 	DefaultSpec `json:",inline"`
 	// Purpose describes how the result of this OperatingSystemConfig is used by Gardener. Either it
@@ -93,6 +96,14 @@ type OperatingSystemConfigSpec struct {
 	// +patchStrategy=merge
 	// +optional
 	Files []File `json:"files,omitempty" patchStrategy:"merge" patchMergeKey:"path"`
+}
+
+// HugePageConfig is a structure that contains the HugePage configuration for an operating system.
+type HugePageConfig struct {
+	// HugePages2M sets the number of 2M hugepages
+	HugePages2M *int `json:"hugePages2M,omitempty"`
+	// HugePages1G sets the number of 1G hugepages
+	HugePages1G *int `json:"hugePages1G,omitempty"`
 }
 
 // Unit is a unit for the operating system configuration (usually, a systemd unit).

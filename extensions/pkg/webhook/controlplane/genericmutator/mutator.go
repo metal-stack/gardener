@@ -85,6 +85,9 @@ type Ensurer interface {
 	// EnsureContainerdConfig ensures the containerd config.
 	// "old" might be "nil" and must always be checked.
 	EnsureContainerdConfig(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *extensionsv1alpha1.CRIConfig) error
+	// EnsureHugepageConfig ensures the hugepage config.
+	// "old" might be "nil" and must always be checked.
+	EnsureHugepageConfig(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *extensionsv1alpha1.HugePageConfig) error
 	// EnsureAdditionalProvisionUnits ensures additional systemd units for the 'provision' OSC
 	// "old" might be "nil" and must always be checked.
 	EnsureAdditionalProvisionUnits(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *[]extensionsv1alpha1.Unit) error
@@ -357,6 +360,10 @@ func (m *mutator) mutateOperatingSystemConfigReconcile(ctx context.Context, gctx
 		if err := m.ensurer.EnsureContainerdConfig(ctx, gctx, osc.Spec.CRIConfig, oldCRIConfig); err != nil {
 			return err
 		}
+	}
+
+	if err := m.ensurer.EnsureHugepageConfig(ctx, gctx, osc.Spec.HugePageConfig, oldOSC.Spec.HugePageConfig); err != nil {
+		return err
 	}
 
 	return nil

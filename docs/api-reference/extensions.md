@@ -1397,6 +1397,20 @@ CRIConfig
 </tr>
 <tr>
 <td>
+<code>hugePageConfig</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.HugePageConfig">
+HugePageConfig
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>HugePageConfig is a structure that contains the HugePage configuration for an operating system.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>DefaultSpec</code></br>
 <em>
 <a href="#extensions.gardener.cloud/v1alpha1.DefaultSpec">
@@ -3386,6 +3400,47 @@ string
 </tr>
 </tbody>
 </table>
+<h3 id="extensions.gardener.cloud/v1alpha1.HugePageConfig">HugePageConfig
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#extensions.gardener.cloud/v1alpha1.OperatingSystemConfigSpec">OperatingSystemConfigSpec</a>)
+</p>
+<p>
+<p>HugePageConfig is a structure that contains the HugePage configuration for an operating system.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>hugePages2M</code></br>
+<em>
+int
+</em>
+</td>
+<td>
+<p>HugePages2M sets the number of 2M hugepages</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>hugePages1G</code></br>
+<em>
+int
+</em>
+</td>
+<td>
+<p>HugePages1G sets the number of 1G hugepages</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="extensions.gardener.cloud/v1alpha1.IPFamily">IPFamily
 (<code>string</code> alias)</p></h3>
 <p>
@@ -3805,6 +3860,20 @@ CRIConfig
 <td>
 <em>(Optional)</em>
 <p>CRI config is a structure contains configurations of the CRI library</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>hugePageConfig</code></br>
+<em>
+<a href="#extensions.gardener.cloud/v1alpha1.HugePageConfig">
+HugePageConfig
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>HugePageConfig is a structure that contains the HugePage configuration for an operating system.</p>
 </td>
 </tr>
 <tr>

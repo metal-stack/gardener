@@ -116,6 +116,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
+	log.Info("Applying hugepage configuration")
+	if err := r.ReconcileHugePageConfiguration(osc.Spec.HugePageConfig); err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed configuring hugepage configuration: %w", err)
+	}
+
 	log.Info("Applying new or changed files")
 	if err := r.applyChangedFiles(ctx, log, oscChanges.files.changed); err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed applying changed files: %w", err)
@@ -152,6 +157,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		if err := r.finalizeContainerdHandling(ctx, log, oldCRIConfig, osc.Spec.CRIConfig, node, oscChanges.mustRestartContainerd); err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed finalizing containerd handling: %w", err)
 		}
+	}
+
+	if err := r.RestartKubeletUponHugepageChanges(ctx, log, node, oldOSC.Spec.HugePageConfig, osc.Spec.HugePageConfig); err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed restarting kubelet upon hugepage changes: %w", err)
 	}
 
 	log.Info("Removing no longer needed files")

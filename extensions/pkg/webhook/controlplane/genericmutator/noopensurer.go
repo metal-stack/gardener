@@ -109,6 +109,11 @@ func (e *NoopEnsurer) EnsureContainerdConfig(_ context.Context, _ extensionscont
 	return nil
 }
 
+// EnsureHugepageConfig ensures the hugepage config.
+func (e *NoopEnsurer) EnsureHugepageConfig(_ context.Context, _ extensionscontextwebhook.GardenContext, _, _ *extensionsv1alpha1.HugePageConfig) error {
+	return nil
+}
+
 // EnsureAdditionalProvisionUnits ensures that additional required system units are added.
 func (e *NoopEnsurer) EnsureAdditionalProvisionUnits(_ context.Context, _ extensionscontextwebhook.GardenContext, _, _ *[]extensionsv1alpha1.Unit) error {
 	return nil

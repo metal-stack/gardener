@@ -476,6 +476,8 @@ var _ = Describe("Mutator", func() {
 						},
 					)
 
+					ensurer.EXPECT().EnsureHugepageConfig(context.TODO(), gomock.Any(), newOSC.Spec.HugePageConfig, oldOSC.Spec.HugePageConfig).Return(nil)
+
 					us.EXPECT().Deserialize(newServiceContent).Return(newUnitOptions, nil)
 					us.EXPECT().Deserialize(oldServiceContent).Return(oldUnitOptions, nil)
 					us.EXPECT().Serialize(mutatedUnitOptions).Return(mutatedServiceContent, nil)
@@ -533,6 +535,8 @@ var _ = Describe("Mutator", func() {
 							return nil
 						},
 					)
+
+					ensurer.EXPECT().EnsureHugepageConfig(context.TODO(), gomock.Any(), newOSC.Spec.HugePageConfig, oldOSC.Spec.HugePageConfig).Return(nil)
 
 					us.EXPECT().Deserialize(newServiceContent).Return(newUnitOptions, nil)
 					us.EXPECT().Deserialize(oldServiceContent).Return(oldUnitOptions, nil)

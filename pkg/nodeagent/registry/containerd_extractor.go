@@ -1,26 +1,14 @@
-// Copyright 2023 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file.
+// SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company and Gardener contributors
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package registry
 
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path"
-	"path/filepath"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/defaults"
@@ -35,6 +23,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
+	"github.com/gardener/gardener/pkg/nodeagent/files"
 )
 
 type containerdExtractor struct{}
@@ -65,6 +54,7 @@ func (e *containerdExtractor) CopyFromImage(ctx context.Context, imageRef string
 	if err != nil {
 		return fmt.Errorf("error adding lease to containerd client: %w", err)
 	}
+
 	defer func() { utilruntime.HandleError(done(ctx)) }()
 
 	resolver := docker.NewResolver(docker.ResolverOptions{
@@ -82,6 +72,7 @@ func (e *containerdExtractor) CopyFromImage(ctx context.Context, imageRef string
 	if err != nil {
 		return fmt.Errorf("error creating temp directory: %w", err)
 	}
+
 	defer func() { utilruntime.HandleError(fs.Remove(imageMountDirectory)) }()
 
 	if err := mountImage(ctx, image, snapshotter, imageMountDirectory); err != nil {
@@ -89,7 +80,7 @@ func (e *containerdExtractor) CopyFromImage(ctx context.Context, imageRef string
 	}
 
 	source := path.Join(imageMountDirectory, filePathInImage)
-	if err := CopyFile(fs, source, destination, permissions); err != nil {
+	if err := files.Copy(fs, source, destination, permissions); err != nil {
 		return fmt.Errorf("error copying file %s to %s: %w", source, destination, err)
 	}
 
@@ -128,58 +119,4 @@ func unmountImage(ctx context.Context, snapshotter snapshots.Snapshotter, direct
 	}
 
 	return nil
-}
-
-// CopyFile copies a source file to destination file and sets the given permissions.
-func CopyFile(fs afero.Afero, sourceFile, destinationFile string, permissions os.FileMode) error {
-	sourceFileStat, err := fs.Stat(sourceFile)
-	if err != nil {
-		return err
-	}
-
-	if !sourceFileStat.Mode().IsRegular() {
-		return fmt.Errorf("source %q is not a regular file", sourceFile)
-	}
-
-	if destinationFileStat, err := fs.Stat(destinationFile); err == nil {
-		if !destinationFileStat.Mode().IsRegular() {
-			return fmt.Errorf("destination %q exists but is not a regular file", destinationFile)
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
-	srcFile, err := fs.Open(sourceFile)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	if err := fs.MkdirAll(path.Dir(destinationFile), permissions); err != nil {
-		return fmt.Errorf("destination directory %q could not be created", path.Dir(destinationFile))
-	}
-
-	tempDir, err := fs.TempDir(nodeagentv1alpha1.TempDir, "copy-image-")
-	if err != nil {
-		return fmt.Errorf("error creating temp directory: %w", err)
-	}
-	defer func() { utilruntime.HandleError(fs.Remove(tempDir)) }()
-
-	tmpFilePath := filepath.Join(tempDir, filepath.Base(destinationFile))
-
-	dstFile, err := fs.OpenFile(tmpFilePath, os.O_CREATE|os.O_RDWR, 0755)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	if _, err = io.Copy(dstFile, srcFile); err != nil {
-		return err
-	}
-
-	if err := fs.Chmod(dstFile.Name(), permissions); err != nil {
-		return err
-	}
-
-	return fs.Rename(tmpFilePath, destinationFile)
 }

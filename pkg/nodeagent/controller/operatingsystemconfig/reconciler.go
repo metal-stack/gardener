@@ -46,6 +46,7 @@ import (
 	"github.com/gardener/gardener/pkg/nodeagent/apis/config"
 	nodeagentv1alpha1 "github.com/gardener/gardener/pkg/nodeagent/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
+	filespkg "github.com/gardener/gardener/pkg/nodeagent/files"
 	"github.com/gardener/gardener/pkg/nodeagent/registry"
 	"github.com/gardener/gardener/pkg/utils/flow"
 )
@@ -201,6 +202,7 @@ func (r *Reconciler) getNode(ctx context.Context) (*metav1.PartialObjectMetadata
 var (
 	etcSystemdSystem                   = path.Join("/", "etc", "systemd", "system")
 	defaultFilePermissions os.FileMode = 0600
+	defaultDirPermissions  os.FileMode = 0755
 )
 
 func (r *Reconciler) applyChangedFiles(ctx context.Context, log logr.Logger, files []extensionsv1alpha1.File) error {
@@ -208,6 +210,7 @@ func (r *Reconciler) applyChangedFiles(ctx context.Context, log logr.Logger, fil
 	if err != nil {
 		return fmt.Errorf("unable to create temporary directory: %w", err)
 	}
+
 	defer func() { utilruntime.HandleError(r.FS.RemoveAll(tmpDir)) }()
 
 	for _, file := range files {
@@ -218,7 +221,7 @@ func (r *Reconciler) applyChangedFiles(ctx context.Context, log logr.Logger, fil
 
 		switch {
 		case file.Content.Inline != nil:
-			if err := r.FS.MkdirAll(filepath.Dir(file.Path), fs.ModeDir); err != nil {
+			if err := r.FS.MkdirAll(filepath.Dir(file.Path), defaultDirPermissions); err != nil {
 				return fmt.Errorf("unable to create directory %q: %w", file.Path, err)
 			}
 
@@ -232,7 +235,7 @@ func (r *Reconciler) applyChangedFiles(ctx context.Context, log logr.Logger, fil
 				return fmt.Errorf("unable to create temporary file %q: %w", tmpFilePath, err)
 			}
 
-			if err := r.FS.Rename(tmpFilePath, file.Path); err != nil {
+			if err := filespkg.Move(r.FS, tmpFilePath, file.Path); err != nil {
 				return fmt.Errorf("unable to rename temporary file %q to %q: %w", tmpFilePath, file.Path, err)
 			}
 
@@ -293,7 +296,7 @@ func (r *Reconciler) applyChangedUnits(ctx context.Context, log logr.Logger, uni
 				return fmt.Errorf("unable to delete systemd drop-in folder for unit %q: %w", unit.Name, err)
 			}
 		} else {
-			if err := r.FS.MkdirAll(dropInDirectory, fs.ModeDir); err != nil {
+			if err := r.FS.MkdirAll(dropInDirectory, defaultDirPermissions); err != nil {
 				return fmt.Errorf("unable to create drop-in directory %q for unit %q: %w", dropInDirectory, unit.Name, err)
 			}
 

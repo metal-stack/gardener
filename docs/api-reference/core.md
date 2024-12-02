@@ -5110,7 +5110,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as &ldquo;planned&rdquo;.</p>
+<p>PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo;.</p>
 </td>
 </tr>
 <tr>
@@ -5124,7 +5124,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as &ldquo;planned&rdquo; or &ldquo;preview&rdquo;.</p>
+<p>SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo; or &ldquo;preview&rdquo;.</p>
 </td>
 </tr>
 <tr>
@@ -5138,7 +5138,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo; or &ldquo;supported&rdquo;.</p>
+<p>DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo; or &ldquo;supported&rdquo;.</p>
 </td>
 </tr>
 <tr>
@@ -5152,7 +5152,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo;, &ldquo;supported&rdquo; or &ldquo;deprecated&rdquo;.</p>
+<p>ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo;, &ldquo;supported&rdquo; or &ldquo;deprecated&rdquo;.</p>
 </td>
 </tr>
 <tr>

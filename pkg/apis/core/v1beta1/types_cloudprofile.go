@@ -136,16 +136,16 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string `json:"version" protobuf:"bytes,1,opt,name=version"`
-	// PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as "planned".
+	// PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as "planned".
 	// +optional
 	PreviewDate *metav1.Time `json:"previewDate" protobuf:"bytes,4,opt,name=previewDate"`
-	// SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as "planned" or "preview".
+	// SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as "planned" or "preview".
 	// +optional
 	SupportedDate *metav1.Time `json:"supportedDate" protobuf:"bytes,5,opt,name=supportedDate"`
-	// DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as "planned", "preview" or "supported".
+	// DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview" or "supported".
 	// +optional
 	DeprecationDate *metav1.Time `json:"deprecationDate" protobuf:"bytes,6,opt,name=deprecationDate"`
-	// ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
+	// ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
 	// +optional
 	ExpirationDate *metav1.Time `json:"expirationDate,omitempty" protobuf:"bytes,2,opt,name=expirationDate"`
 	// Classification defines the state of a version (preview, supported, deprecated)

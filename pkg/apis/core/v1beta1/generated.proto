@@ -896,19 +896,19 @@ message ExpirableVersion {
   // Version is the version identifier.
   optional string version = 1;
 
-  // PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as "planned".
+  // PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as "planned".
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time previewDate = 4;
 
-  // SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as "planned" or "preview".
+  // SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as "planned" or "preview".
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time supportedDate = 5;
 
-  // DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as "planned", "preview" or "supported".
+  // DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview" or "supported".
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time deprecationDate = 6;
 
-  // ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
+  // ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time expirationDate = 2;
 

@@ -118,13 +118,13 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string
-	// PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as "planned".
+	// PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as "planned".
 	PreviewDate *metav1.Time
-	// SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as "planned" or "preview".
+	// SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as "planned" or "preview".
 	SupportedDate *metav1.Time
-	// DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as "planned", "preview" or "supported".
+	// DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview" or "supported".
 	DeprecationDate *metav1.Time
-	// ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
+	// ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
 	ExpirationDate *metav1.Time
 	// Classification defines the state of a version (preview, supported, deprecated)
 	Classification *VersionClassification

@@ -44,7 +44,7 @@ If a version is unclassified, Gardener cannot make those decision based on the "
 Nevertheless, Gardener can operate without version classifications and can be added at any time to the Kubernetes and machine image versions in the `CloudProfile`.
 
 As a best practice, versions usually start with the classification `preview`, then are promoted to `supported`, eventually `deprecated` and finally `expired`.
-In addition to that, there is a dedicated `planned` classification which allows versions to become available at a certain point in time. See [classification dates](#classification-dates).
+In addition to that, there is a dedicated `planned` classification which allows versions to promote classifications depending on a date. For more information on this topic, see [classification dates](#classification-dates).
 This information is programmatically available in the `CloudProfiles` of the Garden cluster.
 
 - **preview:** A `preview` version is a new version that has not yet undergone thorough testing, possibly a new release, and needs time to be validated.
@@ -95,7 +95,7 @@ spec:
 
 ## Classification Dates
 
-For administrators it is possible to automatically cycle classifications according to classification dates. This way, the availability, deprecation or expiration of versions can be scheduled at certain points in time. This feature is only available when the `classification` field is set.
+For administrators it is possible to automatically promote classifications depending on dates. This way, the availability, deprecation or expiration of versions can be scheduled. This feature is only available when the `classification` field is set.
 
 For every classification state there is a corresponding date field:
 
@@ -104,7 +104,7 @@ For every classification state there is a corresponding date field:
 - `supportedDate` effectively classifies a version as `supported` at the given date. When this field is set, `classification` must be set to either `preview` or `planned`.
 - `previewDate` effectively classifies a version as `preview` at the given date. When this field is set, `classification` must be set to `planned`.
 
-When the classification is set to `planned`, the availability of a version solely depends on classification dates.
+When the classification is set to `planned`, the availability of a version solely depends on classification dates. It allows to automatically make a version available at a certain point in time.
 
 Classification dates must be timely aligned, so it is required that `expirationDate` > `deprecationDate` > `supportedDate` > `previewDate`.
 

@@ -5101,6 +5101,48 @@ string
 </tr>
 <tr>
 <td>
+<code>previewDate</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as &ldquo;planned&rdquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>supportedDate</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as &ldquo;planned&rdquo; or &ldquo;preview&rdquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>deprecationDate</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo; or &ldquo;supported&rdquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>expirationDate</code></br>
 <em>
 <a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
@@ -5110,7 +5152,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>ExpirationDate defines the time at which this version expires.</p>
+<p>ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo;, &ldquo;supported&rdquo; or &ldquo;deprecated&rdquo;.</p>
 </td>
 </tr>
 <tr>

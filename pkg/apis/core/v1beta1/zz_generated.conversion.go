@@ -3359,6 +3359,9 @@ func Convert_core_EncryptionConfig_To_v1beta1_EncryptionConfig(in *core.Encrypti
 
 func autoConvert_v1beta1_ExpirableVersion_To_core_ExpirableVersion(in *ExpirableVersion, out *core.ExpirableVersion, s conversion.Scope) error {
 	out.Version = in.Version
+	out.PreviewDate = (*metav1.Time)(unsafe.Pointer(in.PreviewDate))
+	out.SupportedDate = (*metav1.Time)(unsafe.Pointer(in.SupportedDate))
+	out.DeprecationDate = (*metav1.Time)(unsafe.Pointer(in.DeprecationDate))
 	out.ExpirationDate = (*metav1.Time)(unsafe.Pointer(in.ExpirationDate))
 	out.Classification = (*core.VersionClassification)(unsafe.Pointer(in.Classification))
 	return nil
@@ -3371,6 +3374,9 @@ func Convert_v1beta1_ExpirableVersion_To_core_ExpirableVersion(in *ExpirableVers
 
 func autoConvert_core_ExpirableVersion_To_v1beta1_ExpirableVersion(in *core.ExpirableVersion, out *ExpirableVersion, s conversion.Scope) error {
 	out.Version = in.Version
+	out.PreviewDate = (*metav1.Time)(unsafe.Pointer(in.PreviewDate))
+	out.SupportedDate = (*metav1.Time)(unsafe.Pointer(in.SupportedDate))
+	out.DeprecationDate = (*metav1.Time)(unsafe.Pointer(in.DeprecationDate))
 	out.ExpirationDate = (*metav1.Time)(unsafe.Pointer(in.ExpirationDate))
 	out.Classification = (*VersionClassification)(unsafe.Pointer(in.Classification))
 	return nil

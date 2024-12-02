@@ -44,6 +44,7 @@ If a version is unclassified, Gardener cannot make those decision based on the "
 Nevertheless, Gardener can operate without version classifications and can be added at any time to the Kubernetes and machine image versions in the `CloudProfile`.
 
 As a best practice, versions usually start with the classification `preview`, then are promoted to `supported`, eventually `deprecated` and finally `expired`.
+In addition to that, there is a dedicated `planned` classification which allows versions to become available at a certain point in time. See [classification dates](#classification-dates).
 This information is programmatically available in the `CloudProfiles` of the Garden cluster.
 
 - **preview:** A `preview` version is a new version that has not yet undergone thorough testing, possibly a new release, and needs time to be validated.
@@ -92,7 +93,22 @@ spec:
         version: 1.24.5
 ```
 
-## Automatic Version Upgrades 
+## Classification Dates
+
+For administrators it is possible to automatically cycle classifications according to classification dates. This way, the availability, deprecation or expiration of versions can be scheduled at certain points in time. This feature is only available when the `classification` field is set.
+
+For every classification state there is a corresponding date field:
+
+- `expirationDate` effectively classifies a version as `expired` at the given date. When this field is set, `classification` must be set to either `deprecated`, `supported`, `preview` or `planned`.
+- `deprecationDate` effectively classifies a version as `deprecated` at the given date. When this field is set, `classification` must be set to either `supported`, `preview` or `planned`.
+- `supportedDate` effectively classifies a version as `supported` at the given date. When this field is set, `classification` must be set to either `preview` or `planned`.
+- `previewDate` effectively classifies a version as `preview` at the given date. When this field is set, `classification` must be set to `planned`.
+
+When the classification is set to `planned`, the availability of a version solely depends on classification dates.
+
+Classification dates must be timely aligned, so it is required that `expirationDate` > `deprecationDate` > `supportedDate` > `previewDate`.
+
+## Automatic Version Upgrades
 
 There are two ways, the Kubernetes version of the control plane as well as the Kubernetes and machine image version of a worker pool can be upgraded: `auto update` and `forceful` update.
 See [Automatic Version Updates](../shoot/shoot_maintenance.md#automatic-version-updates) for how to enable `auto updates` for Kubernetes or machine image versions on the Shoot cluster.
@@ -104,7 +120,7 @@ This happens **even if the owner has opted out of automatic cluster updates!**
 - The `Shoot` has auto-update enabled and the version is not the *latest eligible version* for the auto-update. Please note that this *latest version* that qualifies for an auto-update is not necessarily the overall latest version in the CloudProfile:
    - For Kubernetes version, the latest eligible version for auto-updates is the latest patch version of the current minor.
    - For machine image version, the latest eligible version for auto-updates is controlled by the `updateStrategy` field of the machine image in the CloudProfile.
-- The `Shoot` has auto-update disabled and the version is either expired or does not exist. 
+- The `Shoot` has auto-update disabled and the version is either expired or does not exist.
 
 The auto update can fail if the version is already on the *latest eligible version* for the auto-update. A failed auto update triggers a **force update**.
 The force and auto update path for Kubernetes and machine image versions differ slightly and are described in more detail below.
@@ -135,7 +151,7 @@ machineImages:
   - name: suse-chost
     updateStrategy: patch
     versions:
-    - version: 15.3.20220818 
+    - version: 15.3.20220818
     - version: 15.3.20221118
 ```
 

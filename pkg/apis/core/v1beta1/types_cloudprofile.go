@@ -136,7 +136,16 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string `json:"version" protobuf:"bytes,1,opt,name=version"`
-	// ExpirationDate defines the time at which this version expires.
+	// PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as "planned".
+	// +optional
+	PreviewDate *metav1.Time `json:"previewDate" protobuf:"bytes,4,opt,name=previewDate"`
+	// SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as "planned" or "preview".
+	// +optional
+	SupportedDate *metav1.Time `json:"supportedDate" protobuf:"bytes,5,opt,name=supportedDate"`
+	// DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as "planned", "preview" or "supported".
+	// +optional
+	DeprecationDate *metav1.Time `json:"deprecationDate" protobuf:"bytes,6,opt,name=deprecationDate"`
+	// ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
 	// +optional
 	ExpirationDate *metav1.Time `json:"expirationDate,omitempty" protobuf:"bytes,2,opt,name=expirationDate"`
 	// Classification defines the state of a version (preview, supported, deprecated)
@@ -261,6 +270,9 @@ const (
 type VersionClassification string
 
 const (
+	// ClassificationPlanned indicates that a version availability is planned by corresponding classification dates.
+	// The current classification is determined by the classification dates. If these are still in the future, this version cannot be used.
+	ClassificationPlanned VersionClassification = "planned"
 	// ClassificationPreview indicates that a version has recently been added and not promoted to "Supported" yet.
 	// ClassificationPreview versions will not be considered for automatic Kubernetes and Machine Image patch version updates.
 	ClassificationPreview VersionClassification = "preview"
@@ -271,6 +283,9 @@ const (
 	// ClassificationDeprecated indicates that a patch version should not be used anymore, should be updated to a new version
 	// and will eventually expire.
 	ClassificationDeprecated VersionClassification = "deprecated"
+	// ClassificationExpired indicates that a version has expired.
+	// New entities with that version cannot be created and existing entities are forcefully migrated to a higher version during the maintenance time.
+	ClassificationExpired VersionClassification = "expired"
 )
 
 // MachineImageUpdateStrategy is the update strategy to use for a machine image

@@ -3464,9 +3464,27 @@ func schema_pkg_apis_core_v1beta1_ExpirableVersion(ref common.ReferenceCallback)
 							Format:      "",
 						},
 					},
+					"previewDate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as \"planned\".",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"supportedDate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as \"planned\" or \"preview\".",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"deprecationDate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as \"planned\", \"preview\" or \"supported\".",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
 					"expirationDate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ExpirationDate defines the time at which this version expires.",
+							Description: "ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as \"planned\", \"preview\", \"supported\" or \"deprecated\".",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
@@ -5370,9 +5388,27 @@ func schema_pkg_apis_core_v1beta1_MachineImageVersion(ref common.ReferenceCallba
 							Format:      "",
 						},
 					},
+					"previewDate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PreviewDate defines the time at which this version will be classified as preview. Requires classification field to be specified as \"planned\".",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"supportedDate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SupportedDate defines the time at which this version will be classified as supported. Requires classification field to be specified as \"planned\" or \"preview\".",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"deprecationDate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DeprecationDate defines the time at which this version will be classified as deprecated. Requires classification field to be specified as \"planned\", \"preview\" or \"supported\".",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
 					"expirationDate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ExpirationDate defines the time at which this version expires.",
+							Description: "ExpirationDate defines the time at which this version will be classified as expired. Requires classification field to be specified as \"planned\", \"preview\", \"supported\" or \"deprecated\".",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},

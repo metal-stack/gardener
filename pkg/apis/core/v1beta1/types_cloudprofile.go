@@ -136,21 +136,23 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string `json:"version" protobuf:"bytes,1,opt,name=version"`
-	// PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as "planned".
-	// +optional
-	PreviewDate *metav1.Time `json:"previewDate" protobuf:"bytes,4,opt,name=previewDate"`
-	// SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as "planned" or "preview".
-	// +optional
-	SupportedDate *metav1.Time `json:"supportedDate" protobuf:"bytes,5,opt,name=supportedDate"`
-	// DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview" or "supported".
-	// +optional
-	DeprecationDate *metav1.Time `json:"deprecationDate" protobuf:"bytes,6,opt,name=deprecationDate"`
-	// ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
+	// DEPRECATED: Is replaced by the lifecycle classification.
 	// +optional
 	ExpirationDate *metav1.Time `json:"expirationDate,omitempty" protobuf:"bytes,2,opt,name=expirationDate"`
-	// Classification defines the state of a version (preview, supported, deprecated)
+	// Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.
 	// +optional
 	Classification *VersionClassification `json:"classification,omitempty" protobuf:"bytes,3,opt,name=classification,casttype=VersionClassification"`
+	// Lifecycle defines the classification lifecycle for this version.
+	// +optional
+	Lifecycle []ClassificationLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
+}
+
+type ClassificationLifecycle struct {
+	// Classification defines the state of a version (preview, supported, deprecated, expired)
+	Classification VersionClassification `json:"classification" protobuf:"bytes,1,opt,name=classification,casttype=VersionClassification"`
+	// StartTime defines when this classification becomes active.
+	// +optional
+	StartTime *metav1.Time `json:"startTime,omitempty" protobuf:"bytes,2,opt,name=startTime"`
 }
 
 // MachineType contains certain properties of a machine type.
@@ -270,9 +272,8 @@ const (
 type VersionClassification string
 
 const (
-	// ClassificationPlanned indicates that a version availability is planned by corresponding classification dates.
-	// The current classification is determined by the classification dates. If these are still in the future, this version cannot be used.
-	ClassificationPlanned VersionClassification = "planned"
+	// ClassificationUnavailable indicates that a version is currently not available and is planned to become available depending on the classification lifecycle.
+	ClassificationUnavailable VersionClassification = "unavailable"
 	// ClassificationPreview indicates that a version has recently been added and not promoted to "Supported" yet.
 	// ClassificationPreview versions will not be considered for automatic Kubernetes and Machine Image patch version updates.
 	ClassificationPreview VersionClassification = "preview"

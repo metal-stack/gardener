@@ -135,6 +135,8 @@ spec:
         version: 1.18.3
 ```
 
+Easy! 😌
+
 ## Automatic Version Upgrades
 
 There are two ways, the Kubernetes version of the control plane as well as the Kubernetes and machine image version of a worker pool can be upgraded: `auto update` and `forceful` update.

@@ -18,6 +18,7 @@ API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core
 API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core/v1beta1,DNSIncludeExclude,Exclude
 API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core/v1beta1,DNSIncludeExclude,Include
 API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core/v1beta1,EncryptionConfig,Resources
+API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core/v1beta1,ExpirableVersion,Lifecycle
 API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core/v1beta1,ExposureClassScheduling,Tolerations
 API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core/v1beta1,ExtensionResourceState,Resources
 API rule violation: list_type_missing,github.com/gardener/gardener/pkg/apis/core/v1beta1,Hibernation,Schedules

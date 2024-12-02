@@ -118,16 +118,19 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string
-	// PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as "planned".
-	PreviewDate *metav1.Time
-	// SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as "planned" or "preview".
-	SupportedDate *metav1.Time
-	// DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview" or "supported".
-	DeprecationDate *metav1.Time
-	// ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
+	// DEPRECATED: Is replaced by the lifecycle classification.
 	ExpirationDate *metav1.Time
-	// Classification defines the state of a version (preview, supported, deprecated)
+	// Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.
 	Classification *VersionClassification
+	// Lifecycle defines the classification lifecycle for this version.
+	Lifecycle []ClassificationLifecycle
+}
+
+type ClassificationLifecycle struct {
+	// Classification defines the state of a version (preview, supported, deprecated, expired)
+	Classification VersionClassification
+	// StartTime defines when this classification becomes active.
+	StartTime *metav1.Time
 }
 
 // MachineType contains certain properties of a machine type.
@@ -230,9 +233,8 @@ const (
 type VersionClassification string
 
 const (
-	// ClassificationPlanned indicates that a version availability is planned by corresponding classification dates.
-	// The current classification is determined by the classification dates. If these are still in the future, this version cannot be used.
-	ClassificationPlanned VersionClassification = "planned"
+	// ClassificationUnavailable indicates that a version is currently not available and is planned to become available depending on the classification lifecycle.
+	ClassificationUnavailable VersionClassification = "unavailable"
 	// ClassificationPreview indicates that a version has recently been added and not promoted to "Supported" yet.
 	// ClassificationPreview versions will not be considered for automatic Kubernetes and Machine Image patch version updates.
 	ClassificationPreview VersionClassification = "preview"

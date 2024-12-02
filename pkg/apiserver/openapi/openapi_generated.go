@@ -57,6 +57,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.BastionMachineType":                         schema_pkg_apis_core_v1beta1_BastionMachineType(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CARotation":                                 schema_pkg_apis_core_v1beta1_CARotation(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CRI":                                        schema_pkg_apis_core_v1beta1_CRI(ref),
+		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ClassificationLifecycle":                    schema_pkg_apis_core_v1beta1_ClassificationLifecycle(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfile":                               schema_pkg_apis_core_v1beta1_CloudProfile(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileList":                           schema_pkg_apis_core_v1beta1_CloudProfileList(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileReference":                      schema_pkg_apis_core_v1beta1_CloudProfileReference(ref),
@@ -1931,6 +1932,35 @@ func schema_pkg_apis_core_v1beta1_CRI(ref common.ReferenceCallback) common.OpenA
 	}
 }
 
+func schema_pkg_apis_core_v1beta1_ClassificationLifecycle(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"classification": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Classification defines the state of a version (preview, supported, deprecated, expired)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"startTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StartTime defines when this classification becomes active.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+				},
+				Required: []string{"classification"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
 func schema_pkg_apis_core_v1beta1_CloudProfile(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3464,35 +3494,31 @@ func schema_pkg_apis_core_v1beta1_ExpirableVersion(ref common.ReferenceCallback)
 							Format:      "",
 						},
 					},
-					"previewDate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as \"planned\".",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"supportedDate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as \"planned\" or \"preview\".",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"deprecationDate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as \"planned\", \"preview\" or \"supported\".",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
 					"expirationDate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as \"planned\", \"preview\", \"supported\" or \"deprecated\".",
+							Description: "DEPRECATED: Is replaced by the lifecycle classification.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 					"classification": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Classification defines the state of a version (preview, supported, deprecated)",
+							Description: "Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"lifecycle": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Lifecycle defines the classification lifecycle for this version.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ClassificationLifecycle"),
+									},
+								},
+							},
 						},
 					},
 				},
@@ -3500,7 +3526,7 @@ func schema_pkg_apis_core_v1beta1_ExpirableVersion(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ClassificationLifecycle", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 
@@ -5388,35 +5414,31 @@ func schema_pkg_apis_core_v1beta1_MachineImageVersion(ref common.ReferenceCallba
 							Format:      "",
 						},
 					},
-					"previewDate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as \"planned\".",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"supportedDate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as \"planned\" or \"preview\".",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"deprecationDate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as \"planned\", \"preview\" or \"supported\".",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
 					"expirationDate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as \"planned\", \"preview\", \"supported\" or \"deprecated\".",
+							Description: "DEPRECATED: Is replaced by the lifecycle classification.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 					"classification": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Classification defines the state of a version (preview, supported, deprecated)",
+							Description: "Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"lifecycle": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Lifecycle defines the classification lifecycle for this version.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ClassificationLifecycle"),
+									},
+								},
+							},
 						},
 					},
 					"cri": {
@@ -5460,7 +5482,7 @@ func schema_pkg_apis_core_v1beta1_MachineImageVersion(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/core/v1beta1.CRI", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.CRI", "github.com/gardener/gardener/pkg/apis/core/v1beta1.ClassificationLifecycle", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 

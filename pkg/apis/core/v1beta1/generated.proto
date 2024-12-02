@@ -337,6 +337,15 @@ message CRI {
   repeated ContainerRuntime containerRuntimes = 2;
 }
 
+message ClassificationLifecycle {
+  // Classification defines the state of a version (preview, supported, deprecated, expired)
+  optional string classification = 1;
+
+  // StartTime defines when this classification becomes active.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time startTime = 2;
+}
+
 // CloudProfile represents certain properties about a provider environment.
 message CloudProfile {
   // Standard object metadata.
@@ -896,25 +905,17 @@ message ExpirableVersion {
   // Version is the version identifier.
   optional string version = 1;
 
-  // PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as "planned".
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time previewDate = 4;
-
-  // SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as "planned" or "preview".
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time supportedDate = 5;
-
-  // DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview" or "supported".
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time deprecationDate = 6;
-
-  // ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as "planned", "preview", "supported" or "deprecated".
+  // DEPRECATED: Is replaced by the lifecycle classification.
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time expirationDate = 2;
 
-  // Classification defines the state of a version (preview, supported, deprecated)
+  // Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.
   // +optional
   optional string classification = 3;
+
+  // Lifecycle defines the classification lifecycle for this version.
+  // +optional
+  repeated ClassificationLifecycle lifecycle = 4;
 }
 
 // ExposureClass represents a control plane endpoint exposure strategy.

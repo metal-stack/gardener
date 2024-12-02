@@ -3329,6 +3329,51 @@ CRIName
 <p>
 <p>CRIName is a type alias for the CRI name string.</p>
 </p>
+<h3 id="core.gardener.cloud/v1beta1.ClassificationLifecycle">ClassificationLifecycle
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.ExpirableVersion">ExpirableVersion</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>classification</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.VersionClassification">
+VersionClassification
+</a>
+</em>
+</td>
+<td>
+<p>Classification defines the state of a version (preview, supported, deprecated, expired)</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>startTime</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>StartTime defines when this classification becomes active.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.gardener.cloud/v1beta1.CloudProfileReference">CloudProfileReference
 </h3>
 <p>
@@ -5101,48 +5146,6 @@ string
 </tr>
 <tr>
 <td>
-<code>previewDate</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
-Kubernetes meta/v1.Time
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>PreviewDate defines the time at which this version will be classified as preview (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo;.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>supportedDate</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
-Kubernetes meta/v1.Time
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>SupportedDate defines the time at which this version will be classified as supported (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo; or &ldquo;preview&rdquo;.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>deprecationDate</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
-Kubernetes meta/v1.Time
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>DeprecationDate defines the time at which this version will be classified as deprecated (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo; or &ldquo;supported&rdquo;.</p>
-</td>
-</tr>
-<tr>
-<td>
 <code>expirationDate</code></br>
 <em>
 <a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
@@ -5152,7 +5155,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>ExpirationDate defines the time at which this version will be classified as expired (overwriting the actual classification value). Requires classification field to be specified as &ldquo;planned&rdquo;, &ldquo;preview&rdquo;, &ldquo;supported&rdquo; or &ldquo;deprecated&rdquo;.</p>
+<p>DEPRECATED: Is replaced by the lifecycle classification.</p>
 </td>
 </tr>
 <tr>
@@ -5166,7 +5169,21 @@ VersionClassification
 </td>
 <td>
 <em>(Optional)</em>
-<p>Classification defines the state of a version (preview, supported, deprecated)</p>
+<p>Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>lifecycle</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.ClassificationLifecycle">
+[]ClassificationLifecycle
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Lifecycle defines the classification lifecycle for this version.</p>
 </td>
 </tr>
 </tbody>
@@ -13202,6 +13219,7 @@ string
 (<code>string</code> alias)</p></h3>
 <p>
 (<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.ClassificationLifecycle">ClassificationLifecycle</a>, 
 <a href="#core.gardener.cloud/v1beta1.ExpirableVersion">ExpirableVersion</a>)
 </p>
 <p>

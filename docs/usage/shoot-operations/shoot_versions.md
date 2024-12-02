@@ -108,6 +108,33 @@ When the classification is set to `planned`, the availability of a version solel
 
 Classification dates must be timely aligned, so it is required that `expirationDate` > `deprecationDate` > `supportedDate` > `previewDate`.
 
+Below is an example how the relevant section of the `CloudProfile` might look like:
+
+``` yaml
+apiVersion: core.gardener.cloud/v1beta1
+kind: CloudProfile
+metadata:
+  name: alicloud
+spec:
+  kubernetes:
+    versions:
+      # Fully planned version availability. Version is not available before previewDate.
+      - classification: planned
+        previewDate: "2024-11-01T23:59:59Z"
+        supportedDate: "2024-12-01T23:59:59Z"
+        deprecationDate: "2025-03-01T23:59:59Z"
+        expirationDate: "2025-04-01T23:59:59Z"
+        version: 1.27.0
+      # Version is already set to supported. Therefore no supportedDate and previewDate must be set.
+      - classification: supported
+        deprecationDate: "2025-03-01T23:59:59Z"
+        expirationDate: "2025-04-01T23:59:59Z"
+        version: 1.26.3
+      # Administrators may expire a version directly by setting classification to expired. No date fields must be set.
+      - classification: expired
+        version: 1.18.3
+```
+
 ## Automatic Version Upgrades
 
 There are two ways, the Kubernetes version of the control plane as well as the Kubernetes and machine image version of a worker pool can be upgraded: `auto update` and `forceful` update.

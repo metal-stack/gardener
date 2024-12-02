@@ -168,7 +168,7 @@ func ValidateIPFamilies(ipFamilies []core.IPFamily, fldPath *field.Path) field.E
 // k8sVersionCPRegex is used to validate kubernetes versions in a cloud profile.
 var k8sVersionCPRegex = regexp.MustCompile(`^([0-9]+\.){2}[0-9]+$`)
 
-var supportedVersionClassifications = sets.New(string(core.ClassificationPreview), string(core.ClassificationSupported), string(core.ClassificationDeprecated))
+var supportedVersionClassifications = sets.New(string(core.ClassificationPreview), string(core.ClassificationSupported), string(core.ClassificationDeprecated), string(core.ClassificationPlanned))
 
 // validateKubernetesVersions validates the given list of ExpirableVersions for valid Kubernetes versions.
 func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field.Path) field.ErrorList {

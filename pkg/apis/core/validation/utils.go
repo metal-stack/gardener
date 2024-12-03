@@ -191,6 +191,10 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 		if version.Classification != nil && !supportedVersionClassifications.Has(string(*version.Classification)) {
 			allErrs = append(allErrs, field.NotSupported(idxPath.Child("classification"), *version.Classification, sets.List(supportedVersionClassifications)))
 		}
+
+		if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycle) > 0 {
+			allErrs = append(allErrs, field.Invalid(idxPath, version, fmt.Sprintf("Invalid specification of `classification` or `expirationDate` while specifying `lifecycle` on k8s version %s.", version.Version)))
+		}
 	}
 
 	return allErrs

@@ -228,27 +228,30 @@ func duplicateLifecycle(lifecycle []core.ClassificationLifecycle) bool {
 // lifecycleInOrder checks if the provided lifecycle slice is in  the expected order.
 // The order is not required for functionality but should ensure better readability.
 func lifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
-	if len(lifecycle) <= 1 {
-		return true
-	}
+	var (
+		order = map[core.VersionClassification]int{
+			core.ClassificationUnavailable: 0,
+			core.ClassificationPreview:     1,
+			core.ClassificationSupported:   2,
+			core.ClassificationDeprecated:  3,
+			core.ClassificationExpired:     4,
+		}
+		previousOrder int
+	)
 
-	order := map[core.VersionClassification]int{
-		core.ClassificationPreview:    0,
-		core.ClassificationSupported:  1,
-		core.ClassificationDeprecated: 2,
-		core.ClassificationExpired:    3,
-	}
+	for i, l := range lifecycle {
+		if i == 0 {
+			previousOrder = order[l.Classification]
+			continue
+		}
 
-	for i, curr := range lifecycle[:len(lifecycle)-1] {
-		currVal, existsCurr := order[curr.Classification]
-		nextVal, existsNext := order[lifecycle[i+1].Classification]
+		currentOrder := order[l.Classification]
 
-		if !existsCurr || !existsNext {
+		if previousOrder >= currentOrder {
 			return false
 		}
-		if currVal >= nextVal {
-			return false
-		}
+
+		previousOrder = currentOrder
 	}
 
 	return true

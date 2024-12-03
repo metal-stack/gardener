@@ -254,6 +254,9 @@ func lifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
 	return true
 }
 
+// lifecycleStartTimesInOrder checks if the provided lifecycle slice has start times in order.
+// It does not ensure the correct order of the classifications but if the elements in the
+// list have dates after each other. The order must be tested via `lifecycleInOrder`.
 func lifecycleStartTimesInOrder(lifecycle []core.ClassificationLifecycle) bool {
 	if len(lifecycle) <= 1 {
 		return true

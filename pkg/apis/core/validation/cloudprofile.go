@@ -97,8 +97,8 @@ func validateCloudProfileKubernetesSettings(kubernetes core.KubernetesSettings, 
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("versions[]").Child("expirationDate"), latestKubernetesVersion.ExpirationDate, fmt.Sprintf("expiration date of latest kubernetes version ('%s') must not be set", latestKubernetesVersion.Version)))
 	}
 
-	for _, lifecycle := range latestKubernetesVersion.Lifecycle {
-		if lifecycle.Classification != core.ClassificationExpired {
+	if len(latestKubernetesVersion.Lifecycle) > 0 {
+		if latestKubernetesVersion.Lifecycle[len(latestKubernetesVersion.Lifecycle)-1].Classification == core.ClassificationExpired {
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("versions[]").Child("lifecycle"), latestKubernetesVersion.ExpirationDate, fmt.Sprintf("expiration date of latest kubernetes version ('%s') must not be set", latestKubernetesVersion.Version)))
 		}
 	}

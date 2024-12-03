@@ -431,35 +431,33 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					}))))
 				})
 
-				// TODO test is broken because  validateLifecycleStartTimes depends on ordered stages and therefore breaks too
-				//
-				//				It("should forbid unordered lifecycle stages", func() {
-				//					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
-				//					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 2)}
-				//					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
-				//						{
-				//							Version: "1.1.0",
-				//							Lifecycle: []core.ClassificationLifecycle{
-				//								{Classification: previewClassification},
-				//								{Classification: deprecatedClassification, StartTime: deprecatedDate},
-				//								{Classification: supportedClassification, StartTime: supportedDate},
-				//							},
-				//						},
-				//						{
-				//							Version: "1.2.0",
-				//							Lifecycle: []core.ClassificationLifecycle{
-				//								{Classification: supportedClassification},
-				//							},
-				//						},
-				//					}
-				//
-				//					errorList := ValidateCloudProfile(cloudProfile)
-				//
-				//					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-				//						"Type":  Equal(field.ErrorTypeInvalid),
-				//						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
-				//					}))))
-				//				})
+				It("should forbid unordered lifecycle stages", func() {
+					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 2)}
+					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+						{
+							Version: "1.1.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: previewClassification},
+								{Classification: deprecatedClassification, StartTime: deprecatedDate},
+								{Classification: supportedClassification, StartTime: supportedDate},
+							},
+						},
+						{
+							Version: "1.2.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: supportedClassification},
+							},
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+					}))))
+				})
 
 				It("should forbid duplicated kubernetes versions", func() {
 					cloudProfile.Spec.Kubernetes = duplicatedKubernetes

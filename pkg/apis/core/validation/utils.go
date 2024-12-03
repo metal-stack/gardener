@@ -203,9 +203,7 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 		}
 		if !validateLifecycleInOrder(version.Lifecycle) {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired.", version.Version)))
-		}
-
-		if err := validateLifecycleStartTimes(version.Lifecycle); err != nil {
+		} else if err := validateLifecycleStartTimes(version.Lifecycle); err != nil {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: %v", version.Version, err)))
 		}
 	}

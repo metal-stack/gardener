@@ -271,6 +271,7 @@ func lifecycleStartTimesInOrder(lifecycle []core.ClassificationLifecycle) bool {
 			return false
 		}
 	}
+	return true
 }
 
 // ValidateMachineImages validates the given list of machine images for valid values and combinations.

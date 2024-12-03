@@ -195,9 +195,26 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 		if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycle) > 0 {
 			allErrs = append(allErrs, field.Invalid(idxPath, version, fmt.Sprintf("Invalid specification of `classification` or `expirationDate` while specifying `lifecycle` on k8s version %s.", version.Version)))
 		}
+
+		if duplicateLifecycle(version.Lifecycle) {
+			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: duplicate classification in lifecycle.", version.Version)))
+		}
 	}
 
 	return allErrs
+}
+
+// duplicateLifecycle checks if there are any duplicate entries in the provided
+// lifecycle slice and returns a boolean value indicating whether duplicates were found in the lifecycle slice.
+func duplicateLifecycle(lifecycle []core.ClassificationLifecycle) bool {
+	seen := make(map[core.ClassificationLifecycle]bool)
+	for _, value := range lifecycle {
+		if seen[value] {
+			return true
+		}
+		seen[value] = true
+	}
+	return false
 }
 
 // ValidateMachineImages validates the given list of machine images for valid values and combinations.

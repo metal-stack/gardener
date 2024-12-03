@@ -195,7 +195,7 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 		}
 
 		if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycle) > 0 {
-			allErrs = append(allErrs, field.Invalid(idxPath, version, "cannot specify `classification` or `expirationDate` in combination with `lifecycle`."))
+			allErrs = append(allErrs, field.Forbidden(idxPath, "cannot specify `classification` or `expirationDate` in combination with `lifecycle`."))
 		}
 
 		if !validateLifecycleNoDuplicates(version.Lifecycle) {

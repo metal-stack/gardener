@@ -249,7 +249,7 @@ var _ = Describe("Reconciler", func() {
 			}
 		)
 
-		It("should reconcile current status of lifecycle classifications", func() {
+		It("should reconcile status of lifecycle classifications", func() {
 			var (
 				now = time.Now()
 
@@ -319,6 +319,26 @@ var _ = Describe("Reconciler", func() {
 									},
 								},
 							},
+							{
+								Version: "1.28.5",
+								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+									{
+										Classification: gardencorev1beta1.ClassificationPreview,
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationSupported,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationDeprecated,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(4 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationExpired,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(5 * time.Hour))),
+									},
+								},
+							},
 						},
 					},
 				}
@@ -344,6 +364,10 @@ var _ = Describe("Reconciler", func() {
 						{
 							Version:             "1.28.4",
 							ClassificationState: gardencorev1beta1.ClassificationExpired,
+						},
+						{
+							Version:             "1.28.5",
+							ClassificationState: gardencorev1beta1.ClassificationPreview,
 						},
 					},
 				}

@@ -199,6 +199,9 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 		if duplicateLifecycle(version.Lifecycle) {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: duplicate classification in lifecycle.", version.Version)))
 		}
+		if lifecycleInOrder(version.Lifecycle) {
+			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired.", version.Version)))
+		}
 	}
 
 	return allErrs
@@ -215,6 +218,35 @@ func duplicateLifecycle(lifecycle []core.ClassificationLifecycle) bool {
 		seen[value] = true
 	}
 	return false
+}
+
+// lifecycleInOrder checks if the provided lifecycle slice is in  the expected order.
+// The order is not required for functionality but should ensure better readability.
+func lifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
+	if len(lifecycle) <= 1 {
+		return true
+	}
+
+	order := map[core.VersionClassification]int{
+		core.ClassificationPreview:    0,
+		core.ClassificationSupported:  1,
+		core.ClassificationDeprecated: 2,
+		core.ClassificationExpired:    3,
+	}
+
+	for i, curr := range lifecycle[:len(lifecycle)-1] {
+		currVal, existsCurr := order[curr.Classification]
+		nextVal, existsNext := order[lifecycle[i+1].Classification]
+
+		if !existsCurr || !existsNext {
+			return false
+		}
+		if currVal >= nextVal {
+			return false
+		}
+	}
+
+	return true
 }
 
 // ValidateMachineImages validates the given list of machine images for valid values and combinations.

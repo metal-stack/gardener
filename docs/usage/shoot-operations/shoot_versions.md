@@ -35,17 +35,40 @@ Moreover, this allows Gardener to "understand" the current state of a version an
 - I can determine the time when my Shoot clusters Machine image and Kubernetes version will be forcefully updated to the next patch or minor version (in case the cluster is running a deprecated version with an expiration date).
 - I can get this information via API from the `CloudProfile`.
 
-## Version Classifications
+## Version Classification Lifecycles
 
-Administrators can classify versions into four distinct "logical states": `preview`, `supported`, `deprecated`, and `expired`.
+Kubernetes and machine image versions in the `CloudProfile` are classified into individual stages: `unavailable`, `preview`, `supported`, `deprecated`, and `expired`.
+
+Administrators may define a classification lifecycle, promoting versions through these lifecycle stages depending on time. The current classification stage is evaluated by the cloud profile reconciler and patched into the `classification` field in the `CloudProfile` version spec. If an administrator does not specify a classification lifecycle, the version defaults to `supported`.
+
 The version classification serves as a "point-of-reference" for end-users and also has implications during shoot creation and the maintenance time.
 
-If a version is unclassified, Gardener cannot make those decision based on the "logical state".
-Nevertheless, Gardener can operate without version classifications and can be added at any time to the Kubernetes and machine image versions in the `CloudProfile`.
+As a best practice, versions usually start with the classification `preview`, then are promoted to `supported`, eventually `deprecated` and finally `expired`. Here is an example:
 
-As a best practice, versions usually start with the classification `preview`, then are promoted to `supported`, eventually `deprecated` and finally `expired`.
-In addition to that, there is a dedicated `planned` classification which allows versions to promote classifications depending on a date. For more information on this topic, see [classification dates](#classification-dates).
-This information is programmatically available in the `CloudProfiles` of the Garden cluster.
+``` yaml
+# assume that the current data is 2024-12-03
+apiVersion: core.gardener.cloud/v1beta1
+kind: CloudProfile
+metadata:
+  name: local
+spec:
+  kubernetes:
+    versions:
+      - classification: supported # this field is set by the cloud profile reconciler
+        version: 1.30.6
+        lifecycle:
+          - classification: preview # starts in preview because no start date is defined
+          - classification: supported
+            startAt: "2024-12-01T00:00:00Z"
+          - classification: deprecated
+            startAt: "2025-03-01T00:00:00Z"
+          - classification: expired
+            startAt: "2025-04-01T00:00:00Z"
+```
+
+The classification stages must occur in a specific order and the start date must reflect this order. Here is a list of the available classification stages in the order they can appear:
+
+- **unavailable:** An `unavailable` version is planned to become available in the future. It is not possible to reference this version in this stage and can be used by administrators to schedule a new version release. Usually there is no need to explicitly declare this stage in the classification lifecycle because it can be automatically derived when the current time is before the first specified lifecycle stage.
 
 - **preview:** A `preview` version is a new version that has not yet undergone thorough testing, possibly a new release, and needs time to be validated.
 Due to its short early age, there is a higher probability of undiscovered issues and is therefore not yet recommended for production usage.
@@ -61,81 +84,50 @@ Typically for Kubernetes versions, the latest Kubernetes patch versions of the a
 New Shoots should not use this version anymore.
 Existing Shoots will be updated to a newer version if `auto-update` is enabled (`.spec.maintenance.autoUpdate.kubernetesVersion` for Kubernetes version `auto-update`, or `.spec.maintenance.autoUpdate.machineImageVersion` for machine image version `auto-update`).
 Using automatic upgrades, however, does not guarantee that a Shoot runs a non-deprecated version, as the latest version (overall or of the minor version) can be deprecated as well.
-Deprecated versions **should** have an expiration date set for eventual expiration.
 
-- **expired:** An `expired` versions has an expiration date (based on the [Golang time package](https://golang.org/src/time/time.go)) in the past.
-New clusters with that version cannot be created and existing clusters are forcefully migrated to a higher version during the maintenance time.
+- **expired:** An `expired` version cannot be used to create a new cluster and existing clusters are forcefully migrated to a higher version during the maintenance time.
 
-Below is an example how the relevant section of the `CloudProfile` might look like:
+Below is a more complex example illustrating different scenarios for lifecycle classifications:
 
 ``` yaml
 apiVersion: core.gardener.cloud/v1beta1
 kind: CloudProfile
 metadata:
-  name: alicloud
+  name: local
 spec:
   kubernetes:
     versions:
-      - classification: preview
+      # if an administrator deploys just the version without any lifecycle,
+      # the reconciler will evaluate the classification field to supported
+      - classification: suppported # this field is set by the cloud profile reconciler
         version: 1.27.0
-      - classification: preview
-        version: 1.26.3
-      - classification: supported
-        version: 1.26.2
-      - classification: preview
-        version: 1.25.5
-      - classification: supported
-        version: 1.25.4
-      - classification: supported
-        version: 1.24.6
-      - classification: deprecated
-        expirationDate: "2022-11-30T23:59:59Z"
-        version: 1.24.5
+
+      # when introducing a new version it may not contain any deprecation or expiration date yet
+      - classification: supported # this field is set by the cloud profile reconciler
+        version: 1.28.0
+        lifecycle:
+          - classification: preview
+          - classification: supported
+            startAt: 2024-12-01T00:00:00Z"
+
+      # it is not strictly required that every lifecycle stage must occur,
+      # they can also be dropped as long as their general order is maintained
+      - classification: expired # this field is set by the cloud profile reconciler
+        version: 1.18.0
+        lifecycle:
+          - classification: supported
+          - classification: expired
+            startAt: 2022-06-01T00:00:00Z"
+
+      # to schedule a new version release, the administrator can define the start dates
+      # of all lifecycle events in the future, such that the classification field will
+      # be evaluated to unavailable
+      - classification: unavailable # this field is set by the cloud profile reconciler
+        version: 2.0.0
+        lifecycle:
+          - classification: preview
+            startAt: 2036-02-07T06:28:16Z"
 ```
-
-## Classification Dates
-
-For administrators it is possible to automatically promote classifications depending on dates. This way, the availability, deprecation or expiration of versions can be scheduled. This feature is only available when the `classification` field is set.
-
-For every classification state there is a corresponding date field:
-
-- `expirationDate` effectively classifies a version as `expired` at the given date. When this field is set, `classification` must be set to either `deprecated`, `supported`, `preview` or `planned`.
-- `deprecationDate` effectively classifies a version as `deprecated` at the given date. When this field is set, `classification` must be set to either `supported`, `preview` or `planned`.
-- `supportedDate` effectively classifies a version as `supported` at the given date. When this field is set, `classification` must be set to either `preview` or `planned`.
-- `previewDate` effectively classifies a version as `preview` at the given date. When this field is set, `classification` must be set to `planned`.
-
-When the classification is set to `planned`, the availability of a version solely depends on classification dates. It allows to automatically make a version available at a certain point in time.
-
-Classification dates must be timely aligned, so it is required that `expirationDate` > `deprecationDate` > `supportedDate` > `previewDate`.
-
-Below is an example how the relevant section of the `CloudProfile` might look like:
-
-``` yaml
-apiVersion: core.gardener.cloud/v1beta1
-kind: CloudProfile
-metadata:
-  name: alicloud
-spec:
-  kubernetes:
-    versions:
-      # Fully planned version availability. Version is not available before previewDate.
-      - classification: planned
-        previewDate: "2024-11-01T23:59:59Z"
-        supportedDate: "2024-12-01T23:59:59Z"
-        deprecationDate: "2025-03-01T23:59:59Z"
-        expirationDate: "2025-04-01T23:59:59Z"
-        version: 1.27.0
-      # Version is already set to supported. Therefore no supportedDate and previewDate must be set.
-      - classification: supported
-        deprecationDate: "2025-03-01T23:59:59Z"
-        expirationDate: "2025-04-01T23:59:59Z"
-        version: 1.26.3
-      # Administrators may expire a version directly by setting classification to expired. No date fields must be set.
-      - classification: expired
-        version: 1.18.3
-```
-
-Easy! 😌
 
 ## Automatic Version Upgrades
 

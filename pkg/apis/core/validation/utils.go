@@ -198,10 +198,10 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 			allErrs = append(allErrs, field.Invalid(idxPath, version, "cannot specify `classification` or `expirationDate` in combination with `lifecycle`."))
 		}
 
-		if duplicateLifecycle(version.Lifecycle) {
+		if !validateLifecycleNoDuplicates(version.Lifecycle) {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: duplicate classification in lifecycle.", version.Version)))
 		}
-		if lifecycleInOrder(version.Lifecycle) {
+		if !validateLifecycleInOrder(version.Lifecycle) {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired.", version.Version)))
 		}
 
@@ -213,22 +213,22 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 	return allErrs
 }
 
-// duplicateLifecycle checks if there are any duplicate entries in the provided
+// validateLifecycleNoDuplicates checks if there are any duplicate entries in the provided
 // lifecycle slice and returns a boolean value indicating whether duplicates were found in the lifecycle slice.
-func duplicateLifecycle(lifecycle []core.ClassificationLifecycle) bool {
+func validateLifecycleNoDuplicates(lifecycle []core.ClassificationLifecycle) bool {
 	seen := make(map[core.ClassificationLifecycle]bool)
 	for _, value := range lifecycle {
 		if seen[value] {
-			return true
+			return false
 		}
 		seen[value] = true
 	}
-	return false
+	return true
 }
 
-// lifecycleInOrder checks if the provided lifecycle slice is in  the expected order.
+// validateLifecycleInOrder checks if the provided lifecycle slice is in  the expected order.
 // The order is not required for functionality but should ensure better readability.
-func lifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
+func validateLifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
 	var (
 		order = map[core.VersionClassification]int{
 			core.ClassificationUnavailable: 0,
@@ -261,7 +261,7 @@ func lifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
 // validateLifecycleStartTimes checks if the given slice of lifecycles has start times in order.
 // and that only the first lifecycle classification has no startTime.
 // It does not ensure the correct order of the classifications but if the elements in the
-// list have dates after each other. The order must be tested via `lifecycleInOrder`.
+// list have dates after each other. The order must be tested via `validateLifecycleInOrder`.
 func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle) error {
 	var previousStartTime time.Time
 

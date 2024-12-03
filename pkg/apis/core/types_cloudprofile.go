@@ -21,6 +21,8 @@ type CloudProfile struct {
 	metav1.ObjectMeta
 	// Spec defines the provider environment properties.
 	Spec CloudProfileSpec
+	// Status contains the current status of the cloud profile.
+	Status CloudProfileStatus
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -120,9 +122,9 @@ type ExpirableVersion struct {
 	Version string
 	// Deprecated: Is replaced by the lifecycle classification.
 	ExpirationDate *metav1.Time
-	// Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.
+	// Deprecated: Classification defines the state of a version (preview, supported, deprecated)
 	Classification *VersionClassification
-	// Lifecycle defines the classification lifecycle for this version.
+	// Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.
 	Lifecycle []ClassificationLifecycle
 }
 
@@ -220,6 +222,22 @@ type BastionMachineImage struct {
 type BastionMachineType struct {
 	// Name of the machine type
 	Name string
+}
+
+// CloudProfileStatus contains the status of the cloud profile.
+type CloudProfileStatus struct {
+	// KubernetesVersions contains the statuses of the kubernetes versions.
+	KubernetesVersions []ExpirableVersionStatus
+	// MachineImageVersions contains the statuses of the machine image versions.
+	MachineImageVersions []ExpirableVersionStatus
+}
+
+// ExpirableVersionStatus defines the current status of an expirable version.
+type ExpirableVersionStatus struct {
+	// Version is the version identifier.
+	Version string `json:"version" protobuf:"bytes,1,opt,name=version"`
+	// ClassificationState reflects the current state in the classification lifecycle.
+	ClassificationState VersionClassification `json:"classificationState,omitempty" protobuf:"bytes,2,opt,name=classificationState,casttype=VersionClassification"`
 }
 
 const (

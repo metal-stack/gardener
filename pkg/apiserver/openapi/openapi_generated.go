@@ -62,6 +62,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileList":                           schema_pkg_apis_core_v1beta1_CloudProfileList(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileReference":                      schema_pkg_apis_core_v1beta1_CloudProfileReference(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileSpec":                           schema_pkg_apis_core_v1beta1_CloudProfileSpec(ref),
+		"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileStatus":                         schema_pkg_apis_core_v1beta1_CloudProfileStatus(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ClusterAutoscaler":                          schema_pkg_apis_core_v1beta1_ClusterAutoscaler(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ClusterAutoscalerOptions":                   schema_pkg_apis_core_v1beta1_ClusterAutoscalerOptions(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.Condition":                                  schema_pkg_apis_core_v1beta1_Condition(ref),
@@ -91,6 +92,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ETCDEncryptionKeyRotation":                  schema_pkg_apis_core_v1beta1_ETCDEncryptionKeyRotation(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.EncryptionConfig":                           schema_pkg_apis_core_v1beta1_EncryptionConfig(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersion":                           schema_pkg_apis_core_v1beta1_ExpirableVersion(ref),
+		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus":                     schema_pkg_apis_core_v1beta1_ExpirableVersionStatus(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExposureClass":                              schema_pkg_apis_core_v1beta1_ExposureClass(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExposureClassList":                          schema_pkg_apis_core_v1beta1_ExposureClassList(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExposureClassScheduling":                    schema_pkg_apis_core_v1beta1_ExposureClassScheduling(ref),
@@ -1996,11 +1998,18 @@ func schema_pkg_apis_core_v1beta1_CloudProfile(ref common.ReferenceCallback) com
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileSpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status contains the current status of the cloud profile.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileStatus"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileSpec", "github.com/gardener/gardener/pkg/apis/core/v1beta1.CloudProfileStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -2218,6 +2227,49 @@ func schema_pkg_apis_core_v1beta1_CloudProfileSpec(ref common.ReferenceCallback)
 		},
 		Dependencies: []string{
 			"github.com/gardener/gardener/pkg/apis/core/v1beta1.Bastion", "github.com/gardener/gardener/pkg/apis/core/v1beta1.KubernetesSettings", "github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineImage", "github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineType", "github.com/gardener/gardener/pkg/apis/core/v1beta1.Region", "github.com/gardener/gardener/pkg/apis/core/v1beta1.SeedSelector", "github.com/gardener/gardener/pkg/apis/core/v1beta1.VolumeType", "k8s.io/apimachinery/pkg/runtime.RawExtension"},
+	}
+}
+
+func schema_pkg_apis_core_v1beta1_CloudProfileStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CloudProfileStatus contains the status of the cloud profile.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kubernetesVersions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KubernetesVersions contains the statuses of the kubernetes versions.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus"),
+									},
+								},
+							},
+						},
+					},
+					"machineImageVersions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MachineImageVersions contains the statuses of the machine image versions.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus"},
 	}
 }
 
@@ -3502,14 +3554,14 @@ func schema_pkg_apis_core_v1beta1_ExpirableVersion(ref common.ReferenceCallback)
 					},
 					"classification": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.",
+							Description: "Deprecated: Classification defines the state of a version (preview, supported, deprecated)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"lifecycle": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Lifecycle defines the classification lifecycle for this version.",
+							Description: "Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3527,6 +3579,35 @@ func schema_pkg_apis_core_v1beta1_ExpirableVersion(ref common.ReferenceCallback)
 		},
 		Dependencies: []string{
 			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ClassificationLifecycle", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_core_v1beta1_ExpirableVersionStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ExpirableVersionStatus defines the current status of an expirable version.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"version": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Version is the version identifier.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"classificationState": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ClassificationState reflects the current state in the classification lifecycle.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"version"},
+			},
+		},
 	}
 }
 
@@ -5422,14 +5503,14 @@ func schema_pkg_apis_core_v1beta1_MachineImageVersion(ref common.ReferenceCallba
 					},
 					"classification": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.",
+							Description: "Deprecated: Classification defines the state of a version (preview, supported, deprecated)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"lifecycle": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Lifecycle defines the classification lifecycle for this version.",
+							Description: "Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

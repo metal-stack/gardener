@@ -104,6 +104,7 @@ var (
 	supportedClassification  = core.ClassificationSupported
 	previewClassification    = core.ClassificationPreview
 	deprecatedClassification = core.ClassificationDeprecated
+	expiredClassification    = core.ClassificationExpired
 
 	updateStrategyMajor = core.MachineImageUpdateStrategy("major")
 )
@@ -309,7 +310,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					}))))
 				})
 
-				It("should forbid expiration date on latest kubernetes version", func() {
+				It("should forbid (deprecated) expiration date on latest kubernetes version", func() {
 					expirationDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
@@ -328,6 +329,59 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
 						"Field": Equal("spec.kubernetes.versions[].expirationDate"),
+					}))))
+				})
+
+				It("should forbid expired lifecycle stage on latest kubernetes version", func() {
+					expirationDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+						{
+							Version: "1.1.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: supportedClassification},
+							},
+						},
+						{
+							Version: "1.2.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: deprecatedClassification},
+								{Classification: expiredClassification, StartTime: expirationDate},
+							},
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.kubernetes.versions[].lifecycle"),
+					}))))
+				})
+
+				It("should forbid multiple lifecycle stages with same startTime", func() {
+					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+					deprecatedDate := supportedDate
+					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+						{
+							Version: "1.1.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: supportedClassification, StartTime: supportedDate},
+								{Classification: deprecatedClassification, StartTime: deprecatedDate},
+							},
+						},
+						{
+							Version: "1.2.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: supportedClassification},
+							},
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
 					}))))
 				})
 

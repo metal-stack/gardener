@@ -282,7 +282,7 @@ func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle) error
 
 		currentStartTime := l.StartTime.Time
 
-		if currentStartTime.After(previousStartTime) {
+		if !previousStartTime.Before(currentStartTime) {
 			return fmt.Errorf("lifecycle start times must be monotonically increasing for the given classification order preview -> supported -> deprecated -> expired")
 		}
 

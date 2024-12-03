@@ -268,7 +268,14 @@ type CloudProfileStatus struct {
 	// KubernetesVersions contains the statuses of the kubernetes versions.
 	KubernetesVersions []ExpirableVersionStatus `json:"kubernetesVersions,omitempty" protobuf:"bytes,1,name=kubernetesVersions"`
 	// MachineImageVersions contains the statuses of the machine image versions.
-	MachineImageVersions []ExpirableVersionStatus `json:"machineImageVersions,omitempty" protobuf:"bytes,2,name=machineImageVersions"`
+	MachineImageVersions []MachineImageVersionStatus `json:"machineImageVersions,omitempty" protobuf:"bytes,2,name=machineImageVersions"`
+}
+
+type MachineImageVersionStatus struct {
+	// Name matches the name of the MachineImage the status is represented of.
+	Name string `json:"name,omitempty" protobuf:"bytes,1,name=name"`
+	// Versions contains the statuses of the machine image versions.
+	Versions []ExpirableVersionStatus `json:"versions,omitempty" protobuf:"bytes,2,name=versions"`
 }
 
 // ExpirableVersionStatus defines the current status of an expirable version.

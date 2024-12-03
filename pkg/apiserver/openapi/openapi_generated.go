@@ -131,6 +131,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineControllerManagerSettings":           schema_pkg_apis_core_v1beta1_MachineControllerManagerSettings(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineImage":                               schema_pkg_apis_core_v1beta1_MachineImage(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineImageVersion":                        schema_pkg_apis_core_v1beta1_MachineImageVersion(ref),
+		"github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineImageVersionStatus":                  schema_pkg_apis_core_v1beta1_MachineImageVersionStatus(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineType":                                schema_pkg_apis_core_v1beta1_MachineType(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineTypeStorage":                         schema_pkg_apis_core_v1beta1_MachineTypeStorage(ref),
 		"github.com/gardener/gardener/pkg/apis/core/v1beta1.Maintenance":                                schema_pkg_apis_core_v1beta1_Maintenance(ref),
@@ -2259,7 +2260,7 @@ func schema_pkg_apis_core_v1beta1_CloudProfileStatus(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus"),
+										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineImageVersionStatus"),
 									},
 								},
 							},
@@ -2269,7 +2270,7 @@ func schema_pkg_apis_core_v1beta1_CloudProfileStatus(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus"},
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus", "github.com/gardener/gardener/pkg/apis/core/v1beta1.MachineImageVersionStatus"},
 	}
 }
 
@@ -5564,6 +5565,41 @@ func schema_pkg_apis_core_v1beta1_MachineImageVersion(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"github.com/gardener/gardener/pkg/apis/core/v1beta1.CRI", "github.com/gardener/gardener/pkg/apis/core/v1beta1.ClassificationLifecycle", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_core_v1beta1_MachineImageVersionStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name matches the name of the MachineImage the status is represented of.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"versions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Versions contains the statuses of the machine image versions.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/core/v1beta1.ExpirableVersionStatus"},
 	}
 }
 

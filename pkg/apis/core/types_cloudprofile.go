@@ -229,7 +229,14 @@ type CloudProfileStatus struct {
 	// KubernetesVersions contains the statuses of the kubernetes versions.
 	KubernetesVersions []ExpirableVersionStatus
 	// MachineImageVersions contains the statuses of the machine image versions.
-	MachineImageVersions []ExpirableVersionStatus
+	MachineImageVersions []MachineImageVersionStatus
+}
+
+type MachineImageVersionStatus struct {
+	// Name matches the name of the MachineImage the status is represented of.
+	Name string
+	// Versions contains the statuses of the machine image versions.
+	Versions []ExpirableVersionStatus
 }
 
 // ExpirableVersionStatus defines the current status of an expirable version.

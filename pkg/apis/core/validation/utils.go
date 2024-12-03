@@ -6,6 +6,7 @@ package validation
 
 import (
 	"fmt"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"regexp"
 	"slices"
 	"strconv"
@@ -204,8 +205,8 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired.", version.Version)))
 		}
 
-		if lifecycleStartTimesInOrder(version.Lifecycle) {
-			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: lifecycle classification startTimes not in order, dates must be preview -> supported -> deprecated -> expired.", version.Version)))
+		if err := validateLifecycleStartTimes(version.Lifecycle); err != nil {
+			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: %v", version.Version, err)))
 		}
 	}
 
@@ -257,27 +258,38 @@ func lifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
 	return true
 }
 
-// lifecycleStartTimesInOrder checks if the provided lifecycle slice has start times in order.
+// validateLifecycleStartTimes checks if the given slice of lifecycles has start times in order.
+// and that only the first lifecycle classification has no startTime.
 // It does not ensure the correct order of the classifications but if the elements in the
 // list have dates after each other. The order must be tested via `lifecycleInOrder`.
-func lifecycleStartTimesInOrder(lifecycle []core.ClassificationLifecycle) bool {
-	if len(lifecycle) <= 1 {
-		return true
-	}
+func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle) error {
+	var previousStartTime time.Time
 
-	for i := 0; i < (len(lifecycle) - 2); i++ {
-		var startTime time.Time
-		if lifecycle[i].StartTime == nil {
-			startTime = time.Unix(0, 0)
-		} else {
-			startTime = lifecycle[i].StartTime.UTC()
+	for i, l := range lifecycle {
+		if i == 0 {
+			if l.StartTime == nil {
+				l.StartTime = &v1.Time{}
+			}
+
+			previousStartTime = l.StartTime.Time
+
+			continue
 		}
 
-		if startTime.After(lifecycle[i+1].StartTime.UTC()) {
-			return false
+		if l.StartTime == nil {
+			return fmt.Errorf("only the first lifecycle element can have the start time optional")
 		}
+
+		currentStartTime := l.StartTime.Time
+
+		if currentStartTime.After(previousStartTime) {
+			return fmt.Errorf("lifecycle start times must be monotonically increasing for the given classification order preview -> supported -> deprecated -> expired")
+		}
+
+		previousStartTime = currentStartTime
 	}
-	return true
+
+	return nil
 }
 
 // ValidateMachineImages validates the given list of machine images for valid values and combinations.

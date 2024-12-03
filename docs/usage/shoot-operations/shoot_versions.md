@@ -39,14 +39,14 @@ Moreover, this allows Gardener to "understand" the current state of a version an
 
 Kubernetes and machine image versions in the `CloudProfile` are classified into individual stages: `unavailable`, `preview`, `supported`, `deprecated`, and `expired`.
 
-Administrators may define a classification lifecycle, promoting versions through these lifecycle stages depending on time. The current classification stage is evaluated by the cloud profile reconciler and patched into the `classification` field in the `CloudProfile` version spec. If an administrator does not specify a classification lifecycle, the version defaults to `supported`.
+Administrators may define a classification lifecycle, promoting versions through these lifecycle stages depending on time. The current classification stage is evaluated by the cloud profile reconciler and patched into the `status` subresource of the `CloudProfile`. If an administrator does not specify a classification lifecycle, the version defaults to `supported`.
 
 The version classification serves as a "point-of-reference" for end-users and also has implications during shoot creation and the maintenance time.
 
 As a best practice, versions usually start with the classification `preview`, then are promoted to `supported`, eventually `deprecated` and finally `expired`. Here is an example:
 
 ``` yaml
-# assume that the current data is 2024-12-03
+# assume that the current date is 2024-12-03
 apiVersion: core.gardener.cloud/v1beta1
 kind: CloudProfile
 metadata:
@@ -54,19 +54,23 @@ metadata:
 spec:
   kubernetes:
     versions:
-      - classification: supported # this field is set by the cloud profile reconciler
-        version: 1.30.6
+      - version: 1.30.6
         lifecycle:
-          - classification: preview # starts in preview because no start date is defined
+          - classification: preview # starts in preview because no start time is defined
           - classification: supported
-            startAt: "2024-12-01T00:00:00Z"
+            startTime: "2024-12-01T00:00:00Z"
           - classification: deprecated
-            startAt: "2025-03-01T00:00:00Z"
+            startTime: "2025-03-01T00:00:00Z"
           - classification: expired
-            startAt: "2025-04-01T00:00:00Z"
+            startTime: "2025-04-01T00:00:00Z"
+status:
+  kubernetes:
+    versions:
+      - version: 1.30.6
+        classificationState: supported
 ```
 
-The classification stages must occur in a specific order and the start date must reflect this order. Here is a list of the available classification stages in the order they can appear:
+The classification stages must occur in a specific order and the start time must reflect this order. Here is a list of the available classification stages in the order they can appear:
 
 - **unavailable:** An `unavailable` version is planned to become available in the future. It is not possible to reference this version in this stage and can be used by administrators to schedule a new version release. Usually there is no need to explicitly declare this stage in the classification lifecycle because it can be automatically derived when the current time is before the first specified lifecycle stage.
 
@@ -98,35 +102,42 @@ spec:
   kubernetes:
     versions:
       # if an administrator deploys just the version without any lifecycle,
-      # the reconciler will evaluate the classification field to supported
-      - classification: suppported # this field is set by the cloud profile reconciler
-        version: 1.27.0
+      # the reconciler will evaluate the classification status to supported
+      - version: 1.27.0
 
       # when introducing a new version it may not contain any deprecation or expiration date yet
-      - classification: supported # this field is set by the cloud profile reconciler
-        version: 1.28.0
+      - version: 1.28.0
         lifecycle:
           - classification: preview
           - classification: supported
-            startAt: 2024-12-01T00:00:00Z"
+            startTime: 2024-12-01T00:00:00Z"
 
       # it is not strictly required that every lifecycle stage must occur,
       # they can also be dropped as long as their general order is maintained
-      - classification: expired # this field is set by the cloud profile reconciler
-        version: 1.18.0
+      - version: 1.18.0
         lifecycle:
           - classification: supported
           - classification: expired
-            startAt: 2022-06-01T00:00:00Z"
+            startTime: 2022-06-01T00:00:00Z"
 
-      # to schedule a new version release, the administrator can define the start dates
-      # of all lifecycle events in the future, such that the classification field will
+      # to schedule a new version release, the administrator can define the start times
+      # of all lifecycle events in the future, such that the classification status will
       # be evaluated to unavailable
-      - classification: unavailable # this field is set by the cloud profile reconciler
-        version: 2.0.0
+      - version: 2.0.0
         lifecycle:
           - classification: preview
-            startAt: 2036-02-07T06:28:16Z"
+            startTime: 2036-02-07T06:28:16Z"
+status:
+  kubernetes:
+    versions:
+      - version: 1.27.0
+        classificationState: supported
+      - version: 1.28.0
+        classificationState: supported
+      - version: 1.18.0
+        classificationState: expired
+      - version: 2.0.0
+        classificationState: unavailable
 ```
 
 ## Automatic Version Upgrades

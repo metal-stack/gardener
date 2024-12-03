@@ -3355,7 +3355,7 @@ VersionClassification
 </em>
 </td>
 <td>
-<p>Classification defines the state of a version (preview, supported, deprecated, expired)</p>
+<p>Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)</p>
 </td>
 </tr>
 <tr>
@@ -5155,7 +5155,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>DEPRECATED: Is replaced by the lifecycle classification.</p>
+<p>Deprecated: Is replaced by the lifecycle classification.</p>
 </td>
 </tr>
 <tr>

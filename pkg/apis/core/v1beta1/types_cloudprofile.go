@@ -136,7 +136,7 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string `json:"version" protobuf:"bytes,1,opt,name=version"`
-	// DEPRECATED: Is replaced by the lifecycle classification.
+	// Deprecated: Is replaced by the lifecycle classification.
 	// +optional
 	ExpirationDate *metav1.Time `json:"expirationDate,omitempty" protobuf:"bytes,2,opt,name=expirationDate"`
 	// Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.
@@ -148,7 +148,7 @@ type ExpirableVersion struct {
 }
 
 type ClassificationLifecycle struct {
-	// Classification defines the state of a version (preview, supported, deprecated, expired)
+	// Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
 	Classification VersionClassification `json:"classification" protobuf:"bytes,1,opt,name=classification,casttype=VersionClassification"`
 	// StartTime defines when this classification becomes active.
 	// +optional

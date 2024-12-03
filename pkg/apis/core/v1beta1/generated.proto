@@ -338,7 +338,7 @@ message CRI {
 }
 
 message ClassificationLifecycle {
-  // Classification defines the state of a version (preview, supported, deprecated, expired)
+  // Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
   optional string classification = 1;
 
   // StartTime defines when this classification becomes active.
@@ -905,7 +905,7 @@ message ExpirableVersion {
   // Version is the version identifier.
   optional string version = 1;
 
-  // DEPRECATED: Is replaced by the lifecycle classification.
+  // Deprecated: Is replaced by the lifecycle classification.
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time expirationDate = 2;
 

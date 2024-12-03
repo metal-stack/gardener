@@ -1940,7 +1940,7 @@ func schema_pkg_apis_core_v1beta1_ClassificationLifecycle(ref common.ReferenceCa
 				Properties: map[string]spec.Schema{
 					"classification": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Classification defines the state of a version (preview, supported, deprecated, expired)",
+							Description: "Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -3496,7 +3496,7 @@ func schema_pkg_apis_core_v1beta1_ExpirableVersion(ref common.ReferenceCallback)
 					},
 					"expirationDate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DEPRECATED: Is replaced by the lifecycle classification.",
+							Description: "Deprecated: Is replaced by the lifecycle classification.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
@@ -5416,7 +5416,7 @@ func schema_pkg_apis_core_v1beta1_MachineImageVersion(ref common.ReferenceCallba
 					},
 					"expirationDate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DEPRECATED: Is replaced by the lifecycle classification.",
+							Description: "Deprecated: Is replaced by the lifecycle classification.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},

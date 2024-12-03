@@ -118,7 +118,7 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string
-	// DEPRECATED: Is replaced by the lifecycle classification.
+	// Deprecated: Is replaced by the lifecycle classification.
 	ExpirationDate *metav1.Time
 	// Classification reflects the current state in the classification lifecycle. This gets set by the cloud profile reconciler and should not be edited manually.
 	Classification *VersionClassification
@@ -127,7 +127,7 @@ type ExpirableVersion struct {
 }
 
 type ClassificationLifecycle struct {
-	// Classification defines the state of a version (preview, supported, deprecated, expired)
+	// Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
 	Classification VersionClassification
 	// StartTime defines when this classification becomes active.
 	StartTime *metav1.Time

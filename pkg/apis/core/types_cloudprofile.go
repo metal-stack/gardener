@@ -21,6 +21,8 @@ type CloudProfile struct {
 	metav1.ObjectMeta
 	// Spec defines the provider environment properties.
 	Spec CloudProfileSpec
+	// Status contains the current status of the cloud profile.
+	Status CloudProfileStatus
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -118,10 +120,19 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string
-	// ExpirationDate defines the time at which this version expires.
+	// Deprecated: Is replaced by the lifecycle classification.
 	ExpirationDate *metav1.Time
-	// Classification defines the state of a version (preview, supported, deprecated)
+	// Deprecated: Classification defines the state of a version (preview, supported, deprecated)
 	Classification *VersionClassification
+	// Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.
+	Lifecycle []ClassificationLifecycle
+}
+
+type ClassificationLifecycle struct {
+	// Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
+	Classification VersionClassification
+	// StartTime defines when this classification becomes active.
+	StartTime *metav1.Time
 }
 
 // MachineType contains certain properties of a machine type.
@@ -213,6 +224,29 @@ type BastionMachineType struct {
 	Name string
 }
 
+// CloudProfileStatus contains the status of the cloud profile.
+type CloudProfileStatus struct {
+	// KubernetesVersions contains the statuses of the kubernetes versions.
+	KubernetesVersions []ExpirableVersionStatus
+	// MachineImageVersions contains the statuses of the machine image versions.
+	MachineImageVersions []MachineImageVersionStatus
+}
+
+type MachineImageVersionStatus struct {
+	// Name matches the name of the MachineImage the status is represented of.
+	Name string
+	// Versions contains the statuses of the machine image versions.
+	Versions []ExpirableVersionStatus
+}
+
+// ExpirableVersionStatus defines the current status of an expirable version.
+type ExpirableVersionStatus struct {
+	// Version is the version identifier.
+	Version string `json:"version" protobuf:"bytes,1,opt,name=version"`
+	// ClassificationState reflects the current state in the classification lifecycle.
+	ClassificationState VersionClassification `json:"classificationState,omitempty" protobuf:"bytes,2,opt,name=classificationState,casttype=VersionClassification"`
+}
+
 const (
 	// VolumeClassStandard is a constant for the standard volume class.
 	VolumeClassStandard string = "standard"
@@ -224,6 +258,8 @@ const (
 type VersionClassification string
 
 const (
+	// ClassificationUnavailable indicates that a version is currently not available and is planned to become available depending on the classification lifecycle.
+	ClassificationUnavailable VersionClassification = "unavailable"
 	// ClassificationPreview indicates that a version has recently been added and not promoted to "Supported" yet.
 	// ClassificationPreview versions will not be considered for automatic Kubernetes and Machine Image patch version updates.
 	ClassificationPreview VersionClassification = "preview"
@@ -234,6 +270,9 @@ const (
 	// ClassificationDeprecated indicates that a patch version should not be used anymore, should be updated to a new version
 	// and will eventually expire.
 	ClassificationDeprecated VersionClassification = "deprecated"
+	// ClassificationExpired indicates that a version has expired.
+	// New entities with that version cannot be created and existing entities are forcefully migrated to a higher version during the maintenance time.
+	ClassificationExpired VersionClassification = "expired"
 )
 
 // MachineImageUpdateStrategy is the update strategy to use for a machine image

@@ -337,6 +337,15 @@ message CRI {
   repeated ContainerRuntime containerRuntimes = 2;
 }
 
+message ClassificationLifecycle {
+  // Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
+  optional string classification = 1;
+
+  // StartTime defines when this classification becomes active.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time startTime = 2;
+}
+
 // CloudProfile represents certain properties about a provider environment.
 message CloudProfile {
   // Standard object metadata.
@@ -346,6 +355,9 @@ message CloudProfile {
   // Spec defines the provider environment properties.
   // +optional
   optional CloudProfileSpec spec = 2;
+
+  // Status contains the current status of the cloud profile.
+  optional CloudProfileStatus status = 3;
 }
 
 // CloudProfileList is a collection of CloudProfiles.
@@ -416,6 +428,15 @@ message CloudProfileSpec {
   // Bastion contains the machine and image properties
   // +optional
   optional Bastion bastion = 10;
+}
+
+// CloudProfileStatus contains the status of the cloud profile.
+message CloudProfileStatus {
+  // KubernetesVersions contains the statuses of the kubernetes versions.
+  repeated ExpirableVersionStatus kubernetesVersions = 1;
+
+  // MachineImageVersions contains the statuses of the machine image versions.
+  repeated MachineImageVersionStatus machineImageVersions = 2;
 }
 
 // ClusterAutoscaler contains the configuration flags for the Kubernetes cluster autoscaler.
@@ -896,13 +917,26 @@ message ExpirableVersion {
   // Version is the version identifier.
   optional string version = 1;
 
-  // ExpirationDate defines the time at which this version expires.
+  // Deprecated: Is replaced by the lifecycle classification.
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time expirationDate = 2;
 
-  // Classification defines the state of a version (preview, supported, deprecated)
+  // Deprecated: Classification defines the state of a version (preview, supported, deprecated)
   // +optional
   optional string classification = 3;
+
+  // Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.
+  // +optional
+  repeated ClassificationLifecycle lifecycle = 4;
+}
+
+// ExpirableVersionStatus defines the current status of an expirable version.
+message ExpirableVersionStatus {
+  // Version is the version identifier.
+  optional string version = 1;
+
+  // ClassificationState reflects the current state in the classification lifecycle.
+  optional string classificationState = 2;
 }
 
 // ExposureClass represents a control plane endpoint exposure strategy.
@@ -1762,6 +1796,14 @@ message MachineImageVersion {
   // - '< 1.26' - supports only kubelet versions less than 1.26
   // +optional
   optional string kubeletVersionConstraint = 4;
+}
+
+message MachineImageVersionStatus {
+  // Name matches the name of the MachineImage the status is represented of.
+  optional string name = 1;
+
+  // Versions contains the statuses of the machine image versions.
+  repeated ExpirableVersionStatus versions = 2;
 }
 
 // MachineType contains certain properties of a machine type.

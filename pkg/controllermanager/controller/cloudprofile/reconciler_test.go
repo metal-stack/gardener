@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -29,9 +31,10 @@ var _ = Describe("Reconciler", func() {
 	const finalizerName = "gardener"
 
 	var (
-		ctx  = context.TODO()
-		ctrl *gomock.Controller
-		c    *mockclient.MockClient
+		ctx    = context.TODO()
+		ctrl   *gomock.Controller
+		c      *mockclient.MockClient
+		status *mockclient.MockStatusWriter
 
 		cloudProfileName string
 		fakeErr          error
@@ -42,6 +45,7 @@ var _ = Describe("Reconciler", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		c = mockclient.NewMockClient(ctrl)
+		status = mockclient.NewMockStatusWriter(ctrl)
 
 		cloudProfileName = "test-cloudprofile"
 		fakeErr = errors.New("fake err")
@@ -100,6 +104,12 @@ var _ = Describe("Reconciler", func() {
 				Expect(patch.Data(o)).To(BeEquivalentTo(fmt.Sprintf(`{"metadata":{"finalizers":["%s"],"resourceVersion":"42"}}`, finalizerName)))
 				return nil
 			})
+
+			c.EXPECT().Status().Return(status)
+			expect := cloudProfile.DeepCopy()
+			expect.Finalizers = []string{finalizerName}
+
+			status.EXPECT().Update(gomock.Any(), expect).Return(nil)
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: cloudProfileName}})
 			Expect(result).To(Equal(reconcile.Result{}))
@@ -208,6 +218,207 @@ var _ = Describe("Reconciler", func() {
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: cloudProfileName}})
 			Expect(result).To(Equal(reconcile.Result{}))
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("status reconciliation", func() {
+		BeforeEach(func() {
+			cloudProfile.Finalizers = []string{finalizerName}
+		})
+
+		var (
+			testStatus = func(spec gardencorev1beta1.CloudProfileSpec, wantStatus gardencorev1beta1.CloudProfileStatus) {
+				cloudProfile.Spec = spec
+
+				c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: cloudProfileName}, gomock.AssignableToTypeOf(&gardencorev1beta1.CloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.CloudProfile, _ ...client.GetOption) error {
+					*obj = *cloudProfile
+					return nil
+				})
+
+				want := cloudProfile.DeepCopy()
+				want.Status = wantStatus
+
+				c.EXPECT().Status().Return(status)
+				status.EXPECT().Update(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.CloudProfile{})).Do(func(_ context.Context, obj client.Object, _ ...client.UpdateOption) {
+					Expect(obj).To(Equal(want))
+				})
+
+				result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: cloudProfileName}})
+				Expect(result).To(Equal(reconcile.Result{}))
+				Expect(err).NotTo(HaveOccurred())
+			}
+		)
+
+		It("should reconcile status of lifecycle classifications", func() {
+			var (
+				now = time.Now()
+
+				spec = gardencorev1beta1.CloudProfileSpec{
+					Kubernetes: gardencorev1beta1.KubernetesSettings{
+						Versions: []gardencorev1beta1.ExpirableVersion{
+							{
+								Version: "1.28.0",
+							},
+							{
+								Version: "1.28.1",
+								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+									{
+										Classification: gardencorev1beta1.ClassificationSupported,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
+									},
+								},
+							},
+							{
+								Version: "1.28.2",
+								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+									{
+										Classification: gardencorev1beta1.ClassificationPreview,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationSupported,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
+									},
+								},
+							},
+							{
+								Version: "1.28.3",
+								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+									{
+										Classification: gardencorev1beta1.ClassificationPreview,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(-3 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationSupported,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationDeprecated,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(5 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationExpired,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(8 * time.Hour))),
+									},
+								},
+							},
+							{
+								Version: "1.28.4",
+								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+									{
+										Classification: gardencorev1beta1.ClassificationSupported,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(-4 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationDeprecated,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(-3 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationExpired,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
+									},
+								},
+							},
+							{
+								Version: "1.28.5",
+								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+									{
+										Classification: gardencorev1beta1.ClassificationPreview,
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationSupported,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationDeprecated,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(4 * time.Hour))),
+									},
+									{
+										Classification: gardencorev1beta1.ClassificationExpired,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(5 * time.Hour))),
+									},
+								},
+							},
+						},
+					},
+				}
+
+				wantStatus = gardencorev1beta1.CloudProfileStatus{
+					KubernetesVersions: []gardencorev1beta1.ExpirableVersionStatus{
+						{
+							Version:             "1.28.0",
+							ClassificationState: gardencorev1beta1.ClassificationSupported,
+						},
+						{
+							Version:             "1.28.1",
+							ClassificationState: gardencorev1beta1.ClassificationUnavailable,
+						},
+						{
+							Version:             "1.28.2",
+							ClassificationState: gardencorev1beta1.ClassificationPreview,
+						},
+						{
+							Version:             "1.28.3",
+							ClassificationState: gardencorev1beta1.ClassificationSupported,
+						},
+						{
+							Version:             "1.28.4",
+							ClassificationState: gardencorev1beta1.ClassificationExpired,
+						},
+						{
+							Version:             "1.28.5",
+							ClassificationState: gardencorev1beta1.ClassificationPreview,
+						},
+					},
+				}
+			)
+
+			testStatus(spec, wantStatus)
+		})
+
+		It("should reconcile status correctly for deprecated classification fields", func() {
+			var (
+				now = time.Now()
+
+				spec = gardencorev1beta1.CloudProfileSpec{
+					Kubernetes: gardencorev1beta1.KubernetesSettings{
+						Versions: []gardencorev1beta1.ExpirableVersion{
+							{
+								Classification: ptr.To(gardencorev1beta1.ClassificationSupported),
+								Version:        "1.28.0",
+							},
+							{
+								Version:        "1.28.1",
+								ExpirationDate: ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
+							},
+							{
+								Classification: ptr.To(gardencorev1beta1.ClassificationPreview),
+								Version:        "1.28.2",
+								ExpirationDate: ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
+							},
+						},
+					},
+				}
+
+				wantStatus = gardencorev1beta1.CloudProfileStatus{
+					KubernetesVersions: []gardencorev1beta1.ExpirableVersionStatus{
+						{
+							Version:             "1.28.0",
+							ClassificationState: gardencorev1beta1.ClassificationSupported,
+						},
+						{
+							Version:             "1.28.1",
+							ClassificationState: gardencorev1beta1.ClassificationExpired,
+						},
+						{
+							Version:             "1.28.2",
+							ClassificationState: gardencorev1beta1.ClassificationPreview,
+						},
+					},
+				}
+			)
+
+			testStatus(spec, wantStatus)
 		})
 	})
 })

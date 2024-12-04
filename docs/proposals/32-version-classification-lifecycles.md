@@ -1,6 +1,6 @@
 ---
 title: Cloud Profile Version Classification Lifecycles
-gep-number: 29
+gep-number: 32
 creation-date: 2024-12-03
 status: implementable
 authors:
@@ -13,7 +13,7 @@ reviewers:
 - "@timebertt"
 ---
 
-# GEP-29: Cloud Profile Version Classification Lifecycles
+# GEP-32: Cloud Profile Version Classification Lifecycles
 
 ## Table of Contents
 

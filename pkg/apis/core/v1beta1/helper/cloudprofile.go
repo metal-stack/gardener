@@ -1,8 +1,9 @@
 package helper
 
 import (
-	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"time"
+
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 )
 
 func CurrentLifecycleClassification(version v1beta1.ExpirableVersion) v1beta1.VersionClassification {

@@ -170,7 +170,7 @@ func ValidateIPFamilies(ipFamilies []core.IPFamily, fldPath *field.Path) field.E
 // k8sVersionCPRegex is used to validate kubernetes versions in a cloud profile.
 var k8sVersionCPRegex = regexp.MustCompile(`^([0-9]+\.){2}[0-9]+$`)
 
-var supportedVersionClassifications = sets.New(string(core.ClassificationPreview), string(core.ClassificationSupported), string(core.ClassificationDeprecated), string(core.ClassificationUnavailable))
+var supportedVersionClassifications = sets.New(string(core.ClassificationPreview), string(core.ClassificationSupported), string(core.ClassificationDeprecated), string(core.ClassificationExpired), string(core.ClassificationUnavailable))
 
 // validateKubernetesVersions validates the given list of ExpirableVersions for valid Kubernetes versions.
 func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field.Path) field.ErrorList {
@@ -194,38 +194,76 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 			allErrs = append(allErrs, field.NotSupported(idxPath.Child("classification"), *version.Classification, sets.List(supportedVersionClassifications)))
 		}
 
-		if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycle) > 0 {
-			allErrs = append(allErrs, field.Forbidden(idxPath, "cannot specify `classification` or `expirationDate` in combination with `lifecycle`."))
-		}
+		allErrs = append(allErrs, validateExpirableVersion(version, idxPath)...)
+	}
 
-		if !validateLifecycleNoDuplicates(version.Lifecycle) {
-			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: duplicate classification in lifecycle.", version.Version)))
-		}
-		if !validateLifecycleInOrder(version.Lifecycle) {
-			allErrs = append(allErrs, field.Invalid(idxPath.Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired.", version.Version)))
+	return allErrs
+}
+
+// validateExpirableVersion validates the ExpirableVersions.
+func validateExpirableVersion(version core.ExpirableVersion, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycle) > 0 {
+		allErrs = append(allErrs, field.Forbidden(fldPath, "cannot specify `classification` or `expirationDate` in combination with `lifecycle`"))
+	}
+
+	lifecyclePath := fldPath.Child("lifecycle")
+
+	allErrs = append(allErrs, validateLifecycleClassificationsValid(version.Lifecycle, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleNoDuplicates(version.Lifecycle, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleInOrder(version.Lifecycle, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleStartTimes(version.Lifecycle, lifecyclePath)...)
+
+	return allErrs
+}
+
+// validateLifecycleClassificationsValid checks if the given classification in the lifecycle are in the list of supported version classifications.
+func validateLifecycleClassificationsValid(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	for i, l := range lifecycle {
+		if !supportedVersionClassifications.Has(string(l.Classification)) {
+			validValues := supportedVersionClassifications.UnsortedList()
+			slices.Sort(validValues)
+			allErrs = append(allErrs, field.NotSupported(fldPath.Index(i).Child("classification"), l.Classification, validValues))
 		}
 	}
 
 	return allErrs
 }
 
-// validateLifecycleNoDuplicates checks if there are any duplicate entries in the provided
-// lifecycle slice and returns a boolean value indicating whether duplicates were found in the lifecycle slice.
-func validateLifecycleNoDuplicates(lifecycle []core.ClassificationLifecycle) bool {
-	seen := make(map[core.ClassificationLifecycle]bool)
+// validateLifecycleNoDuplicates checks if there are any duplicate entries in the provided lifecycle slice
+func validateLifecycleNoDuplicates(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
+	var (
+		allErrs    = field.ErrorList{}
+		duplicates = sets.NewString()
+		seen       = make(map[core.VersionClassification]bool)
+	)
+
 	for _, value := range lifecycle {
-		if seen[value] {
-			return false
+		classification := value.Classification
+
+		if seen[classification] {
+			duplicates.Insert(string(classification))
 		}
-		seen[value] = true
+
+		seen[classification] = true
 	}
-	return true
+
+	for _, duplicate := range duplicates.List() {
+		allErrs = append(allErrs, field.Invalid(fldPath, duplicate, "duplicate classification stage in lifecycle"))
+	}
+
+	return allErrs
 }
 
 // validateLifecycleInOrder checks if the provided lifecycle slice is in  the expected order.
 // The order is not required for functionality but should ensure better readability.
-func validateLifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
+func validateLifecycleInOrder(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
 	var (
+		allErrs = field.ErrorList{}
+
 		order = map[core.VersionClassification]int{
 			core.ClassificationUnavailable: 0,
 			core.ClassificationPreview:     1,
@@ -245,21 +283,24 @@ func validateLifecycleInOrder(lifecycle []core.ClassificationLifecycle) bool {
 		currentOrder := order[l.Classification]
 
 		if previousOrder >= currentOrder {
-			return false
+			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.Classification, "lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired"))
 		}
 
 		previousOrder = currentOrder
 	}
 
-	return true
+	return allErrs
 }
 
 // validateLifecycleStartTimes checks if the given slice of lifecycles has start times in order.
 // and that only the first lifecycle classification has no startTime.
 // It does not ensure the correct order of the classifications but if the elements in the
 // list have dates after each other. The order must be tested via `validateLifecycleInOrder`.
-func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle) error {
-	var previousStartTime time.Time
+func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
+	var (
+		allErrs           = field.ErrorList{}
+		previousStartTime time.Time
+	)
 
 	for i, l := range lifecycle {
 		if i == 0 {
@@ -272,20 +313,21 @@ func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle) error
 			continue
 		}
 
-		if l.StartTime == nil {
-			return fmt.Errorf("only the first lifecycle element can have the start time optional")
+		if i > 0 && l.StartTime == nil {
+			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.Classification, "only the first lifecycle element can have the start time optional"))
+			continue
 		}
 
 		currentStartTime := l.StartTime.Time
 
 		if !previousStartTime.Before(currentStartTime) {
-			return fmt.Errorf("lifecycle start times must be monotonically increasing for the given classification order preview -> supported -> deprecated -> expired")
+			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.StartTime.String(), "lifecycle start times must be monotonically increasing"))
 		}
 
 		previousStartTime = currentStartTime
 	}
 
-	return nil
+	return allErrs
 }
 
 // ValidateMachineImages validates the given list of machine images for valid values and combinations.

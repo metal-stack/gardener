@@ -116,7 +116,6 @@ func ValidateCloudProfileSpec(spec *core.CloudProfileSpec, fldPath *field.Path) 
 	}
 
 	allErrs = append(allErrs, validateCloudProfileKubernetesSettings(spec.Kubernetes, fldPath.Child("kubernetes"))...)
-	allErrs = append(allErrs, validateCloudProfileKubernetesClassificationLifecycleStartTimesOrder(&spec.Kubernetes, fldPath.Child("kubernetes"))...)
 	allErrs = append(allErrs, ValidateCloudProfileMachineImages(spec.MachineImages, fldPath.Child("machineImages"))...)
 	allErrs = append(allErrs, validateCloudProfileMachineTypes(spec.MachineTypes, fldPath.Child("machineTypes"))...)
 	allErrs = append(allErrs, validateVolumeTypes(spec.VolumeTypes, fldPath.Child("volumeTypes"))...)
@@ -142,9 +141,7 @@ func validateCloudProfileKubernetesClassificationLifecycleStartTimesOrder(kubern
 		return allErrs
 	}
 	for i, version := range kubernetes.Versions {
-		if err := validateLifecycleStartTimes(version.Lifecycle); err != nil {
-			allErrs = append(allErrs, field.Invalid(fldPath.Child("versions").Index(i).Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: %v", version.Version, err)))
-		}
+		allErrs = append(allErrs, validateLifecycleStartTimes(version.Lifecycle, fldPath.Child("versions").Index(i))...)
 	}
 	return allErrs
 }
@@ -181,7 +178,7 @@ func validateCloudProfileKubernetesSettings(kubernetes core.KubernetesSettings, 
 func validateSupportedVersionsConfiguration(version core.ExpirableVersion, allVersions []core.ExpirableVersion, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if version.Classification != nil && *version.Classification == core.ClassificationSupported {
+	if helper.VersionIsSupported(version) {
 		currentSemVer, err := semver.NewVersion(version.Version)
 		if err != nil {
 			// check is already performed by caller, avoid duplicate error
@@ -234,6 +231,7 @@ func ValidateCloudProfileMachineImages(machineImages []core.MachineImage, fldPat
 		for index, machineVersion := range image.Versions {
 			versionsPath := idxPath.Child("versions").Index(index)
 			allErrs = append(allErrs, validateContainerRuntimesInterfaces(machineVersion.CRI, versionsPath.Child("cri"))...)
+			allErrs = append(allErrs, validateExpirableVersion(machineVersion.ExpirableVersion, versionsPath)...)
 			allErrs = append(allErrs, validateSupportedVersionsConfiguration(machineVersion.ExpirableVersion, helper.ToExpirableVersions(image.Versions), versionsPath)...)
 
 			if len(machineVersion.Architectures) == 0 {

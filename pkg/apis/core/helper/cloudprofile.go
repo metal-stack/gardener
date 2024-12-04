@@ -56,3 +56,7 @@ func CurrentLifecycleClassification(version core.ExpirableVersion) core.VersionC
 
 	return currentClassification
 }
+
+func VersionIsSupported(version core.ExpirableVersion) bool {
+	return CurrentLifecycleClassification(version) == core.ClassificationSupported
+}

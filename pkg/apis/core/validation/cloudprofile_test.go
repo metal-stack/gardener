@@ -174,6 +174,31 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						},
 					},
 				}
+				duplicatedMachineImage = []core.MachineImage{
+					{
+						Name: "ubuntu",
+						Versions: []core.MachineImageVersion{
+							{
+								ExpirableVersion: core.ExpirableVersion{
+									Version: "3.4.6",
+								},
+								CRI:           []core.CRI{{Name: "containerd"}},
+								Architectures: []string{"amd64"},
+							},
+							{
+								ExpirableVersion: core.ExpirableVersion{
+									Version: "3.4.6",
+									Lifecycle: []core.ClassificationLifecycle{
+										{Classification: previewClassification},
+									},
+								},
+								CRI:           []core.CRI{{Name: "containerd"}},
+								Architectures: []string{"amd64"},
+							},
+						},
+						UpdateStrategy: &updateStrategyMajor,
+					},
+				}
 			)
 
 			BeforeEach(func() {
@@ -378,15 +403,15 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					}))))
 				})
 
-				It("should forbid multiple lifecycle stages with same startTime", func() {
+				It("should forbid multiple lifecycle stages with same start time", func() {
 					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
-					deprecatedDate := supportedDate
+
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
 							Lifecycle: []core.ClassificationLifecycle{
 								{Classification: supportedClassification, StartTime: supportedDate},
-								{Classification: deprecatedClassification, StartTime: deprecatedDate},
+								{Classification: deprecatedClassification, StartTime: supportedDate},
 							},
 						},
 						{
@@ -400,8 +425,9 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					errorList := ValidateCloudProfile(cloudProfile)
 
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[1]"),
+						"Detail": Equal("lifecycle start times must be monotonically increasing"),
 					}))))
 				})
 
@@ -426,21 +452,26 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					errorList := ValidateCloudProfile(cloudProfile)
 
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle"),
+						"Detail": Equal("duplicate classification stage in lifecycle"),
+					})), PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[1]"),
+						"Detail": Equal("lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired"),
 					}))))
 				})
 
 				It("should forbid unordered lifecycle stages", func() {
-					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
-					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 2)}
+					now := time.Now()
+
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
 							Lifecycle: []core.ClassificationLifecycle{
 								{Classification: previewClassification},
-								{Classification: deprecatedClassification, StartTime: deprecatedDate},
-								{Classification: supportedClassification, StartTime: supportedDate},
+								{Classification: deprecatedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(1 * time.Hour)))},
+								{Classification: supportedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(3 * time.Hour)))},
 							},
 						},
 						{
@@ -454,12 +485,13 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					errorList := ValidateCloudProfile(cloudProfile)
 
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[2]"),
+						"Detail": Equal("lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired"),
 					}))))
 				})
 
-				It("should forbid missing StartTime for subsequent lifecycle stages", func() {
+				It("should forbid missing start time for subsequent lifecycle stages", func() {
 					previewDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
 					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 3)}
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
@@ -482,20 +514,43 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					errorList := ValidateCloudProfile(cloudProfile)
 
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[1]"),
+						"Detail": Equal("only the first lifecycle element can have the start time optional"),
 					}))))
 				})
 
-				It("should forbid multiple missing StartTimes for lifecycle stages", func() {
-					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 3)}
+				It("should forbid lifecycle start times that are not monotonically increasing", func() {
+					now := time.Now()
+
+					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+						{
+							Version: "1.1.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: previewClassification, StartTime: ptr.To(metav1.NewTime(now.Add(0 * time.Hour)))},
+								{Classification: supportedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(2 * time.Hour)))},
+								{Classification: deprecatedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(1 * time.Hour)))},
+							},
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[2]"),
+						"Detail": Equal("lifecycle start times must be monotonically increasing"),
+					}))))
+				})
+
+				It("should forbid multiple missing start times for lifecycle stages", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
 							Lifecycle: []core.ClassificationLifecycle{
 								{Classification: previewClassification},
 								{Classification: supportedClassification},
-								{Classification: deprecatedClassification, StartTime: deprecatedDate},
+								{Classification: deprecatedClassification},
 							},
 						},
 						{
@@ -509,12 +564,17 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					errorList := ValidateCloudProfile(cloudProfile)
 
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[1]"),
+						"Detail": Equal("only the first lifecycle element can have the start time optional"),
+					})), PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[2]"),
+						"Detail": Equal("only the first lifecycle element can have the start time optional"),
 					}))))
 				})
 
-				It("should allow missing StartTime for first lifecycle stage", func() {
+				It("should allow missing start time for first lifecycle stage", func() {
 					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
 					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 2)}
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
@@ -566,6 +626,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						"Type":     Equal(field.ErrorTypeNotSupported),
 						"Field":    Equal("spec.kubernetes.versions[0].classification"),
 						"BadValue": Equal(classification),
+						"Detail":   Equal(`supported values: "deprecated", "expired", "preview", "supported", "unavailable"`),
 					}))))
 				})
 
@@ -593,6 +654,254 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 			})
 
 			Context("machine image validation", func() {
+				It("should forbid specifying lifecycle and classification at the same time", func() {
+					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+					cloudProfile.Spec.MachineImages = []core.MachineImage{
+						{
+							Name: "ubuntu",
+							Versions: []core.MachineImageVersion{
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version:        "3.4.6",
+										Classification: &supportedClassification,
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: deprecatedClassification, StartTime: deprecatedDate},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+							},
+							UpdateStrategy: &updateStrategyMajor,
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeForbidden),
+						"Field":  Equal("spec.machineImages[0].versions[0]"),
+						"Detail": Equal("cannot specify `classification` or `expirationDate` in combination with `lifecycle`"),
+					}))))
+				})
+
+				It("should forbid multiple lifecycle stages with same start time", func() {
+					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+					cloudProfile.Spec.MachineImages = []core.MachineImage{
+						{
+							Name: "ubuntu",
+							Versions: []core.MachineImageVersion{
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "3.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: supportedClassification, StartTime: supportedDate},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "4.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: supportedClassification, StartTime: supportedDate},
+											{Classification: deprecatedClassification, StartTime: supportedDate},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+							},
+							UpdateStrategy: &updateStrategyMajor,
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.machineImages[0].versions[1].lifecycle[1]"),
+						"Detail": Equal("lifecycle start times must be monotonically increasing"),
+					}))))
+				})
+
+				It("should forbid multiple lifecycle stages with same classification", func() {
+					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+
+					cloudProfile.Spec.MachineImages = []core.MachineImage{
+						{
+							Name: "ubuntu",
+							Versions: []core.MachineImageVersion{
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "3.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: supportedClassification},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "4.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: supportedClassification},
+											{Classification: supportedClassification, StartTime: supportedDate},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+							},
+							UpdateStrategy: &updateStrategyMajor,
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.machineImages[0].versions[1].lifecycle"),
+						"Detail": Equal("duplicate classification stage in lifecycle"),
+					})), PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.machineImages[0].versions[1].lifecycle[1]"),
+						"Detail": Equal("lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired"),
+					}))))
+				})
+
+				It("should forbid unordered lifecycle stages", func() {
+					now := time.Now()
+
+					cloudProfile.Spec.MachineImages = []core.MachineImage{
+						{
+							Name: "ubuntu",
+							Versions: []core.MachineImageVersion{
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "3.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: previewClassification},
+											{Classification: deprecatedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(1 * time.Hour)))},
+											{Classification: supportedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(2 * time.Hour)))},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "4.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: supportedClassification},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+							},
+							UpdateStrategy: &updateStrategyMajor,
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.machineImages[0].versions[0].lifecycle[2]"),
+						"Detail": Equal("lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired"),
+					}))))
+				})
+
+				It("should forbid missing start time for subsequent lifecycle stages", func() {
+					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+
+					cloudProfile.Spec.MachineImages = []core.MachineImage{
+						{
+							Name: "ubuntu",
+							Versions: []core.MachineImageVersion{
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "3.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: previewClassification},
+											{Classification: supportedClassification, StartTime: supportedDate},
+											{Classification: deprecatedClassification},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "4.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: supportedClassification},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+							},
+							UpdateStrategy: &updateStrategyMajor,
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeInvalid),
+						"Field":  Equal("spec.machineImages[0].versions[0].lifecycle[2]"),
+						"Detail": Equal("only the first lifecycle element can have the start time optional"),
+					}))))
+				})
+
+				It("should forbid duplicated machineImage versions", func() {
+					cloudProfile.Spec.MachineImages = duplicatedMachineImage
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeDuplicate),
+							"Field": Equal(fmt.Sprintf("spec.machineImages[0].versions[%d]", len(duplicatedMachineImage[0].Versions)-1)),
+						}))))
+				})
+
+				It("should forbid invalid classification for machineImage versions", func() {
+					invalidClassification := core.VersionClassification("dummy")
+
+					cloudProfile.Spec.MachineImages = []core.MachineImage{
+						{
+							Name: "ubuntu",
+							Versions: []core.MachineImageVersion{
+								{
+									ExpirableVersion: core.ExpirableVersion{
+										Version: "3.4.6",
+										Lifecycle: []core.ClassificationLifecycle{
+											{Classification: invalidClassification},
+										},
+									},
+									CRI:           []core.CRI{{Name: "containerd"}},
+									Architectures: []string{"amd64"},
+								},
+							},
+							UpdateStrategy: &updateStrategyMajor,
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":     Equal(field.ErrorTypeNotSupported),
+						"Field":    Equal("spec.machineImages[0].versions[0].lifecycle[0].classification"),
+						"BadValue": Equal(invalidClassification),
+						"Detail":   Equal(`supported values: "deprecated", "expired", "preview", "supported", "unavailable"`),
+					}))))
+				})
+
 				It("should forbid an empty list of machine images", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{}
 

@@ -45,7 +45,7 @@ The version classification serves as a "point-of-reference" for end-users and al
 
 As a best practice, versions usually start with the classification `preview`, then are promoted to `supported`, eventually `deprecated` and finally `expired`. Here is an example:
 
-``` yaml
+```yaml
 # assume that the current date is 2024-12-03
 apiVersion: core.gardener.cloud/v1beta1
 kind: CloudProfile
@@ -93,7 +93,7 @@ Using automatic upgrades, however, does not guarantee that a Shoot runs a non-de
 
 Below is a more complex example illustrating different scenarios for lifecycle classifications:
 
-``` yaml
+```yaml
 apiVersion: core.gardener.cloud/v1beta1
 kind: CloudProfile
 metadata:

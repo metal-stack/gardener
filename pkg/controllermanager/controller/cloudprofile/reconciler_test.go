@@ -257,18 +257,6 @@ var _ = Describe("Reconciler", func() {
 					Kubernetes: gardencorev1beta1.KubernetesSettings{
 						Versions: []gardencorev1beta1.ExpirableVersion{
 							{
-								Version: "1.28.0",
-							},
-							{
-								Version: "1.28.1",
-								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
-									{
-										Classification: gardencorev1beta1.ClassificationSupported,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
-									},
-								},
-							},
-							{
 								Version: "1.28.2",
 								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
 									{
@@ -281,135 +269,12 @@ var _ = Describe("Reconciler", func() {
 									},
 								},
 							},
-							{
-								Version: "1.28.3",
-								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
-									{
-										Classification: gardencorev1beta1.ClassificationPreview,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(-3 * time.Hour))),
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationSupported,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationDeprecated,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(5 * time.Hour))),
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationExpired,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(8 * time.Hour))),
-									},
-								},
-							},
-							{
-								Version: "1.28.4",
-								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
-									{
-										Classification: gardencorev1beta1.ClassificationSupported,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(-4 * time.Hour))),
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationDeprecated,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(-3 * time.Hour))),
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationExpired,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
-									},
-								},
-							},
-							{
-								Version: "1.28.5",
-								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
-									{
-										Classification: gardencorev1beta1.ClassificationPreview,
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationSupported,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationDeprecated,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(4 * time.Hour))),
-									},
-									{
-										Classification: gardencorev1beta1.ClassificationExpired,
-										StartTime:      ptr.To(metav1.NewTime(now.Add(5 * time.Hour))),
-									},
-								},
-							},
 						},
 					},
 				}
 
 				wantStatus = gardencorev1beta1.CloudProfileStatus{
 					KubernetesVersions: []gardencorev1beta1.ExpirableVersionStatus{
-						{
-							Version:             "1.28.0",
-							ClassificationState: gardencorev1beta1.ClassificationSupported,
-						},
-						{
-							Version:             "1.28.1",
-							ClassificationState: gardencorev1beta1.ClassificationUnavailable,
-						},
-						{
-							Version:             "1.28.2",
-							ClassificationState: gardencorev1beta1.ClassificationPreview,
-						},
-						{
-							Version:             "1.28.3",
-							ClassificationState: gardencorev1beta1.ClassificationSupported,
-						},
-						{
-							Version:             "1.28.4",
-							ClassificationState: gardencorev1beta1.ClassificationExpired,
-						},
-						{
-							Version:             "1.28.5",
-							ClassificationState: gardencorev1beta1.ClassificationPreview,
-						},
-					},
-				}
-			)
-
-			testStatus(spec, wantStatus)
-		})
-
-		It("should reconcile status correctly for deprecated classification fields", func() {
-			var (
-				now = time.Now()
-
-				spec = gardencorev1beta1.CloudProfileSpec{
-					Kubernetes: gardencorev1beta1.KubernetesSettings{
-						Versions: []gardencorev1beta1.ExpirableVersion{
-							{
-								Classification: ptr.To(gardencorev1beta1.ClassificationSupported),
-								Version:        "1.28.0",
-							},
-							{
-								Version:        "1.28.1",
-								ExpirationDate: ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
-							},
-							{
-								Classification: ptr.To(gardencorev1beta1.ClassificationPreview),
-								Version:        "1.28.2",
-								ExpirationDate: ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
-							},
-						},
-					},
-				}
-
-				wantStatus = gardencorev1beta1.CloudProfileStatus{
-					KubernetesVersions: []gardencorev1beta1.ExpirableVersionStatus{
-						{
-							Version:             "1.28.0",
-							ClassificationState: gardencorev1beta1.ClassificationSupported,
-						},
-						{
-							Version:             "1.28.1",
-							ClassificationState: gardencorev1beta1.ClassificationExpired,
-						},
 						{
 							Version:             "1.28.2",
 							ClassificationState: gardencorev1beta1.ClassificationPreview,

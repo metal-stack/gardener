@@ -496,6 +496,8 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 			// getting Kubernetes versions that have been removed from the CloudProfile
 			removedKubernetesVersions := sets.StringKeySet(helper.GetRemovedVersions(oldCloudProfile.Spec.Kubernetes.Versions, cloudProfile.Spec.Kubernetes.Versions))
 
+			// TODO: check for removed lifecycle classifications
+
 			// getting Machine image versions that have been removed from or added to the CloudProfile
 			removedMachineImages, removedMachineImageVersions, addedMachineImages, addedMachineImageVersions := helper.GetMachineImageDiff(oldCloudProfile.Spec.MachineImages, cloudProfile.Spec.MachineImages)
 

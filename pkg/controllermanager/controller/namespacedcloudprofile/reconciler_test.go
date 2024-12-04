@@ -203,7 +203,7 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should merge Kubernetes versions correctly", func() {
+		It("should ignore ExpirationDate set only in NamespacedCloudProfile", func() {
 			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
 				{Version: "1.0.0", ExpirationDate: &newExpiryDate},
 			}
@@ -221,7 +221,111 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any())
 
 			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any()).DoAndReturn(func(_ context.Context, o client.Object, patch client.Patch, _ ...client.PatchOption) error {
-				Expect(patch.Data(o)).To(BeEquivalentTo(fmt.Sprintf(`{"status":{"cloudProfileSpec":{"kubernetes":{"versions":[{"expirationDate":"%s","version":"1.0.0"}]},"machineImages":[],"machineTypes":[]}}}`, newExpiryDate.UTC().Format(time.RFC3339))))
+				Expect(patch.Data(o)).To(BeEquivalentTo(`{"status":{"cloudProfileSpec":{"kubernetes":{"versions":[{"lifecycle":[{"classification":"supported"}],"version":"1.0.0"}]},"machineImages":[],"machineTypes":[]}}}`))
+				return nil
+			})
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: namespacedCloudProfileName, Namespace: namespaceName}})
+			Expect(result).To(Equal(reconcile.Result{}))
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should merge Kubernetes versions ExpirationDates correctly", func() {
+			cloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.0.0", ExpirationDate: ptr.To(metav1.Time{Time: newExpiryDate.Add(24 * time.Hour)})},
+			}
+			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.0.0", ExpirationDate: &newExpiryDate},
+			}
+
+			c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: namespacedCloudProfileName, Namespace: namespaceName}, gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.NamespacedCloudProfile, _ ...client.GetOption) error {
+				namespacedCloudProfile.DeepCopyInto(obj)
+				return nil
+			})
+
+			c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: cloudProfileName}, gomock.AssignableToTypeOf(&gardencorev1beta1.CloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.CloudProfile, _ ...client.GetOption) error {
+				cloudProfile.DeepCopyInto(obj)
+				return nil
+			})
+
+			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any())
+
+			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any()).DoAndReturn(func(_ context.Context, o client.Object, patch client.Patch, _ ...client.PatchOption) error {
+				Expect(patch.Data(o)).To(BeEquivalentTo(fmt.Sprintf(`{"status":{"cloudProfileSpec":{"kubernetes":{"versions":[{"lifecycle":[{"classification":"supported"},{"classification":"expired","startTime":"%s"}],"version":"1.0.0"}]},"machineImages":[],"machineTypes":[]}}}`, newExpiryDate.UTC().Format(time.RFC3339))))
+				return nil
+			})
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: namespacedCloudProfileName, Namespace: namespaceName}})
+			Expect(result).To(Equal(reconcile.Result{}))
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should ignore Lifecycle expired classification set only in NamespacedCloudProfile", func() {
+			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+					{
+						Classification: gardencorev1beta1.ClassificationExpired,
+						StartTime:      &newExpiryDate,
+					},
+				}},
+			}
+
+			c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: namespacedCloudProfileName, Namespace: namespaceName}, gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.NamespacedCloudProfile, _ ...client.GetOption) error {
+				namespacedCloudProfile.DeepCopyInto(obj)
+				return nil
+			})
+
+			c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: cloudProfileName}, gomock.AssignableToTypeOf(&gardencorev1beta1.CloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.CloudProfile, _ ...client.GetOption) error {
+				cloudProfile.DeepCopyInto(obj)
+				return nil
+			})
+
+			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any())
+
+			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any()).DoAndReturn(func(_ context.Context, o client.Object, patch client.Patch, _ ...client.PatchOption) error {
+				Expect(patch.Data(o)).To(BeEquivalentTo(`{"status":{"cloudProfileSpec":{"kubernetes":{"versions":[{"lifecycle":[{"classification":"supported"}],"version":"1.0.0"}]},"machineImages":[],"machineTypes":[]}}}`))
+				return nil
+			})
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: namespacedCloudProfileName, Namespace: namespaceName}})
+			Expect(result).To(Equal(reconcile.Result{}))
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should merge Kubernetes version Lifecycle classification startTimes correctly", func() {
+			cloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+					{
+						Classification: gardencorev1beta1.ClassificationSupported,
+					},
+					{
+						Classification: gardencorev1beta1.ClassificationExpired,
+						StartTime:      ptr.To(metav1.Time{Time: newExpiryDate.Add(24 * time.Hour)})},
+				},
+				}}
+			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+					{
+						Classification: gardencorev1beta1.ClassificationExpired,
+						StartTime:      &newExpiryDate,
+					},
+				}},
+			}
+
+			c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: namespacedCloudProfileName, Namespace: namespaceName}, gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.NamespacedCloudProfile, _ ...client.GetOption) error {
+				namespacedCloudProfile.DeepCopyInto(obj)
+				return nil
+			})
+
+			c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: cloudProfileName}, gomock.AssignableToTypeOf(&gardencorev1beta1.CloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.CloudProfile, _ ...client.GetOption) error {
+				cloudProfile.DeepCopyInto(obj)
+				return nil
+			})
+
+			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any())
+
+			c.EXPECT().Patch(gomock.Any(), gomock.AssignableToTypeOf(&gardencorev1beta1.NamespacedCloudProfile{}), gomock.Any()).DoAndReturn(func(_ context.Context, o client.Object, patch client.Patch, _ ...client.PatchOption) error {
+				Expect(patch.Data(o)).To(BeEquivalentTo(fmt.Sprintf(`{"status":{"cloudProfileSpec":{"kubernetes":{"versions":[{"lifecycle":[{"classification":"supported"},{"classification":"expired","startTime":"%s"}],"version":"1.0.0"}]},"machineImages":[],"machineTypes":[]}}}`, newExpiryDate.UTC().Format(time.RFC3339))))
 				return nil
 			})
 

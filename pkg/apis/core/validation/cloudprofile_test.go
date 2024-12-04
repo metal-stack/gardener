@@ -459,6 +459,86 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					}))))
 				})
 
+				It("should forbid missing StartTime for subsequent lifecycle stages", func() {
+					previewDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 3)}
+					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+						{
+							Version: "1.1.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: previewClassification, StartTime: previewDate},
+								{Classification: supportedClassification},
+								{Classification: deprecatedClassification, StartTime: deprecatedDate},
+							},
+						},
+						{
+							Version: "1.2.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: supportedClassification},
+							},
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+					}))))
+				})
+
+				It("should forbid multiple missing StartTimes for lifecycle stages", func() {
+					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 3)}
+					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+						{
+							Version: "1.1.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: previewClassification},
+								{Classification: supportedClassification},
+								{Classification: deprecatedClassification, StartTime: deprecatedDate},
+							},
+						},
+						{
+							Version: "1.2.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: supportedClassification},
+							},
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.kubernetes.versions[0].lifecycle"),
+					}))))
+				})
+
+				It("should allow missing StartTime for first lifecycle stage", func() {
+					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+					deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 2)}
+					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+						{
+							Version: "1.1.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: previewClassification},
+								{Classification: supportedClassification, StartTime: supportedDate},
+								{Classification: deprecatedClassification, StartTime: deprecatedDate},
+							},
+						},
+						{
+							Version: "1.2.0",
+							Lifecycle: []core.ClassificationLifecycle{
+								{Classification: supportedClassification},
+							},
+						},
+					}
+
+					errorList := ValidateCloudProfile(cloudProfile)
+
+					Expect(errorList).To(BeEmpty())
+				})
+
 				It("should forbid duplicated kubernetes versions", func() {
 					cloudProfile.Spec.Kubernetes = duplicatedKubernetes
 

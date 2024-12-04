@@ -60,3 +60,7 @@ func CurrentLifecycleClassification(version v1beta1.ExpirableVersion) v1beta1.Ve
 func VersionIsExpired(version v1beta1.ExpirableVersion) bool {
 	return CurrentLifecycleClassification(version) == v1beta1.ClassificationExpired
 }
+
+func VersionIsSupported(version v1beta1.ExpirableVersion) bool {
+	return CurrentLifecycleClassification(version) == v1beta1.ClassificationSupported
+}

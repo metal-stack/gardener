@@ -119,7 +119,7 @@ There will be additional validations to be implemented for the new `lifecycle`:
 - If no lifecycle is given, it defaults to a lifecycle definition with one `supported` stage.
 - If all start times are in the future, the resulting classification is `unavailable`.
 
-There is already a controller in place for reconciling the `CloudProfile` (by now it's primarily handling finalizers only), which is going to be extended by reconciling the version classification statuses.
+There is already a controller in place for reconciling the `CloudProfile` (by now it's primarily handling finalizers only), which is going to be extended by reconciling the version classification statuses. If there are remaining phases inside `lifecycle` the next reconcile needs to be scheduled at its `startTime`.
 
 ```yaml
 apiVersion: core.gardener.cloud/v1beta1
@@ -176,6 +176,8 @@ The `status` always reflects the current state of a classification no matter if 
 
 ## Considered Alternatives
 
+Beside from the proposed approach we considered multiple alternatives or variations of approaches. The most notable candidates are described below.
+
 ### Consequent Continuation of Current Approach
 
 The first idea was to just extend the current API by adding further fields for the classification stages:
@@ -199,12 +201,13 @@ spec:
 While this approach has the advantage that it just integrates with the current implementation (existing behavior is maintained), it was rejected because:
 
 - Classification stages are defined as keys in the API, which feels wrong because these are enums and when adding a new stage the API definition is required to change. So this is considered an anti-pattern.
--
--
--
--
+- All consumers of the `CloudProfile` are required to calculate the effective classification state that depends on time.
+- The `*Date` suffix for the new fields still imply that a date would be sufficient without a time, which is not the case.
 
 ### Introducing Lifecycle Map
+
+The next approach keeps the `classification` field itself, but moves the date fields into a new object to not pollute the `ExpirableVersion` struct.
+This also offers the oppurtunity to better express the fact that date times are required to schedule the lifecycle of a version classification instead of just plain dates.
 
 ```yaml
 apiVersion: core.gardener.cloud/v1beta1
@@ -227,10 +230,49 @@ spec:
             startTime: "2025-06-01T00:00:00Z"
 ```
 
+In this case only the `expirationDate` needs to be deprecated. We discarded this approach mostly for the same reasons as the previous one:
+
+- Classification stages are defined as keys in the API, which feels wrong because these are enums and when adding a new stage the API definition is required to change. So this is considered an anti-pattern.
+- All consumers of the `CloudProfile` are required to calculate the effective classification state that depends on time.
+
 ### Classification Field Patching
 
-- Patching the classification field with reconciler without status
+This variant of approaches tries to not introduce the status on the `CloudProfile` and instead changes the spec itself. It is applicable to the proposal and all its alternatives.
+Here the `CloudProfile` reconciler patches the currently computed classification stage of a version back into `classification` or an eventually newly introduced sibling field like `currentClassification`.
+
+```yaml
+# assume that the current date is 2024-12-03
+apiVersion: core.gardener.cloud/v1beta1
+kind: CloudProfile
+metadata:
+  name: local
+spec:
+  kubernetes:
+    versions:
+      - version: 1.30.6
+        classification: supported # the classification is patched by the reconciler and not set by the administrator
+        lifecycle:
+          - classification: preview
+          - classification: supported
+            startTime: "2024-12-01T00:00:00Z"
+          - classification: deprecated
+            startTime: "2025-03-01T00:00:00Z"
+          - classification: expired
+            startTime: "2025-04-01T00:00:00Z"
+```
+
+While this variant offers a field to directly see the computed classification stage, we opted against it due to the following reasons:
+
+- As it patches the spec, the administrator can no longer be seen as singular owner of this resource. This breaks the goal to stay compatible with typical deployment strategies.
+- A validation webhook needs to prevent setting the `classification` to a value that contradicts the phases inside `lifecycle` at the current time of day. Time drifts of servers must be considered while implementing this webhook.
 
 ### Implementation Without the Status Field
 
 - Do not provide any calculated classification stage in status or spec
+
+This variant is more or less a placeholder for dropping the goal of reflecting the currently computed classification stage. Clients consuming the classification stage need to compute the current classification stage on their own.
+
+We want to keep this goal for the following reasons:
+
+- If there is still a `classification` field, this is confusing for the human reader because four additional date time fields need to be considered.
+- Every consumer of the `CloudProfile` needs to duplicate the computation of the actual classification stage. With one additional field this was fine enough, but with a complex lifecycle it certainly isn't.

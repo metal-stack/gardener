@@ -1847,6 +1847,40 @@ var _ = Describe("resourcereferencemanager", func() {
 				)))
 			})
 
+			It("should reject removal of kubernetes version classification lifecycle that are still in use by a NamespacedCloudProfile", func() {
+				namespacedCloudProfile := &gardencorev1beta1.NamespacedCloudProfile{
+					Spec: gardencorev1beta1.NamespacedCloudProfileSpec{
+						Parent: gardencorev1beta1.CloudProfileReference{Kind: "CloudProfile", Name: cloudProfile.Name},
+						Kubernetes: &gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+							{Version: "1.24.1", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+								{Classification: gardencorev1beta1.ClassificationExpired, StartTime: ptr.To(metav1.Now())},
+							}},
+						}},
+					},
+				}
+				Expect(gardenCoreInformerFactory.Core().V1beta1().NamespacedCloudProfiles().Informer().GetStore().Add(namespacedCloudProfile)).To(Succeed())
+
+				cloudProfile.Spec.Kubernetes.Versions[1].Lifecycle = []core.ClassificationLifecycle{
+					{Classification: core.ClassificationSupported},
+					{Classification: core.ClassificationExpired, StartTime: ptr.To(metav1.Now())},
+				}
+				cloudProfileNew := cloudProfile.DeepCopy()
+				cloudProfileNew.Spec = core.CloudProfileSpec{
+					Kubernetes: core.KubernetesSettings{
+						Versions: []core.ExpirableVersion{
+							{Version: "1.24.1", Lifecycle: []core.ClassificationLifecycle{{Classification: core.ClassificationSupported}}},
+						},
+					},
+				}
+
+				attrs := admission.NewAttributesRecord(cloudProfileNew, &cloudProfile, core.Kind("CloudProfile").WithVersion("version"), "", cloudProfile.Name, core.Resource("CloudProfile").WithVersion("version"), "", admission.Update, &metav1.UpdateOptions{}, false, defaultUserInfo)
+
+				Expect(admissionHandler.Admit(context.TODO(), attrs, nil)).To(MatchError(And(
+					ContainSubstring("unable to delete Kubernetes classification lifecycle \"expired\" from version \"1.24.1\""),
+					ContainSubstring("still in use by NamespacedCloudProfile"),
+				)))
+			})
+
 			It("should reject removal of kubernetes versions that are still in use by a Shoot referencing a NamespacedCloudProfile", func() {
 				namespacedCloudProfile := &gardencorev1beta1.NamespacedCloudProfile{
 					Spec: gardencorev1beta1.NamespacedCloudProfileSpec{

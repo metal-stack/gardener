@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -493,15 +494,33 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 				return apierrors.NewBadRequest("could not convert old resource into CloudProfile object")
 			}
 
+			kubernetesKeyFunc := func(v core.ExpirableVersion) string { return v.Version }
+			newKubernetesVersions := gardenerutils.CreateMapFromSlice(cloudProfile.Spec.Kubernetes.Versions, kubernetesKeyFunc)
+
 			// getting Kubernetes versions that have been removed from the CloudProfile
 			removedKubernetesVersions := sets.StringKeySet(helper.GetRemovedVersions(oldCloudProfile.Spec.Kubernetes.Versions, cloudProfile.Spec.Kubernetes.Versions))
+			removedKubernetesClassificationLifecycles := make(map[string][]core.VersionClassification)
+
+			for _, existingVersion := range oldCloudProfile.Spec.Kubernetes.Versions {
+				if removedKubernetesVersions.Has(existingVersion.Version) {
+					continue
+				}
+				for _, existingLifecycleClass := range existingVersion.Lifecycle {
+					if slices.ContainsFunc(newKubernetesVersions[existingVersion.Version].Lifecycle, func(newLifecycle core.ClassificationLifecycle) bool {
+						return newLifecycle.Classification == existingLifecycleClass.Classification
+					}) {
+						continue
+					}
+					removedKubernetesClassificationLifecycles[existingVersion.Version] = append(removedKubernetesClassificationLifecycles[existingVersion.Version], existingLifecycleClass.Classification)
+				}
+			}
 
 			// TODO: check for removed lifecycle classifications
 
 			// getting Machine image versions that have been removed from or added to the CloudProfile
 			removedMachineImages, removedMachineImageVersions, addedMachineImages, addedMachineImageVersions := helper.GetMachineImageDiff(oldCloudProfile.Spec.MachineImages, cloudProfile.Spec.MachineImages)
 
-			if len(removedKubernetesVersions) > 0 || len(removedMachineImageVersions) > 0 || len(addedMachineImageVersions) > 0 {
+			if len(removedKubernetesVersions) > 0 || len(removedMachineImageVersions) > 0 || len(addedMachineImageVersions) > 0 || len(removedKubernetesClassificationLifecycles) > 0 {
 				shootList, err1 := r.shootLister.List(labels.Everything())
 				if err1 != nil {
 					return apierrors.NewInternalError(fmt.Errorf("could not list shoots to verify that Kubernetes and/or Machine image version can be removed: %v", err1))
@@ -539,6 +558,15 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 							for _, kubernetesVersion := range nscpfl.Spec.Kubernetes.Versions {
 								if removedKubernetesVersions.Has(kubernetesVersion.Version) {
 									channel <- fmt.Errorf("unable to delete Kubernetes version %q from CloudProfile %q - version is still in use by NamespacedCloudProfile '%s/%s'", kubernetesVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
+								}
+								if removedClassifications, exists := removedKubernetesClassificationLifecycles[kubernetesVersion.Version]; exists {
+									for _, c := range removedClassifications {
+										if slices.ContainsFunc(kubernetesVersion.Lifecycle, func(referencedLifecycle gardencorev1beta1.ClassificationLifecycle) bool {
+											return core.VersionClassification(referencedLifecycle.Classification) == c
+										}) {
+											channel <- fmt.Errorf("unable to delete Kubernetes classification lifecycle %q from version %q from CloudProfile %q still in use by NamespacedCloudProfile '%s/%s'", c, kubernetesVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
+										}
+									}
 								}
 							}
 						}

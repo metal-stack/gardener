@@ -116,6 +116,7 @@ func ValidateCloudProfileSpec(spec *core.CloudProfileSpec, fldPath *field.Path) 
 	}
 
 	allErrs = append(allErrs, validateCloudProfileKubernetesSettings(spec.Kubernetes, fldPath.Child("kubernetes"))...)
+	allErrs = append(allErrs, validateCloudProfileKubernetesClassificationLifecycleStartTimesOrder(&spec.Kubernetes, fldPath.Child("kubernetes"))...)
 	allErrs = append(allErrs, ValidateCloudProfileMachineImages(spec.MachineImages, fldPath.Child("machineImages"))...)
 	allErrs = append(allErrs, validateCloudProfileMachineTypes(spec.MachineTypes, fldPath.Child("machineTypes"))...)
 	allErrs = append(allErrs, validateVolumeTypes(spec.VolumeTypes, fldPath.Child("volumeTypes"))...)
@@ -132,6 +133,19 @@ func ValidateCloudProfileSpec(spec *core.CloudProfileSpec, fldPath *field.Path) 
 		}
 	}
 
+	return allErrs
+}
+
+func validateCloudProfileKubernetesClassificationLifecycleStartTimesOrder(kubernetes *core.KubernetesSettings, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if kubernetes == nil {
+		return allErrs
+	}
+	for i, version := range kubernetes.Versions {
+		if err := validateLifecycleStartTimes(version.Lifecycle); err != nil {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("versions").Index(i).Child("lifecycle"), version, fmt.Sprintf("Invalid lifecycle of %s: %v", version.Version, err)))
+		}
+	}
 	return allErrs
 }
 

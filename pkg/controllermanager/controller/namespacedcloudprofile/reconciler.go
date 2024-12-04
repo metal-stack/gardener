@@ -149,9 +149,20 @@ func mergeExpirableVersions(base, override gardencorev1beta1.ExpirableVersion) g
 		gardencorev1beta1.ClassificationDeprecated:  3,
 		gardencorev1beta1.ClassificationExpired:     4,
 	}
-	slices.SortFunc(migratedBase.Lifecycle, func(a, b gardencorev1beta1.ClassificationLifecycle) int {
+	compareFunc := func(a, b gardencorev1beta1.ClassificationLifecycle) int {
 		return order[a.Classification] - order[b.Classification]
-	})
+	}
+	slices.SortFunc(migratedBase.Lifecycle, compareFunc)
+
+	for _, overrideClass := range migratedOverride.Lifecycle {
+		// Push startTimes of all subsequent classifications after last custom version
+		for i, classification := range migratedBase.Lifecycle {
+			if compareFunc(classification, overrideClass) > 0 &&
+				(classification.StartTime == nil || classification.StartTime.Before(overrideClass.StartTime)) {
+				migratedBase.Lifecycle[i].StartTime = overrideClass.StartTime
+			}
+		}
+	}
 
 	return migratedBase
 }

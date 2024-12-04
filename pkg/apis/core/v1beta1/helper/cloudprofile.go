@@ -61,6 +61,15 @@ func VersionIsExpired(version v1beta1.ExpirableVersion) bool {
 	return CurrentLifecycleClassification(version) == v1beta1.ClassificationExpired
 }
 
+func VersionIsActive(version v1beta1.ExpirableVersion) bool {
+	curr := CurrentLifecycleClassification(version)
+	return curr != v1beta1.ClassificationExpired && curr != v1beta1.ClassificationUnavailable
+}
+
 func VersionIsSupported(version v1beta1.ExpirableVersion) bool {
 	return CurrentLifecycleClassification(version) == v1beta1.ClassificationSupported
+}
+
+func VersionIsPreview(version v1beta1.ExpirableVersion) bool {
+	return CurrentLifecycleClassification(version) == v1beta1.ClassificationPreview
 }

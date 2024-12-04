@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +20,7 @@ import (
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/controllermanager/apis/config"
 	"github.com/gardener/gardener/pkg/controllerutils"
 )

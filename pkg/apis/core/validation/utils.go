@@ -6,7 +6,6 @@ package validation
 
 import (
 	"fmt"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"regexp"
 	"slices"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"

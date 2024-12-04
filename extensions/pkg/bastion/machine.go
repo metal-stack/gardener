@@ -6,7 +6,6 @@ package bastion
 
 import (
 	"fmt"
-	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	"slices"
 
 	"github.com/Masterminds/semver/v3"
@@ -15,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 )
 
 // MachineSpec define all bastion vm details derived from the CloudProfile

@@ -515,12 +515,10 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 				}
 			}
 
-			// TODO: check for removed lifecycle classifications
-
 			// getting Machine image versions that have been removed from or added to the CloudProfile
-			removedMachineImages, removedMachineImageVersions, addedMachineImages, addedMachineImageVersions := helper.GetMachineImageDiff(oldCloudProfile.Spec.MachineImages, cloudProfile.Spec.MachineImages)
+			diff := helper.GetMachineImageDiff(oldCloudProfile.Spec.MachineImages, cloudProfile.Spec.MachineImages)
 
-			if len(removedKubernetesVersions) > 0 || len(removedMachineImageVersions) > 0 || len(addedMachineImageVersions) > 0 || len(removedKubernetesClassificationLifecycles) > 0 {
+			if len(removedKubernetesVersions) > 0 || len(diff.RemovedVersions) > 0 || len(diff.AddedVersions) > 0 || len(diff.RemovedVersionClassifications) > 0 || len(removedKubernetesClassificationLifecycles) > 0 {
 				shootList, err1 := r.shootLister.List(labels.Everything())
 				if err1 != nil {
 					return apierrors.NewInternalError(fmt.Errorf("could not list shoots to verify that Kubernetes and/or Machine image version can be removed: %v", err1))
@@ -572,16 +570,27 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 						}
 
 						for _, machineImage := range nscpfl.Spec.MachineImages {
-							if removedMachineImages.Has(machineImage.Name) {
+							if diff.RemovedImages.Has(machineImage.Name) {
 								channel <- fmt.Errorf("unable to delete MachineImage %q from CloudProfile %q - MachineImage is still in use by NamespacedCloudProfile %q", machineImage.Name, cloudProfile.Name, ncpNamespacedName.String())
 							}
-							if addedMachineImages.Has(machineImage.Name) {
+							if diff.AddedImages.Has(machineImage.Name) {
 								channel <- fmt.Errorf("unable to add MachineImage %q to CloudProfile %q - MachineImage is already defined by NamespacedCloudProfile %q", machineImage.Name, cloudProfile.Name, ncpNamespacedName.String())
 							}
-							if removedVersions, exists := removedMachineImageVersions[machineImage.Name]; exists {
-								for _, imageVersion := range machineImage.Versions {
+							for _, imageVersion := range machineImage.Versions {
+								if removedVersions, exists := diff.RemovedVersions[machineImage.Name]; exists {
 									if removedVersions.Has(imageVersion.Version) {
 										channel <- fmt.Errorf("unable to delete MachineImage version '%s/%s' from CloudProfile %q - version is still in use by NamespacedCloudProfile '%s/%s'", machineImage.Name, imageVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
+									}
+
+								}
+								if removedClassifications, exists := diff.RemovedVersionClassifications[machineImage.Name]; exists {
+									for _, c := range removedClassifications[imageVersion.Version] {
+										if slices.ContainsFunc(imageVersion.Lifecycle, func(referencedLifecycle gardencorev1beta1.ClassificationLifecycle) bool {
+											return core.VersionClassification(referencedLifecycle.Classification) == c
+										}) {
+											channel <- fmt.Errorf("unable to delete classification lifecycle %q from MachineImage version '%s/%s' from CloudProfile %q still in use by NamespacedCloudProfile '%s/%s'", c, machineImage.Name, imageVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
+										}
+
 									}
 								}
 							}
@@ -608,11 +617,11 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 								continue
 							}
 							// happens if Shoot runs an image that does not exist in the old CloudProfile - in this case: ignore
-							if _, ok := removedMachineImageVersions[worker.Machine.Image.Name]; !ok {
+							if _, ok := diff.RemovedVersions[worker.Machine.Image.Name]; !ok {
 								continue
 							}
 
-							if removedMachineImageVersions[worker.Machine.Image.Name].Has(*worker.Machine.Image.Version) {
+							if diff.RemovedVersions[worker.Machine.Image.Name].Has(*worker.Machine.Image.Version) {
 								channel <- fmt.Errorf("unable to delete Machine image version '%s/%s' from CloudProfile %q - version is still in use by shoot '%s/%s' by worker %q", worker.Machine.Image.Name, *worker.Machine.Image.Version, cloudProfile.Name, shoot.Namespace, shoot.Name, worker.Name)
 							}
 						}

@@ -320,7 +320,7 @@ func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle, fldPa
 
 		currentStartTime := l.StartTime.Time
 
-		if !previousStartTime.Before(currentStartTime) {
+		if currentStartTime.Before(previousStartTime) {
 			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.StartTime.String(), "lifecycle start times must be monotonically increasing"))
 		}
 

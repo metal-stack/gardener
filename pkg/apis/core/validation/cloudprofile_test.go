@@ -1501,5 +1501,91 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				Expect(errorList).To(BeEmpty())
 			})
 		})
+
+		Context("Update version from supported to unavailable", func() {
+			It("should prevent a kubernetes version update to unavailable when it was already active", func() {
+				now := time.Now()
+
+				cloudProfileNew.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+					{
+						Version: "1.17.2",
+						Lifecycle: []core.ClassificationLifecycle{
+							{
+								Classification: core.ClassificationSupported,
+								StartTime:      ptr.To(metav1.NewTime(now.Add(1 * time.Hour))),
+							},
+						},
+					},
+				}
+				cloudProfileOld.Spec.Kubernetes.Versions = []core.ExpirableVersion{
+					{
+						Version: "1.17.2",
+						Lifecycle: []core.ClassificationLifecycle{
+							{
+								Classification: core.ClassificationSupported,
+							},
+						},
+					},
+				}
+				errorList := ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)
+
+				Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":   Equal(field.ErrorTypeForbidden),
+					"Field":  Equal("spec.kubernetes.versions[0]"),
+					"Detail": Equal("a version cannot be turned into unavailable if it already was already moved into a later lifecycle stage"),
+				}))))
+			})
+
+			It("should prevent a machine image update to unavailable when it was already active", func() {
+				cloudProfileNew.Spec.MachineImages = []core.MachineImage{
+					{
+						Name:           "ubuntu",
+						UpdateStrategy: &updateStrategyMajor,
+						Versions: []core.MachineImageVersion{
+							{
+								CRI:           []core.CRI{{Name: "containerd"}},
+								Architectures: []string{"amd64"},
+								ExpirableVersion: core.ExpirableVersion{
+									Version: "2135.6.0",
+									Lifecycle: []core.ClassificationLifecycle{
+										{
+											Classification: core.ClassificationUnavailable,
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				cloudProfileOld.Spec.MachineImages = []core.MachineImage{
+					{
+						Name:           "ubuntu",
+						UpdateStrategy: &updateStrategyMajor,
+						Versions: []core.MachineImageVersion{
+							{
+								CRI:           []core.CRI{{Name: "containerd"}},
+								Architectures: []string{"amd64"},
+								ExpirableVersion: core.ExpirableVersion{
+									Version: "2135.6.0",
+									Lifecycle: []core.ClassificationLifecycle{
+										{
+											Classification: core.ClassificationPreview,
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				errorList := ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)
+
+				Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":   Equal(field.ErrorTypeForbidden),
+					"Field":  Equal("spec.machineImages[0].versions[0]"),
+					"Detail": Equal("a version cannot be turned into unavailable if it already was already moved into a later lifecycle stage"),
+				}))))
+			})
+		})
 	})
 })

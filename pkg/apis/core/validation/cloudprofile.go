@@ -50,8 +50,59 @@ func ValidateCloudProfileUpdate(newProfile, oldProfile *core.CloudProfile) field
 }
 
 // ValidateCloudProfileSpecUpdate validates the spec update of a CloudProfile
-func ValidateCloudProfileSpecUpdate(_, _ *core.CloudProfileSpec, _ *field.Path) field.ErrorList {
+func ValidateCloudProfileSpecUpdate(new, old *core.CloudProfileSpec, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
+
+	allErrs = append(allErrs, ValidateCloudProfileExpirableVersionsUpdate(new.Kubernetes.Versions, old.Kubernetes.Versions, fldPath.Child("kubernetes").Child("versions"))...)
+
+	oldMachineImageVersions := map[string]core.MachineImage{}
+	for _, version := range old.MachineImages {
+		oldMachineImageVersions[version.Name] = version
+	}
+
+	for i, newMachineImage := range new.MachineImages {
+		oldMachineImage, ok := oldMachineImageVersions[newMachineImage.Name]
+		if !ok {
+			continue
+		}
+
+		var (
+			oldVersions, newVersions []core.ExpirableVersion
+		)
+
+		for _, oldVersion := range oldMachineImage.Versions {
+			oldVersions = append(oldVersions, oldVersion.ExpirableVersion)
+		}
+		for _, newVersion := range newMachineImage.Versions {
+			newVersions = append(newVersions, newVersion.ExpirableVersion)
+		}
+
+		allErrs = append(allErrs, ValidateCloudProfileExpirableVersionsUpdate(newVersions, oldVersions, fldPath.Child("machineImages").Index(i).Child("versions"))...)
+	}
+
+	return allErrs
+}
+
+// ValidateCloudProfileExpirableVersionsUpdate validates the expirable versions update of a CloudProfile expirable version
+func ValidateCloudProfileExpirableVersionsUpdate(new, old []core.ExpirableVersion, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	oldVersions := map[string]core.ExpirableVersion{}
+	for _, version := range old {
+		oldVersions[version.Version] = version
+	}
+
+	for i, newVersion := range new {
+		oldVersion, ok := oldVersions[newVersion.Version]
+		if !ok {
+			continue
+		}
+
+		if helper.CurrentLifecycleClassification(oldVersion) != core.ClassificationUnavailable &&
+			helper.CurrentLifecycleClassification(newVersion) == core.ClassificationUnavailable {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Index(i), "a version cannot be turned into unavailable if it already was already moved into a later lifecycle stage"))
+		}
+	}
 
 	return allErrs
 }

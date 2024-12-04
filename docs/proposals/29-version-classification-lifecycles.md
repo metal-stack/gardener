@@ -29,6 +29,23 @@ reviewers:
 
 At the current stage of implementation, Gardener administrators may classify Kubernetes versions and machine image versions using the `CloudProfile` spec.
 
+```yaml
+apiVersion: core.gardener.cloud/v1beta1
+kind: CloudProfile
+metadata:
+  name: local
+spec:
+  kubernetes:
+    versions:
+      - version: 1.26.0
+        classification: supported
+        expirationDate: "2024-06-01T00:00:00Z"
+      - version: 1.27.0
+        classification: deprecated
+      - version: 1.28.0
+        classification: supported
+```
+
 Typically, administrators move a version through the classification stages manually over time. However, there is a dedicated field called `expirationDate`, that allows setting a deadline after which a version is interpreted as expired without manual intervention.
 
 However, manually moving versions through the stages is cumbersome, so there should be a way for adminstrators to define an entire version lifecycle.

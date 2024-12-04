@@ -73,7 +73,7 @@ The idea is to deprecate both existing fields `classification` and `expirationDa
 
 With this change we also introduce a resource status for the `CloudProfile` to improve the issue that the actual classification stage is not immediately obvious. The status makes it more readable for API consumers and they do not need to calculate the actual classification stage on their own.
 
-``` yaml
+```yaml
 # assume that the current date is 2024-12-03
 apiVersion: core.gardener.cloud/v1beta1
 kind: CloudProfile
@@ -138,7 +138,7 @@ spec:
         lifecycle:
           - classification: preview
           - classification: supported
-            startTime: 2024-12-01T00:00:00Z"
+            startTime: "2024-12-01T00:00:00Z"
 
       # it is not strictly required that every lifecycle stage must occur,
       # they can also be dropped as long as their general order is maintained
@@ -146,7 +146,7 @@ spec:
         lifecycle:
           - classification: supported
           - classification: expired
-            startTime: 2022-06-01T00:00:00Z"
+            startTime: "2022-06-01T00:00:00Z"
 
       # to schedule a new version release, the administrator can define the start times
       # of all lifecycle events in the future, such that the classification status will
@@ -154,7 +154,7 @@ spec:
       - version: 2.0.0
         lifecycle:
           - classification: preview
-            startTime: 2036-02-07T06:28:16Z"
+            startTime: "2036-02-07T06:28:16Z"
 status:
   kubernetes:
     versions:
@@ -172,11 +172,65 @@ status:
 
 The existing fields continue to function as before but are deprecated. `lifecycle` cannot be combined with the usage of the existing `classification` and `expirationDate` fields though.
 
-The `status` always reflects the current state of a classification no matter if the new or deprecated API is used.
+The `status` always reflects the current state of a classification no matter if the new or deprecated API is used. Specifically when using the old API this means that if the `expirationDate` has passed, the resulting status is evaluated as `expired`, overwriting the actual `classification` value.
 
 ## Considered Alternatives
 
-- PreviewDate, SupportedDate, DeprecatedDate, ExpirationDate
-- Dictionary with stage key names
+### Consequent Continuation of Current Approach
+
+The first idea was to just extend the current API by adding further fields for the classification stages:
+
+```yaml
+apiVersion: core.gardener.cloud/v1beta1
+kind: CloudProfile
+metadata:
+  name: local
+spec:
+  kubernetes:
+    versions:
+      - version: 1.30.6
+        classification: unavailable
+        previewDate: "2025-01-01T00:00:00Z"
+        supportedDate: "2025-01-14T00:00:00Z"
+        deprecationDate: "2025-03-01T00:00:00Z"
+        expirationDate: "2025-06-01T00:00:00Z"
+```
+
+While this approach has the advantage that it just integrates with the current implementation (existing behavior is maintained), it was rejected because:
+
+- Classification stages are defined as keys in the API, which feels wrong because these are enums and when adding a new stage the API definition is required to change. So this is considered an anti-pattern.
+-
+-
+-
+-
+
+### Introducing Lifecycle Map
+
+```yaml
+apiVersion: core.gardener.cloud/v1beta1
+kind: CloudProfile
+metadata:
+  name: local
+spec:
+  kubernetes:
+    versions:
+      - version: 1.30.6
+        classification: supported
+        lifecycle:
+          preview:
+            startTime: "2025-01-01T00:00:00Z"
+          supported:
+            startTime: "2025-01-14T00:00:00Z"
+          deprecation:
+            startTime: "2025-03-01T00:00:00Z"
+          expiration:
+            startTime: "2025-06-01T00:00:00Z"
+```
+
+### Classification Field Patching
+
 - Patching the classification field with reconciler without status
+
+### Implementation Without the Status Field
+
 - Do not provide any calculated classification stage in status or spec

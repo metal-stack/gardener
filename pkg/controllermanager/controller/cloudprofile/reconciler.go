@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -114,70 +114,26 @@ func status(cloudProfile *gardencorev1beta1.CloudProfile) gardencorev1beta1.Clou
 	var result gardencorev1beta1.CloudProfileStatus
 
 	for _, version := range cloudProfile.Spec.Kubernetes.Versions {
-		result.KubernetesVersions = append(result.KubernetesVersions, statusExpirableVersion(version))
+		result.KubernetesVersions = append(result.KubernetesVersions, gardencorev1beta1.ExpirableVersionStatus{
+			Version:             version.Version,
+			ClassificationState: helper.CurrentLifecycleClassification(version),
+		})
 	}
+
 	for _, machineImage := range cloudProfile.Spec.MachineImages {
 		status := gardencorev1beta1.MachineImageVersionStatus{
 			Name: machineImage.Name,
 		}
 
 		for _, version := range machineImage.Versions {
-			status.Versions = append(status.Versions, statusExpirableVersion(version.ExpirableVersion))
+			status.Versions = append(status.Versions, gardencorev1beta1.ExpirableVersionStatus{
+				Version:             version.Version,
+				ClassificationState: helper.CurrentLifecycleClassification(version.ExpirableVersion),
+			})
 		}
 
 		result.MachineImageVersions = append(result.MachineImageVersions, status)
 	}
 
 	return result
-}
-
-func statusExpirableVersion(version gardencorev1beta1.ExpirableVersion) gardencorev1beta1.ExpirableVersionStatus {
-	if version.Classification != nil || version.ExpirationDate != nil {
-		// old cloud profile definition, convert to lifecycle
-		// this can be removed as soon as we remove the old classification and expiration date fields
-
-		if version.Classification != nil {
-			version.Lifecycle = append(version.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
-				Classification: *version.Classification,
-			})
-		}
-
-		if version.ExpirationDate != nil {
-			if version.Classification == nil {
-				version.Lifecycle = append(version.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
-					Classification: gardencorev1beta1.ClassificationSupported,
-				})
-			}
-
-			version.Lifecycle = append(version.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
-				Classification: gardencorev1beta1.ClassificationExpired,
-				StartTime:      version.ExpirationDate,
-			})
-		}
-	}
-
-	if len(version.Lifecycle) == 0 {
-		// when there is no classification lifecycle defined then default to supported
-		version.Lifecycle = append(version.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
-			Classification: gardencorev1beta1.ClassificationSupported,
-		})
-	}
-
-	status := gardencorev1beta1.ExpirableVersionStatus{
-		Version:             version.Version,
-		ClassificationState: gardencorev1beta1.ClassificationUnavailable,
-	}
-
-	for _, l := range version.Lifecycle {
-		startTime := time.Time{}
-		if l.StartTime != nil {
-			startTime = l.StartTime.Time
-		}
-
-		if startTime.Before(time.Now()) {
-			status.ClassificationState = l.Classification
-		}
-	}
-
-	return status
 }

@@ -292,6 +292,38 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		It("should adjust supported startTime to deprecrated startTime when before", func() {
+			overriddenDeprecatedDate := &metav1.Time{Time: time.Now()}
+			supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
+			deprecatedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 2)}
+			cloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
+				{
+					Version: "1.1.0",
+					Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+						{Classification: gardencorev1beta1.ClassificationPreview},
+						{Classification: gardencorev1beta1.ClassificationSupported, StartTime: supportedDate},
+						{Classification: gardencorev1beta1.ClassificationDeprecated, StartTime: deprecatedDate},
+					},
+				},
+			}
+			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
+				{
+					Version: "1.1.0",
+					Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+						{Classification: gardencorev1beta1.ClassificationDeprecated, StartTime: overriddenDeprecatedDate},
+					},
+				},
+			}
+
+			namespacedcloudprofilecontroller.MergeCloudProfiles(namespacedCloudProfile, cloudProfile)
+
+			Expect(namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions[0].Lifecycle).To(Equal([]gardencorev1beta1.ClassificationLifecycle{
+				{Classification: gardencorev1beta1.ClassificationPreview},
+				{Classification: gardencorev1beta1.ClassificationSupported, StartTime: overriddenDeprecatedDate},
+				{Classification: gardencorev1beta1.ClassificationDeprecated, StartTime: overriddenDeprecatedDate},
+			}))
+		})
+
 		It("should merge Kubernetes version Lifecycle classification startTimes correctly", func() {
 			cloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
 				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{

@@ -293,38 +293,39 @@ func validateLifecycleInOrder(lifecycle []core.ClassificationLifecycle, fldPath 
 }
 
 // validateLifecycleStartTimes checks if the given slice of lifecycles has start times in order.
-// and that only the first lifecycle classification has no startTime.
+// and that only the leading lifecycle classification has no startTime.
+// As soon as one lifecycle classification did contain a startTime, all following must have a startTime, too.
 // It does not ensure the correct order of the classifications but if the elements in the
 // list have dates after each other. The order must be tested via `validateLifecycleInOrder`.
 func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
 	var (
 		allErrs           = field.ErrorList{}
-		previousStartTime time.Time
+		previousStartTime *time.Time
 	)
 
 	for i, l := range lifecycle {
-		if i == 0 {
+		if previousStartTime == nil {
 			if l.StartTime == nil {
 				l.StartTime = &v1.Time{}
 			}
 
-			previousStartTime = l.StartTime.Time
+			previousStartTime = &l.StartTime.Time
 
 			continue
 		}
 
-		if i > 0 && l.StartTime == nil {
-			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.Classification, "only the first lifecycle element can have the start time optional"))
+		if l.StartTime == nil {
+			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.Classification, "only the leading lifecycle elements can have the start time optional"))
 			continue
 		}
 
 		currentStartTime := l.StartTime.Time
 
-		if currentStartTime.Before(previousStartTime) {
+		if currentStartTime.Before(*previousStartTime) {
 			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.StartTime.String(), "lifecycle start times must be monotonically increasing"))
 		}
 
-		previousStartTime = currentStartTime
+		previousStartTime = &currentStartTime
 	}
 
 	return allErrs

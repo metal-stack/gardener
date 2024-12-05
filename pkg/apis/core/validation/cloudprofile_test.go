@@ -403,7 +403,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					}))))
 				})
 
-				It("should forbid multiple lifecycle stages with same start time", func() {
+				It("should allow multiple directly following lifecycle stages with same start time", func() {
 					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
 
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
@@ -424,11 +424,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 					errorList := ValidateCloudProfile(cloudProfile)
 
-					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":   Equal(field.ErrorTypeInvalid),
-						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[1]"),
-						"Detail": Equal("lifecycle start times must be monotonically increasing"),
-					}))))
+					Expect(errorList).To(BeEmpty())
 				})
 
 				It("should forbid multiple lifecycle stages with same classification", func() {
@@ -516,7 +512,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":   Equal(field.ErrorTypeInvalid),
 						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[1]"),
-						"Detail": Equal("only the first lifecycle element can have the start time optional"),
+						"Detail": Equal("only the leading lifecycle elements can have the start time optional"),
 					}))))
 				})
 
@@ -543,7 +539,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					}))))
 				})
 
-				It("should forbid multiple missing start times for lifecycle stages", func() {
+				It("should allow multiple missing start times for leading lifecycle stages", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
@@ -563,15 +559,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 					errorList := ValidateCloudProfile(cloudProfile)
 
-					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":   Equal(field.ErrorTypeInvalid),
-						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[1]"),
-						"Detail": Equal("only the first lifecycle element can have the start time optional"),
-					})), PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":   Equal(field.ErrorTypeInvalid),
-						"Field":  Equal("spec.kubernetes.versions[0].lifecycle[2]"),
-						"Detail": Equal("only the first lifecycle element can have the start time optional"),
-					}))))
+					Expect(errorList).To(BeEmpty())
 				})
 
 				It("should allow missing start time for first lifecycle stage", func() {
@@ -685,7 +673,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					}))))
 				})
 
-				It("should forbid multiple lifecycle stages with same start time", func() {
+				It("should allow multiple lifecycle stages with same start time", func() {
 					supportedDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
@@ -719,11 +707,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 					errorList := ValidateCloudProfile(cloudProfile)
 
-					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":   Equal(field.ErrorTypeInvalid),
-						"Field":  Equal("spec.machineImages[0].versions[1].lifecycle[1]"),
-						"Detail": Equal("lifecycle start times must be monotonically increasing"),
-					}))))
+					Expect(errorList).To(BeEmpty())
 				})
 
 				It("should forbid multiple lifecycle stages with same classification", func() {
@@ -854,7 +838,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":   Equal(field.ErrorTypeInvalid),
 						"Field":  Equal("spec.machineImages[0].versions[0].lifecycle[2]"),
-						"Detail": Equal("only the first lifecycle element can have the start time optional"),
+						"Detail": Equal("only the leading lifecycle elements can have the start time optional"),
 					}))))
 				})
 

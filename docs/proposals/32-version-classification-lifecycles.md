@@ -6,6 +6,7 @@ status: implementable
 authors:
 - "@crigertg"
 - "@Gerrit91"
+- "@LucaBernstein"
 - "@vknabel"
 reviewers:
 - "@maboehm"

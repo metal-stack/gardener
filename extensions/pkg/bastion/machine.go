@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 )
 
 // MachineSpec define all bastion vm details derived from the CloudProfile
@@ -85,7 +86,7 @@ func getImageArchitectures(bastion *gardencorev1beta1.Bastion, images []gardenco
 				return
 			}
 
-			if version.Classification != nil && *version.Classification == gardencorev1beta1.ClassificationSupported {
+			if helper.VersionIsSupported(version.ExpirableVersion) {
 				for _, arch := range version.Architectures {
 					architectures.Insert(arch)
 				}
@@ -124,7 +125,7 @@ func getImageName(bastion *gardencorev1beta1.Bastion, images []gardencorev1beta1
 	// take the first image from cloud profile that is supported and arch compatible
 	for _, image := range images {
 		for _, version := range image.Versions {
-			if version.Classification == nil || *version.Classification != gardencorev1beta1.ClassificationSupported {
+			if !helper.VersionIsSupported(version.ExpirableVersion) {
 				continue
 			}
 			if !slices.Contains(version.Architectures, arch) {
@@ -153,7 +154,7 @@ func getImageVersion(bastion *gardencorev1beta1.Bastion, imageName, machineArch 
 			return "", fmt.Errorf("image version %s not found not found in cloudProfile", *bastion.MachineImage.Version)
 		}
 
-		if image.Versions[versionIndex].Classification != nil && *image.Versions[versionIndex].Classification != gardencorev1beta1.ClassificationSupported {
+		if !helper.VersionIsSupported(image.Versions[versionIndex].ExpirableVersion) {
 			return "", fmt.Errorf("specified image %s in version %s is not classified supported", imageName, *bastion.MachineImage.Version)
 		}
 
@@ -162,7 +163,7 @@ func getImageVersion(bastion *gardencorev1beta1.Bastion, imageName, machineArch 
 
 	var greatest *semver.Version
 	for _, version := range image.Versions {
-		if version.Classification == nil || *version.Classification != gardencorev1beta1.ClassificationSupported {
+		if !helper.VersionIsSupported(version.ExpirableVersion) {
 			continue
 		}
 

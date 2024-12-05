@@ -127,6 +127,7 @@ var _ = Describe("Admission", func() {
 			})
 
 			It("should fail if the latest Kubernetes version has an expiration date", func() {
+				parentCloudProfile.Spec.Kubernetes.Versions[0] = gardencorev1beta1.ExpirableVersion{Version: "1.30.0", Classification: ptr.To(gardencorev1beta1.ClassificationExpired)}
 				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(parentCloudProfile)).To(Succeed())
 
 				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
@@ -419,9 +420,9 @@ var _ = Describe("Admission", func() {
 				machineTypesConstraint []gardencorev1beta1.MachineType
 				volumeTypesConstraint  []gardencorev1beta1.VolumeType
 
-				supportedClassification  = gardencorev1beta1.ClassificationSupported
-				previewClassification    = gardencorev1beta1.ClassificationPreview
-				deprecatedClassification = gardencorev1beta1.ClassificationDeprecated
+				supportedClassification = gardencorev1beta1.ClassificationSupported
+				previewClassification   = gardencorev1beta1.ClassificationPreview
+				expiredClassification   = gardencorev1beta1.ClassificationExpired
 			)
 
 			BeforeEach(func() {
@@ -532,7 +533,7 @@ var _ = Describe("Admission", func() {
 						},
 						{
 							Version:        "1.2.0",
-							Classification: &deprecatedClassification,
+							Classification: &expiredClassification,
 						},
 					}
 					namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
@@ -542,7 +543,7 @@ var _ = Describe("Admission", func() {
 						},
 						{
 							Version:        "1.2.0",
-							Classification: &deprecatedClassification,
+							Classification: &expiredClassification,
 							ExpirationDate: expirationDate,
 						},
 					}
@@ -551,7 +552,7 @@ var _ = Describe("Admission", func() {
 
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("status.cloudProfileSpec.kubernetes.versions[].expirationDate"),
+						"Field": Equal("status.cloudProfileSpec.kubernetes.versions[].lifecycle"),
 					}))))
 				})
 

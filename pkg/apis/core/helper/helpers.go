@@ -7,6 +7,7 @@ package helper
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -318,12 +319,23 @@ func getVersionDiff(v1, v2 []core.ExpirableVersion) map[string]int {
 	return diff
 }
 
+type MachineImageDiff struct {
+	RemovedImages                 sets.Set[string]
+	RemovedVersions               map[string]sets.Set[string]
+	RemovedVersionClassifications map[string]map[string][]core.VersionClassification
+	AddedImages                   sets.Set[string]
+	AddedVersions                 map[string]sets.Set[string]
+}
+
 // GetMachineImageDiff returns the removed and added machine images and versions from the diff of two slices.
-func GetMachineImageDiff(old, new []core.MachineImage) (removedMachineImages sets.Set[string], removedMachineImageVersions map[string]sets.Set[string], addedMachineImages sets.Set[string], addedMachineImageVersions map[string]sets.Set[string]) {
-	removedMachineImages = sets.Set[string]{}
-	removedMachineImageVersions = map[string]sets.Set[string]{}
-	addedMachineImages = sets.Set[string]{}
-	addedMachineImageVersions = map[string]sets.Set[string]{}
+func GetMachineImageDiff(old, new []core.MachineImage) MachineImageDiff {
+	diff := MachineImageDiff{
+		RemovedImages:                 sets.Set[string]{},
+		RemovedVersions:               map[string]sets.Set[string]{},
+		RemovedVersionClassifications: map[string]map[string][]core.VersionClassification{},
+		AddedImages:                   sets.Set[string]{},
+		AddedVersions:                 map[string]sets.Set[string]{},
+	}
 
 	oldImages := utils.CreateMapFromSlice(old, func(image core.MachineImage) string { return image.Name })
 	newImages := utils.CreateMapFromSlice(new, func(image core.MachineImage) string { return image.Name })
@@ -334,8 +346,8 @@ func GetMachineImageDiff(old, new []core.MachineImage) (removedMachineImages set
 		newImage, exists := newImages[imageName]
 		if !exists {
 			// Completely removed images.
-			removedMachineImages.Insert(imageName)
-			removedMachineImageVersions[imageName] = oldImageVersionsSet
+			diff.RemovedImages.Insert(imageName)
+			diff.RemovedVersions[imageName] = oldImageVersionsSet
 		} else {
 			// Check for image versions diff.
 			newImageVersions := utils.CreateMapFromSlice(newImage.Versions, func(version core.MachineImageVersion) string { return version.Version })
@@ -343,11 +355,30 @@ func GetMachineImageDiff(old, new []core.MachineImage) (removedMachineImages set
 
 			removedDiff := oldImageVersionsSet.Difference(newImageVersionsSet)
 			if removedDiff.Len() > 0 {
-				removedMachineImageVersions[imageName] = removedDiff
+				diff.RemovedVersions[imageName] = removedDiff
 			}
 			addedDiff := newImageVersionsSet.Difference(oldImageVersionsSet)
 			if addedDiff.Len() > 0 {
-				addedMachineImageVersions[imageName] = addedDiff
+				diff.AddedVersions[imageName] = addedDiff
+			}
+
+			for _, version := range oldImageVersions {
+				if removedDiff.Has(version.Version) {
+					continue
+				}
+				for _, existingStage := range version.Lifecycle {
+					if slices.ContainsFunc(newImageVersions[version.Version].Lifecycle, func(newStage core.LifecycleStage) bool {
+						return newStage.Classification == existingStage.Classification
+					}) {
+						continue
+					}
+					removedClassifications := diff.RemovedVersionClassifications[imageName]
+					if removedClassifications == nil {
+						removedClassifications = make(map[string][]core.VersionClassification)
+						diff.RemovedVersionClassifications[imageName] = removedClassifications
+					}
+					removedClassifications[version.Version] = append(removedClassifications[version.Version], existingStage.Classification)
+				}
 			}
 		}
 	}
@@ -358,18 +389,21 @@ func GetMachineImageDiff(old, new []core.MachineImage) (removedMachineImages set
 			newImageVersions := utils.CreateMapFromSlice(newImage.Versions, func(version core.MachineImageVersion) string { return version.Version })
 			newImageVersionsSet := sets.KeySet(newImageVersions)
 
-			addedMachineImages.Insert(imageName)
-			addedMachineImageVersions[imageName] = newImageVersionsSet
+			diff.AddedImages.Insert(imageName)
+			diff.AddedVersions[imageName] = newImageVersionsSet
 		}
 	}
-	return
+	return diff
 }
 
 // FilterVersionsWithClassification filters versions for a classification
 func FilterVersionsWithClassification(versions []core.ExpirableVersion, classification core.VersionClassification) []core.ExpirableVersion {
 	var result []core.ExpirableVersion
 	for _, version := range versions {
-		if version.Classification == nil || *version.Classification != classification {
+		if (version.Classification == nil || *version.Classification != classification) &&
+			!slices.ContainsFunc(version.Lifecycle, func(s core.LifecycleStage) bool {
+				return s.Classification == classification
+			}) {
 			continue
 		}
 

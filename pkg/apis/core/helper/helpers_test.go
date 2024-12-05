@@ -1147,17 +1147,17 @@ var _ = Describe("helper", func() {
 				},
 			}
 
-			removedImages, removedVersions, addedImages, addedVersions := GetMachineImageDiff(versions1, versions2)
+			diff := GetMachineImageDiff(versions1, versions2)
 
-			Expect(removedImages.UnsortedList()).To(ConsistOf("image-1"))
-			Expect(removedVersions).To(BeEquivalentTo(
+			Expect(diff.RemovedImages.UnsortedList()).To(ConsistOf("image-1"))
+			Expect(diff.RemovedVersions).To(BeEquivalentTo(
 				map[string]sets.Set[string]{
 					"image-1": sets.New[string]("version-1", "version-2"),
 					"image-2": sets.New[string]("version-1"),
 				},
 			))
-			Expect(addedImages.UnsortedList()).To(ConsistOf("image-3"))
-			Expect(addedVersions).To(BeEquivalentTo(
+			Expect(diff.AddedImages.UnsortedList()).To(ConsistOf("image-3"))
+			Expect(diff.AddedVersions).To(BeEquivalentTo(
 				map[string]sets.Set[string]{
 					"image-2": sets.New[string]("version-3"),
 					"image-3": sets.New[string]("version-1", "version-2"),
@@ -1182,12 +1182,12 @@ var _ = Describe("helper", func() {
 				},
 			}
 
-			removedImages, removedVersions, addedImages, addedVersions := GetMachineImageDiff(nil, versions2)
+			diff := GetMachineImageDiff(nil, versions2)
 
-			Expect(removedImages.UnsortedList()).To(BeEmpty())
-			Expect(removedVersions).To(BeEmpty())
-			Expect(addedImages.UnsortedList()).To(ConsistOf("image-2", "image-3"))
-			Expect(addedVersions).To(BeEquivalentTo(
+			Expect(diff.RemovedImages.UnsortedList()).To(BeEmpty())
+			Expect(diff.RemovedVersions).To(BeEmpty())
+			Expect(diff.AddedImages.UnsortedList()).To(ConsistOf("image-2", "image-3"))
+			Expect(diff.AddedVersions).To(BeEquivalentTo(
 				map[string]sets.Set[string]{
 					"image-2": sets.New[string]("version-3"),
 					"image-3": sets.New[string]("version-1", "version-2"),
@@ -1212,26 +1212,26 @@ var _ = Describe("helper", func() {
 				},
 			}
 
-			removedImages, removedVersions, addedImages, addedVersions := GetMachineImageDiff(versions1, []core.MachineImage{})
+			diff := GetMachineImageDiff(versions1, []core.MachineImage{})
 
-			Expect(removedImages.UnsortedList()).To(ConsistOf("image-2", "image-3"))
-			Expect(removedVersions).To(BeEquivalentTo(
+			Expect(diff.RemovedImages.UnsortedList()).To(ConsistOf("image-2", "image-3"))
+			Expect(diff.RemovedVersions).To(BeEquivalentTo(
 				map[string]sets.Set[string]{
 					"image-2": sets.New[string]("version-3"),
 					"image-3": sets.New[string]("version-1", "version-2"),
 				},
 			))
-			Expect(addedImages.UnsortedList()).To(BeEmpty())
-			Expect(addedVersions).To(BeEmpty())
+			Expect(diff.AddedImages.UnsortedList()).To(BeEmpty())
+			Expect(diff.AddedVersions).To(BeEmpty())
 		})
 
 		It("should return the diff between two empty machine image slices", func() {
-			removedImages, removedVersions, addedImages, addedVersions := GetMachineImageDiff([]core.MachineImage{}, nil)
+			diff := GetMachineImageDiff([]core.MachineImage{}, nil)
 
-			Expect(removedImages.UnsortedList()).To(BeEmpty())
-			Expect(removedVersions).To(BeEmpty())
-			Expect(addedImages.UnsortedList()).To(BeEmpty())
-			Expect(addedVersions).To(BeEmpty())
+			Expect(diff.RemovedImages.UnsortedList()).To(BeEmpty())
+			Expect(diff.RemovedVersions).To(BeEmpty())
+			Expect(diff.AddedImages.UnsortedList()).To(BeEmpty())
+			Expect(diff.AddedVersions).To(BeEmpty())
 		})
 	})
 })

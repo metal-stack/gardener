@@ -307,10 +307,9 @@ func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle, fldPa
 		if previousStartTime == nil {
 			if l.StartTime == nil {
 				l.StartTime = &v1.Time{}
+			} else {
+				previousStartTime = &l.StartTime.Time
 			}
-
-			previousStartTime = &l.StartTime.Time
-
 			continue
 		}
 

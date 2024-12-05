@@ -60,3 +60,12 @@ func CurrentLifecycleClassification(version core.ExpirableVersion) core.VersionC
 func VersionIsSupported(version core.ExpirableVersion) bool {
 	return CurrentLifecycleClassification(version) == core.ClassificationSupported
 }
+
+func SupportedLifecycleClassification(version core.ExpirableVersion) *core.LifecycleStage {
+	for _, stage := range version.Lifecycle {
+		if stage.Classification == core.ClassificationSupported {
+			return &stage
+		}
+	}
+	return nil
+}

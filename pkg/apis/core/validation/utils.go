@@ -261,32 +261,18 @@ func validateLifecycleNoDuplicates(lifecycle []core.LifecycleStage, fldPath *fie
 // validateLifecycleInOrder checks if the provided lifecycle slice is in  the expected order.
 // The order is not required for functionality but should ensure better readability.
 func validateLifecycleInOrder(lifecycle []core.LifecycleStage, fldPath *field.Path) field.ErrorList {
-	var (
-		allErrs = field.ErrorList{}
+	var allErrs = field.ErrorList{}
 
-		order = map[core.VersionClassification]int{
-			core.ClassificationUnavailable: 0,
-			core.ClassificationPreview:     1,
-			core.ClassificationSupported:   2,
-			core.ClassificationDeprecated:  3,
-			core.ClassificationExpired:     4,
+	var misplacedElement core.VersionClassification
+	isSorted := slices.IsSortedFunc(lifecycle, func(a, b core.LifecycleStage) int {
+		orderResult := a.Classification.Compare(b.Classification)
+		if orderResult > 0 {
+			misplacedElement = a.Classification
 		}
-		previousOrder int
-	)
-
-	for i, l := range lifecycle {
-		if i == 0 {
-			previousOrder = order[l.Classification]
-			continue
-		}
-
-		currentOrder := order[l.Classification]
-
-		if previousOrder >= currentOrder {
-			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), l.Classification, "lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired"))
-		}
-
-		previousOrder = currentOrder
+		return orderResult
+	})
+	if !isSorted {
+		allErrs = append(allErrs, field.Invalid(fldPath, misplacedElement, "lifecycle classifications not in order, must be preview -> supported -> deprecated -> expired"))
 	}
 
 	return allErrs

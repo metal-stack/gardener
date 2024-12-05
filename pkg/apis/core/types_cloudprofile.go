@@ -258,6 +258,18 @@ const (
 // VersionClassification is the logical state of a version.
 type VersionClassification string
 
+var order = map[VersionClassification]int{
+	ClassificationUnavailable: 0,
+	ClassificationPreview:     1,
+	ClassificationSupported:   2,
+	ClassificationDeprecated:  3,
+	ClassificationExpired:     4,
+}
+
+func (c1 VersionClassification) Compare(c2 VersionClassification) int {
+	return order[c1] - order[c2]
+}
+
 const (
 	// ClassificationUnavailable indicates that a version is currently not available and is planned to become available depending on the classification lifecycle.
 	ClassificationUnavailable VersionClassification = "unavailable"

@@ -191,13 +191,49 @@ func validateSupportedVersionsConfiguration(version core.ExpirableVersion, allVe
 			return allErrs
 		}
 
-		// do not allow adding multiple supported versions per minor version
+		// do not allow adding multiple overlapping supported versions per minor version
 		if len(filteredVersions) > 0 {
-			allErrs = append(allErrs, field.Forbidden(fldPath, fmt.Sprintf("unable to add version %q with classification %q. Only one %q version is allowed per minor version", version.Version, core.ClassificationSupported, core.ClassificationSupported)))
+			for _, possibleOverlap := range filteredVersions {
+				if supportedVersionsOverlapping(version, possibleOverlap) {
+					allErrs = append(allErrs, field.Forbidden(fldPath, fmt.Sprintf("unable to add version %q with classification %q. %q lifecycle stages must not overlap per minor version", version.Version, core.ClassificationSupported, core.ClassificationSupported)))
+				}
+			}
 		}
 	}
 
 	return allErrs
+}
+
+// supportedVersionsOverlapping checks whether supported classifications do overlap. Start time equality is not deemed an overlap in this context.
+func supportedVersionsOverlapping(v1, v2 core.ExpirableVersion) bool {
+	if len(v1.Lifecycle) == 0 || len(v2.Lifecycle) == 0 {
+		return true
+	}
+
+	supportedStage := helper.SupportedLifecycleClassification(v1)
+	nextStage := findLifecycleStageAbove(v1, supportedStage.Classification)
+	supportedStage2 := helper.SupportedLifecycleClassification(v2)
+	nextStage2 := findLifecycleStageAbove(v2, supportedStage2.Classification)
+
+	if supportedStage.Classification != core.ClassificationSupported ||
+		supportedStage.Classification != supportedStage2.Classification {
+		return false
+	}
+	if nextStage == nil && nextStage2 == nil || // Eventually both supported classifications will be supported simultaneously
+		nextStage == nil && (supportedStage.StartTime == nil || supportedStage.StartTime.Before(nextStage2.StartTime)) || // supportedStage has no subsequent classification and starts before nextStage2
+		nextStage2 == nil && (supportedStage2.StartTime == nil || supportedStage2.StartTime.Before(nextStage.StartTime)) { // supportedStage2 has no subsequent classification and starts before nextStage
+		return true
+	}
+	return false
+}
+
+func findLifecycleStageAbove(version core.ExpirableVersion, classification core.VersionClassification) *core.LifecycleStage {
+	for _, stage := range version.Lifecycle {
+		if stage.Classification.Compare(classification) > 0 {
+			return &stage
+		}
+	}
+	return nil
 }
 
 func validateCloudProfileMachineTypes(machineTypes []core.MachineType, fldPath *field.Path) field.ErrorList {

@@ -400,7 +400,9 @@ func GetMachineImageDiff(old, new []core.MachineImage) MachineImageDiff {
 func FilterVersionsWithClassification(versions []core.ExpirableVersion, classification core.VersionClassification) []core.ExpirableVersion {
 	var result []core.ExpirableVersion
 	for _, version := range versions {
-		if version.Classification == nil || *version.Classification != classification {
+		if !slices.ContainsFunc(version.Lifecycle, func(c core.ClassificationLifecycle) bool {
+			return c.Classification == classification
+		}) {
 			continue
 		}
 

@@ -138,21 +138,22 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string `json:"version" protobuf:"bytes,1,opt,name=version"`
-	// Deprecated: Is replaced by the lifecycle classification.
+	// Deprecated: Is replaced by Lifecycle.
 	// +optional
 	ExpirationDate *metav1.Time `json:"expirationDate,omitempty" protobuf:"bytes,2,opt,name=expirationDate"`
-	// Deprecated: Classification defines the state of a version (preview, supported, deprecated)
+	// Classification defines the state of a version (preview, supported, deprecated).
+	// Deprecated: Is replaced by Lifecycle.
 	// +optional
 	Classification *VersionClassification `json:"classification,omitempty" protobuf:"bytes,3,opt,name=classification,casttype=VersionClassification"`
-	// Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.
+	// Lifecycle defines the lifecycle stages for this version. Cannot be used in combination with Classification and ExpirationDate.
 	// +optional
-	Lifecycle []ClassificationLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
+	Lifecycle []LifecycleStage `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
 }
 
-type ClassificationLifecycle struct {
-	// Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
+type LifecycleStage struct {
+	// Classification is the category of this lifecycle stage (unavailable, preview, supported, deprecated, expired).
 	Classification VersionClassification `json:"classification" protobuf:"bytes,1,opt,name=classification,casttype=VersionClassification"`
-	// StartTime defines when this classification becomes active.
+	// StartTime defines when this lifecycle stage becomes active.
 	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty" protobuf:"bytes,2,opt,name=startTime"`
 }

@@ -1852,7 +1852,7 @@ var _ = Describe("resourcereferencemanager", func() {
 					Spec: gardencorev1beta1.NamespacedCloudProfileSpec{
 						Parent: gardencorev1beta1.CloudProfileReference{Kind: "CloudProfile", Name: cloudProfile.Name},
 						Kubernetes: &gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
-							{Version: "1.24.1", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+							{Version: "1.24.1", Lifecycle: []gardencorev1beta1.LifecycleStage{
 								{Classification: gardencorev1beta1.ClassificationExpired, StartTime: ptr.To(metav1.Now())},
 							}},
 						}},
@@ -1860,7 +1860,7 @@ var _ = Describe("resourcereferencemanager", func() {
 				}
 				Expect(gardenCoreInformerFactory.Core().V1beta1().NamespacedCloudProfiles().Informer().GetStore().Add(namespacedCloudProfile)).To(Succeed())
 
-				cloudProfile.Spec.Kubernetes.Versions[1].Lifecycle = []core.ClassificationLifecycle{
+				cloudProfile.Spec.Kubernetes.Versions[1].Lifecycles = []core.LifecycleStage{
 					{Classification: core.ClassificationSupported},
 					{Classification: core.ClassificationExpired, StartTime: ptr.To(metav1.Now())},
 				}
@@ -1868,7 +1868,7 @@ var _ = Describe("resourcereferencemanager", func() {
 				cloudProfileNew.Spec = core.CloudProfileSpec{
 					Kubernetes: core.KubernetesSettings{
 						Versions: []core.ExpirableVersion{
-							{Version: "1.24.1", Lifecycle: []core.ClassificationLifecycle{{Classification: core.ClassificationSupported}}},
+							{Version: "1.24.1", Lifecycles: []core.LifecycleStage{{Classification: core.ClassificationSupported}}},
 						},
 					},
 				}

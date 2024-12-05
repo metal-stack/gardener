@@ -28,7 +28,7 @@ var _ = Describe("CloudProfile Helper", func() {
 		It("unavailable classification due to scheduled lifecycle start in the future", func() {
 			classification := helper.CurrentLifecycleClassification(gardencorev1beta1.ExpirableVersion{
 				Version: "1.28.0",
-				Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationSupported,
 						StartTime:      ptr.To(metav1.NewTime(now.Add(3 * time.Hour))),
@@ -41,7 +41,7 @@ var _ = Describe("CloudProfile Helper", func() {
 		It("version is in preview stage", func() {
 			classification := helper.CurrentLifecycleClassification(gardencorev1beta1.ExpirableVersion{
 				Version: "1.28.0",
-				Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationPreview,
 						StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
@@ -58,7 +58,7 @@ var _ = Describe("CloudProfile Helper", func() {
 		It("full version lifecycle with version currently in supported stage", func() {
 			classification := helper.CurrentLifecycleClassification(gardencorev1beta1.ExpirableVersion{
 				Version: "1.28.0",
-				Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationPreview,
 						StartTime:      ptr.To(metav1.NewTime(now.Add(-3 * time.Hour))),
@@ -83,7 +83,7 @@ var _ = Describe("CloudProfile Helper", func() {
 		It("version is expired", func() {
 			classification := helper.CurrentLifecycleClassification(gardencorev1beta1.ExpirableVersion{
 				Version: "1.28.0",
-				Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationSupported,
 						StartTime:      ptr.To(metav1.NewTime(now.Add(-4 * time.Hour))),
@@ -104,7 +104,7 @@ var _ = Describe("CloudProfile Helper", func() {
 		It("first lifecycle start time field is optional", func() {
 			classification := helper.CurrentLifecycleClassification(gardencorev1beta1.ExpirableVersion{
 				Version: "1.28.5",
-				Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationPreview,
 					},

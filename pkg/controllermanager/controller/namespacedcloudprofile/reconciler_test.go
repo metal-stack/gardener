@@ -260,9 +260,9 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should ignore Lifecycle expired classification set only in NamespacedCloudProfile", func() {
+		It("should ignore Lifecycles expired classification set only in NamespacedCloudProfile", func() {
 			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
-				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationExpired,
 						StartTime:      &newExpiryDate,
@@ -299,7 +299,7 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 			cloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
 				{
 					Version: "1.1.0",
-					Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+					Lifecycle: []gardencorev1beta1.LifecycleStage{
 						{Classification: gardencorev1beta1.ClassificationPreview},
 						{Classification: gardencorev1beta1.ClassificationSupported, StartTime: supportedDate},
 						{Classification: gardencorev1beta1.ClassificationDeprecated, StartTime: deprecatedDate},
@@ -309,7 +309,7 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
 				{
 					Version: "1.1.0",
-					Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+					Lifecycle: []gardencorev1beta1.LifecycleStage{
 						{Classification: gardencorev1beta1.ClassificationDeprecated, StartTime: overriddenDeprecatedDate},
 					},
 				},
@@ -317,16 +317,16 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 
 			namespacedcloudprofilecontroller.MergeCloudProfiles(namespacedCloudProfile, cloudProfile)
 
-			Expect(namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions[0].Lifecycle).To(Equal([]gardencorev1beta1.ClassificationLifecycle{
+			Expect(namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions[0].Lifecycle).To(Equal([]gardencorev1beta1.LifecycleStage{
 				{Classification: gardencorev1beta1.ClassificationPreview},
 				{Classification: gardencorev1beta1.ClassificationSupported, StartTime: overriddenDeprecatedDate},
 				{Classification: gardencorev1beta1.ClassificationDeprecated, StartTime: overriddenDeprecatedDate},
 			}))
 		})
 
-		It("should merge Kubernetes version Lifecycle classification startTimes correctly", func() {
+		It("should merge Kubernetes version Lifecycles classification startTimes correctly", func() {
 			cloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
-				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationSupported,
 					},
@@ -341,7 +341,7 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 				}},
 			}
 			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
-				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+				{Version: "1.0.0", Lifecycle: []gardencorev1beta1.LifecycleStage{
 					{
 						Classification: gardencorev1beta1.ClassificationDeprecated,
 						StartTime:      ptr.To(metav1.Time{Time: newExpiryDate.Add(48 * time.Hour)}),

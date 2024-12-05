@@ -130,7 +130,7 @@ func MergeCloudProfiles(namespacedCloudProfile *gardencorev1beta1.NamespacedClou
 
 var (
 	expirableVersionKeyFunc        = func(v gardencorev1beta1.ExpirableVersion) string { return v.Version }
-	classificationLifecycleKeyFunc = func(c gardencorev1beta1.ClassificationLifecycle) string { return string(c.Classification) }
+	classificationLifecycleKeyFunc = func(c gardencorev1beta1.LifecycleStage) string { return string(c.Classification) }
 	machineImageKeyFunc            = func(i gardencorev1beta1.MachineImage) string { return i.Name }
 	machineImageVersionKeyFunc     = func(v gardencorev1beta1.MachineImageVersion) string { return v.Version }
 	machineTypeKeyFunc             = func(t gardencorev1beta1.MachineType) string { return t.Name }
@@ -149,7 +149,7 @@ func mergeExpirableVersions(base, override gardencorev1beta1.ExpirableVersion) g
 		gardencorev1beta1.ClassificationDeprecated:  3,
 		gardencorev1beta1.ClassificationExpired:     4,
 	}
-	compareFunc := func(a, b gardencorev1beta1.ClassificationLifecycle) int {
+	compareFunc := func(a, b gardencorev1beta1.LifecycleStage) int {
 		return order[a.Classification] - order[b.Classification]
 	}
 	slices.SortFunc(migratedBase.Lifecycle, compareFunc)
@@ -172,7 +172,7 @@ func mergeExpirableVersions(base, override gardencorev1beta1.ExpirableVersion) g
 	return migratedBase
 }
 
-func mergeClassificationLifecycles(base, override gardencorev1beta1.ClassificationLifecycle) gardencorev1beta1.ClassificationLifecycle {
+func mergeClassificationLifecycles(base, override gardencorev1beta1.LifecycleStage) gardencorev1beta1.LifecycleStage {
 	base.StartTime = override.StartTime
 	return base
 }
@@ -185,19 +185,19 @@ func migrateExpirableVersionToLifecycle(version gardencorev1beta1.ExpirableVersi
 		// this can be removed as soon as we remove the old classification and expiration date fields
 
 		if result.Classification != nil {
-			result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
+			result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
 				Classification: *result.Classification,
 			})
 		}
 
 		if result.ExpirationDate != nil {
 			if result.Classification == nil {
-				result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
+				result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
 					Classification: gardencorev1beta1.ClassificationSupported,
 				})
 			}
 
-			result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
+			result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
 				Classification: gardencorev1beta1.ClassificationExpired,
 				StartTime:      result.ExpirationDate,
 			})
@@ -206,7 +206,7 @@ func migrateExpirableVersionToLifecycle(version gardencorev1beta1.ExpirableVersi
 
 	if len(result.Lifecycle) == 0 {
 		// when there is no classification lifecycle defined then default to supported
-		result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.ClassificationLifecycle{
+		result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
 			Classification: gardencorev1beta1.ClassificationSupported,
 		})
 	}

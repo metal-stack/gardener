@@ -120,18 +120,19 @@ type MachineImageVersion struct {
 type ExpirableVersion struct {
 	// Version is the version identifier.
 	Version string
-	// Deprecated: Is replaced by the lifecycle classification.
+	// Deprecated: Is replaced by Lifecycle.
 	ExpirationDate *metav1.Time
-	// Deprecated: Classification defines the state of a version (preview, supported, deprecated)
+	// Classification defines the state of a version (preview, supported, deprecated).
+	// Deprecated: Is replaced by Lifecycle.
 	Classification *VersionClassification
-	// Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.
-	Lifecycle []ClassificationLifecycle
+	// Lifecycle defines the lifecycle stages for this version. Cannot be used in combination with deprecated Classification and ExpirationDate.
+	Lifecycle []LifecycleStage
 }
 
-type ClassificationLifecycle struct {
-	// Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
+type LifecycleStage struct {
+	// Classification is the category of this lifecycle stage (unavailable, preview, supported, deprecated, expired).
 	Classification VersionClassification
-	// StartTime defines when this classification becomes active.
+	// StartTime defines when this lifecycle stage becomes active.
 	StartTime *metav1.Time
 }
 

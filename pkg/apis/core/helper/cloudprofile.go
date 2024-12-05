@@ -17,19 +17,19 @@ func CurrentLifecycleClassification(version core.ExpirableVersion) core.VersionC
 		// this can be removed as soon as we remove the old classification and expiration date fields
 
 		if version.Classification != nil {
-			version.Lifecycle = append(version.Lifecycle, core.ClassificationLifecycle{
+			version.Lifecycle = append(version.Lifecycle, core.LifecycleStage{
 				Classification: *version.Classification,
 			})
 		}
 
 		if version.ExpirationDate != nil {
 			if version.Classification == nil {
-				version.Lifecycle = append(version.Lifecycle, core.ClassificationLifecycle{
+				version.Lifecycle = append(version.Lifecycle, core.LifecycleStage{
 					Classification: core.ClassificationSupported,
 				})
 			}
 
-			version.Lifecycle = append(version.Lifecycle, core.ClassificationLifecycle{
+			version.Lifecycle = append(version.Lifecycle, core.LifecycleStage{
 				Classification: core.ClassificationExpired,
 				StartTime:      version.ExpirationDate,
 			})
@@ -38,19 +38,19 @@ func CurrentLifecycleClassification(version core.ExpirableVersion) core.VersionC
 
 	if len(version.Lifecycle) == 0 {
 		// when there is no classification lifecycle defined then default to supported
-		version.Lifecycle = append(version.Lifecycle, core.ClassificationLifecycle{
+		version.Lifecycle = append(version.Lifecycle, core.LifecycleStage{
 			Classification: core.ClassificationSupported,
 		})
 	}
 
-	for _, l := range version.Lifecycle {
+	for _, stage := range version.Lifecycle {
 		startTime := time.Time{}
-		if l.StartTime != nil {
-			startTime = l.StartTime.Time
+		if stage.StartTime != nil {
+			startTime = stage.StartTime.Time
 		}
 
 		if startTime.Before(currentTime) {
-			currentClassification = l.Classification
+			currentClassification = stage.Classification
 		}
 	}
 

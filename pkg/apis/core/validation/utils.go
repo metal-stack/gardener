@@ -204,22 +204,22 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 func validateExpirableVersion(version core.ExpirableVersion, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycle) > 0 {
+	if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycles) > 0 {
 		allErrs = append(allErrs, field.Forbidden(fldPath, "cannot specify `classification` or `expirationDate` in combination with `lifecycle`"))
 	}
 
 	lifecyclePath := fldPath.Child("lifecycle")
 
-	allErrs = append(allErrs, validateLifecycleClassificationsValid(version.Lifecycle, lifecyclePath)...)
-	allErrs = append(allErrs, validateLifecycleNoDuplicates(version.Lifecycle, lifecyclePath)...)
-	allErrs = append(allErrs, validateLifecycleInOrder(version.Lifecycle, lifecyclePath)...)
-	allErrs = append(allErrs, validateLifecycleStartTimes(version.Lifecycle, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleClassificationsValid(version.Lifecycles, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleNoDuplicates(version.Lifecycles, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleInOrder(version.Lifecycles, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleStartTimes(version.Lifecycles, lifecyclePath)...)
 
 	return allErrs
 }
 
 // validateLifecycleClassificationsValid checks if the given classification in the lifecycle are in the list of supported version classifications.
-func validateLifecycleClassificationsValid(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
+func validateLifecycleClassificationsValid(lifecycle []core.LifecycleStage, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	for i, l := range lifecycle {
@@ -234,7 +234,7 @@ func validateLifecycleClassificationsValid(lifecycle []core.ClassificationLifecy
 }
 
 // validateLifecycleNoDuplicates checks if there are any duplicate entries in the provided lifecycle slice
-func validateLifecycleNoDuplicates(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
+func validateLifecycleNoDuplicates(lifecycle []core.LifecycleStage, fldPath *field.Path) field.ErrorList {
 	var (
 		allErrs    = field.ErrorList{}
 		duplicates = sets.NewString()
@@ -260,7 +260,7 @@ func validateLifecycleNoDuplicates(lifecycle []core.ClassificationLifecycle, fld
 
 // validateLifecycleInOrder checks if the provided lifecycle slice is in  the expected order.
 // The order is not required for functionality but should ensure better readability.
-func validateLifecycleInOrder(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
+func validateLifecycleInOrder(lifecycle []core.LifecycleStage, fldPath *field.Path) field.ErrorList {
 	var (
 		allErrs = field.ErrorList{}
 
@@ -297,7 +297,7 @@ func validateLifecycleInOrder(lifecycle []core.ClassificationLifecycle, fldPath 
 // As soon as one lifecycle classification did contain a startTime, all following must have a startTime, too.
 // It does not ensure the correct order of the classifications but if the elements in the
 // list have dates after each other. The order must be tested via `validateLifecycleInOrder`.
-func validateLifecycleStartTimes(lifecycle []core.ClassificationLifecycle, fldPath *field.Path) field.ErrorList {
+func validateLifecycleStartTimes(lifecycle []core.LifecycleStage, fldPath *field.Path) field.ErrorList {
 	var (
 		allErrs           = field.ErrorList{}
 		previousStartTime *time.Time

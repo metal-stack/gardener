@@ -17,19 +17,19 @@ func CurrentLifecycleClassification(version v1beta1.ExpirableVersion) v1beta1.Ve
 		// this can be removed as soon as we remove the old classification and expiration date fields
 
 		if version.Classification != nil {
-			version.Lifecycle = append(version.Lifecycle, v1beta1.ClassificationLifecycle{
+			version.Lifecycle = append(version.Lifecycle, v1beta1.LifecycleStage{
 				Classification: *version.Classification,
 			})
 		}
 
 		if version.ExpirationDate != nil {
 			if version.Classification == nil {
-				version.Lifecycle = append(version.Lifecycle, v1beta1.ClassificationLifecycle{
+				version.Lifecycle = append(version.Lifecycle, v1beta1.LifecycleStage{
 					Classification: v1beta1.ClassificationSupported,
 				})
 			}
 
-			version.Lifecycle = append(version.Lifecycle, v1beta1.ClassificationLifecycle{
+			version.Lifecycle = append(version.Lifecycle, v1beta1.LifecycleStage{
 				Classification: v1beta1.ClassificationExpired,
 				StartTime:      version.ExpirationDate,
 			})
@@ -38,7 +38,7 @@ func CurrentLifecycleClassification(version v1beta1.ExpirableVersion) v1beta1.Ve
 
 	if len(version.Lifecycle) == 0 {
 		// when there is no classification lifecycle defined then default to supported
-		version.Lifecycle = append(version.Lifecycle, v1beta1.ClassificationLifecycle{
+		version.Lifecycle = append(version.Lifecycle, v1beta1.LifecycleStage{
 			Classification: v1beta1.ClassificationSupported,
 		})
 	}

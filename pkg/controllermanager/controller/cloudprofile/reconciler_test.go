@@ -258,7 +258,7 @@ var _ = Describe("Reconciler", func() {
 						Versions: []gardencorev1beta1.ExpirableVersion{
 							{
 								Version: "1.28.2",
-								Lifecycle: []gardencorev1beta1.ClassificationLifecycle{
+								Lifecycle: []gardencorev1beta1.LifecycleStage{
 									{
 										Classification: gardencorev1beta1.ClassificationPreview,
 										StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),

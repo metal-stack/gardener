@@ -367,7 +367,7 @@ func GetMachineImageDiff(old, new []core.MachineImage) MachineImageDiff {
 					continue
 				}
 				for _, existingLifecycleClass := range version.Lifecycle {
-					if slices.ContainsFunc(newImageVersions[version.Version].Lifecycle, func(newLifecycle core.ClassificationLifecycle) bool {
+					if slices.ContainsFunc(newImageVersions[version.Version].Lifecycle, func(newLifecycle core.LifecycleStage) bool {
 						return newLifecycle.Classification == existingLifecycleClass.Classification
 					}) {
 						continue
@@ -400,7 +400,7 @@ func GetMachineImageDiff(old, new []core.MachineImage) MachineImageDiff {
 func FilterVersionsWithClassification(versions []core.ExpirableVersion, classification core.VersionClassification) []core.ExpirableVersion {
 	var result []core.ExpirableVersion
 	for _, version := range versions {
-		if !slices.ContainsFunc(version.Lifecycle, func(c core.ClassificationLifecycle) bool {
+		if !slices.ContainsFunc(version.Lifecycle, func(c core.LifecycleStage) bool {
 			return c.Classification == classification
 		}) {
 			continue

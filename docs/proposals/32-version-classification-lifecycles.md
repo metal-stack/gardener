@@ -123,7 +123,7 @@ There are rules for the new lifecycle, some of them need to be ensured through v
 - If no lifecycle is given, it defaults to a lifecycle definition with one `supported` stage.
 - If all start times are in the future, the resulting classification is `unavailable`.
 
-There is already a controller in place for reconciling the `CloudProfile` (by now it's primarily handling finalizers only), which is going to be extended by reconciling the version classification statuses. If there are remaining phases inside `lifecycle` the next reconcile needs to be scheduled at its `startTime`.
+There is already a controller in place for reconciling the `CloudProfile` (by now it's primarily handling finalizers only), which is going to be extended by reconciling the version classification statuses. If there are remaining stages inside `lifecycle` the next reconcile needs to be scheduled at its `startTime`.
 
 ```yaml
 apiVersion: core.gardener.cloud/v1beta1
@@ -269,7 +269,7 @@ spec:
 While this variant offers a user to directly see the computed classification stage in a field of the specification, we opted against it due to the following reasons:
 
 - As it patches the spec, the administrator can no longer be seen as the sole owner of this resource. This breaks the goal to stay compatible with typical deployment strategies (deployment and reconciler may toggle the field value consistently).
-- The gardener-apiserver validation needs to prevent setting the `classification` to a value that contradicts the phases inside `lifecycle`. When the gardener-controller-manager patches the field, potential time drifts of servers must be considered for the implementation, which is complex.
+- The gardener-apiserver validation needs to prevent setting the `classification` to a value that contradicts the stages inside `lifecycle`. When the gardener-controller-manager patches the field, potential time drifts of servers must be considered for the implementation, which is complex.
 
 ### Implementation Without the Status Field
 

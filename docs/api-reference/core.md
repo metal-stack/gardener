@@ -3342,51 +3342,6 @@ CRIName
 <p>
 <p>CRIName is a type alias for the CRI name string.</p>
 </p>
-<h3 id="core.gardener.cloud/v1beta1.ClassificationLifecycle">ClassificationLifecycle
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#core.gardener.cloud/v1beta1.ExpirableVersion">ExpirableVersion</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>classification</code></br>
-<em>
-<a href="#core.gardener.cloud/v1beta1.VersionClassification">
-VersionClassification
-</a>
-</em>
-</td>
-<td>
-<p>Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>startTime</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
-Kubernetes meta/v1.Time
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>StartTime defines when this classification becomes active.</p>
-</td>
-</tr>
-</tbody>
-</table>
 <h3 id="core.gardener.cloud/v1beta1.CloudProfileReference">CloudProfileReference
 </h3>
 <p>
@@ -5213,7 +5168,7 @@ Kubernetes meta/v1.Time
 </td>
 <td>
 <em>(Optional)</em>
-<p>Deprecated: Is replaced by the lifecycle classification.</p>
+<p>Deprecated: Is replaced by Lifecycle.</p>
 </td>
 </tr>
 <tr>
@@ -5227,21 +5182,22 @@ VersionClassification
 </td>
 <td>
 <em>(Optional)</em>
-<p>Deprecated: Classification defines the state of a version (preview, supported, deprecated)</p>
+<p>Classification defines the state of a version (preview, supported, deprecated).
+Deprecated: Is replaced by Lifecycle.</p>
 </td>
 </tr>
 <tr>
 <td>
 <code>lifecycle</code></br>
 <em>
-<a href="#core.gardener.cloud/v1beta1.ClassificationLifecycle">
-[]ClassificationLifecycle
+<a href="#core.gardener.cloud/v1beta1.LifecycleStage">
+[]LifecycleStage
 </a>
 </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.</p>
+<p>Lifecycle defines the lifecycle stages for this version. Cannot be used in combination with Classification and ExpirationDate.</p>
 </td>
 </tr>
 </tbody>
@@ -7732,6 +7688,51 @@ LastOperationType
 <p>
 <p>LastOperationType is a string alias.</p>
 </p>
+<h3 id="core.gardener.cloud/v1beta1.LifecycleStage">LifecycleStage
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.ExpirableVersion">ExpirableVersion</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>classification</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.VersionClassification">
+VersionClassification
+</a>
+</em>
+</td>
+<td>
+<p>Classification is the category of this lifecycle stage (unavailable, preview, supported, deprecated, expired).</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>startTime</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>StartTime defines when this lifecycle stage becomes active.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.gardener.cloud/v1beta1.LoadBalancerServicesProxyProtocol">LoadBalancerServicesProxyProtocol
 </h3>
 <p>
@@ -13363,9 +13364,9 @@ string
 (<code>string</code> alias)</p></h3>
 <p>
 (<em>Appears on:</em>
-<a href="#core.gardener.cloud/v1beta1.ClassificationLifecycle">ClassificationLifecycle</a>, 
 <a href="#core.gardener.cloud/v1beta1.ExpirableVersion">ExpirableVersion</a>, 
-<a href="#core.gardener.cloud/v1beta1.ExpirableVersionStatus">ExpirableVersionStatus</a>)
+<a href="#core.gardener.cloud/v1beta1.ExpirableVersionStatus">ExpirableVersionStatus</a>, 
+<a href="#core.gardener.cloud/v1beta1.LifecycleStage">LifecycleStage</a>)
 </p>
 <p>
 <p>VersionClassification is the logical state of a version.</p>

@@ -204,16 +204,16 @@ func validateKubernetesVersions(versions []core.ExpirableVersion, fldPath *field
 func validateExpirableVersion(version core.ExpirableVersion, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycles) > 0 {
+	if (version.Classification != nil || version.ExpirationDate != nil) && len(version.Lifecycle) > 0 {
 		allErrs = append(allErrs, field.Forbidden(fldPath, "cannot specify `classification` or `expirationDate` in combination with `lifecycle`"))
 	}
 
 	lifecyclePath := fldPath.Child("lifecycle")
 
-	allErrs = append(allErrs, validateLifecycleClassificationsValid(version.Lifecycles, lifecyclePath)...)
-	allErrs = append(allErrs, validateLifecycleNoDuplicates(version.Lifecycles, lifecyclePath)...)
-	allErrs = append(allErrs, validateLifecycleInOrder(version.Lifecycles, lifecyclePath)...)
-	allErrs = append(allErrs, validateLifecycleStartTimes(version.Lifecycles, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleClassificationsValid(version.Lifecycle, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleNoDuplicates(version.Lifecycle, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleInOrder(version.Lifecycle, lifecyclePath)...)
+	allErrs = append(allErrs, validateLifecycleStartTimes(version.Lifecycle, lifecyclePath)...)
 
 	return allErrs
 }

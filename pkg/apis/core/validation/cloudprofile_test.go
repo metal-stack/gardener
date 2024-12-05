@@ -188,7 +188,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 							{
 								ExpirableVersion: core.ExpirableVersion{
 									Version: "3.4.6",
-									Lifecycles: []core.LifecycleStage{
+									Lifecycle: []core.LifecycleStage{
 										{Classification: previewClassification},
 									},
 								},
@@ -362,13 +362,13 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 							},
 						},
 						{
 							Version: "1.2.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: deprecatedClassification},
 								{Classification: expiredClassification, StartTime: expirationDate},
 							},
@@ -389,7 +389,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						{
 							Version:        "1.1.0",
 							Classification: &supportedClassification,
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: deprecatedClassification, StartTime: deprecatedDate},
 							},
 						},
@@ -409,14 +409,14 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification, StartTime: supportedDate},
 								{Classification: deprecatedClassification, StartTime: supportedDate},
 							},
 						},
 						{
 							Version: "1.2.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 							},
 						},
@@ -432,14 +432,14 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 								{Classification: supportedClassification, StartTime: supportedDate},
 							},
 						},
 						{
 							Version: "1.2.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 							},
 						},
@@ -464,7 +464,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: previewClassification},
 								{Classification: deprecatedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(1 * time.Hour)))},
 								{Classification: supportedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(3 * time.Hour)))},
@@ -472,7 +472,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						},
 						{
 							Version: "1.2.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 							},
 						},
@@ -493,7 +493,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: previewClassification, StartTime: previewDate},
 								{Classification: supportedClassification},
 								{Classification: deprecatedClassification, StartTime: deprecatedDate},
@@ -501,7 +501,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						},
 						{
 							Version: "1.2.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 							},
 						},
@@ -522,7 +522,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: previewClassification, StartTime: ptr.To(metav1.NewTime(now.Add(0 * time.Hour)))},
 								{Classification: supportedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(2 * time.Hour)))},
 								{Classification: deprecatedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(1 * time.Hour)))},
@@ -543,7 +543,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: previewClassification},
 								{Classification: supportedClassification},
 								{Classification: deprecatedClassification},
@@ -551,7 +551,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						},
 						{
 							Version: "1.2.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 							},
 						},
@@ -568,7 +568,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 						{
 							Version: "1.1.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: previewClassification},
 								{Classification: supportedClassification, StartTime: supportedDate},
 								{Classification: deprecatedClassification, StartTime: deprecatedDate},
@@ -576,7 +576,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						},
 						{
 							Version: "1.2.0",
-							Lifecycles: []core.LifecycleStage{
+							Lifecycle: []core.LifecycleStage{
 								{Classification: supportedClassification},
 							},
 						},
@@ -652,7 +652,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 									ExpirableVersion: core.ExpirableVersion{
 										Version:        "3.4.6",
 										Classification: &supportedClassification,
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: deprecatedClassification, StartTime: deprecatedDate},
 										},
 									},
@@ -682,7 +682,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "3.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: supportedClassification, StartTime: supportedDate},
 										},
 									},
@@ -692,7 +692,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "4.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: supportedClassification, StartTime: supportedDate},
 											{Classification: deprecatedClassification, StartTime: supportedDate},
 										},
@@ -720,7 +720,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "3.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: supportedClassification},
 										},
 									},
@@ -730,7 +730,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "4.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: supportedClassification},
 											{Classification: supportedClassification, StartTime: supportedDate},
 										},
@@ -766,7 +766,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "3.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: previewClassification},
 											{Classification: deprecatedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(1 * time.Hour)))},
 											{Classification: supportedClassification, StartTime: ptr.To(metav1.NewTime(now.Add(2 * time.Hour)))},
@@ -778,7 +778,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "4.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: supportedClassification},
 										},
 									},
@@ -809,7 +809,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "3.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: previewClassification},
 											{Classification: supportedClassification, StartTime: supportedDate},
 											{Classification: deprecatedClassification},
@@ -821,7 +821,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "4.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: supportedClassification},
 										},
 									},
@@ -864,7 +864,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								{
 									ExpirableVersion: core.ExpirableVersion{
 										Version: "3.4.6",
-										Lifecycles: []core.LifecycleStage{
+										Lifecycle: []core.LifecycleStage{
 											{Classification: invalidClassification},
 										},
 									},
@@ -1802,7 +1802,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				cloudProfileNew.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 					{
 						Version: "1.17.2",
-						Lifecycles: []core.LifecycleStage{
+						Lifecycle: []core.LifecycleStage{
 							{
 								Classification: core.ClassificationSupported,
 								StartTime:      ptr.To(metav1.NewTime(now.Add(1 * time.Hour))),
@@ -1813,7 +1813,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				cloudProfileOld.Spec.Kubernetes.Versions = []core.ExpirableVersion{
 					{
 						Version: "1.17.2",
-						Lifecycles: []core.LifecycleStage{
+						Lifecycle: []core.LifecycleStage{
 							{
 								Classification: core.ClassificationSupported,
 							},
@@ -1840,7 +1840,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								Architectures: []string{"amd64"},
 								ExpirableVersion: core.ExpirableVersion{
 									Version: "2135.6.0",
-									Lifecycles: []core.LifecycleStage{
+									Lifecycle: []core.LifecycleStage{
 										{
 											Classification: core.ClassificationUnavailable,
 										},
@@ -1860,7 +1860,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 								Architectures: []string{"amd64"},
 								ExpirableVersion: core.ExpirableVersion{
 									Version: "2135.6.0",
-									Lifecycles: []core.LifecycleStage{
+									Lifecycle: []core.LifecycleStage{
 										{
 											Classification: core.ClassificationPreview,
 										},

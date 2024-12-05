@@ -43,14 +43,14 @@ func CurrentLifecycleClassification(version v1beta1.ExpirableVersion) v1beta1.Ve
 		})
 	}
 
-	for _, l := range version.Lifecycle {
+	for _, stage := range version.Lifecycle {
 		startTime := time.Time{}
-		if l.StartTime != nil {
-			startTime = l.StartTime.Time
+		if stage.StartTime != nil {
+			startTime = stage.StartTime.Time
 		}
 
 		if startTime.Before(currentTime) {
-			currentClassification = l.Classification
+			currentClassification = stage.Classification
 		}
 	}
 

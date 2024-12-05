@@ -337,15 +337,6 @@ message CRI {
   repeated ContainerRuntime containerRuntimes = 2;
 }
 
-message ClassificationLifecycle {
-  // Classification defines the state of a version (unavailable, preview, supported, deprecated, expired)
-  optional string classification = 1;
-
-  // StartTime defines when this classification becomes active.
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time startTime = 2;
-}
-
 // CloudProfile represents certain properties about a provider environment.
 message CloudProfile {
   // Standard object metadata.
@@ -917,17 +908,18 @@ message ExpirableVersion {
   // Version is the version identifier.
   optional string version = 1;
 
-  // Deprecated: Is replaced by the lifecycle classification.
+  // Deprecated: Is replaced by Lifecycle.
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time expirationDate = 2;
 
-  // Deprecated: Classification defines the state of a version (preview, supported, deprecated)
+  // Classification defines the state of a version (preview, supported, deprecated).
+  // Deprecated: Is replaced by Lifecycle.
   // +optional
   optional string classification = 3;
 
-  // Lifecycle defines the classification lifecycle for this version. Cannot be used in combination with classification and expirationDate.
+  // Lifecycle defines the lifecycle stages for this version. Cannot be used in combination with Classification and ExpirationDate.
   // +optional
-  repeated ClassificationLifecycle lifecycle = 4;
+  repeated LifecycleStage lifecycle = 4;
 }
 
 // ExpirableVersionStatus defines the current status of an expirable version.
@@ -1709,6 +1701,15 @@ message LastOperation {
 
   // Type of the last operation, one of Create, Reconcile, Delete, Migrate, Restore.
   optional string type = 5;
+}
+
+message LifecycleStage {
+  // Classification is the category of this lifecycle stage (unavailable, preview, supported, deprecated, expired).
+  optional string classification = 1;
+
+  // StartTime defines when this lifecycle stage becomes active.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time startTime = 2;
 }
 
 // LoadBalancerServicesProxyProtocol controls whether ProxyProtocol is (optionally) allowed for the load balancer services.

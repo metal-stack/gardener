@@ -154,17 +154,17 @@ func mergeExpirableVersions(base, override gardencorev1beta1.ExpirableVersion) g
 	}
 	slices.SortFunc(migratedBase.Lifecycle, compareFunc)
 
-	for _, overrideClass := range migratedOverride.Lifecycle {
+	for _, overrideStage := range migratedOverride.Lifecycle {
 		// Push startTimes of all subsequent classifications after last custom version
-		for i, classification := range migratedBase.Lifecycle {
-			if compareFunc(classification, overrideClass) < 0 &&
-				(classification.StartTime != nil && overrideClass.StartTime.Before(classification.StartTime)) {
-				migratedBase.Lifecycle[i].StartTime = overrideClass.StartTime
+		for i, baseStage := range migratedBase.Lifecycle {
+			if compareFunc(baseStage, overrideStage) < 0 &&
+				(baseStage.StartTime != nil && overrideStage.StartTime.Before(baseStage.StartTime)) {
+				migratedBase.Lifecycle[i].StartTime = overrideStage.StartTime
 			}
 
-			if compareFunc(classification, overrideClass) > 0 &&
-				(classification.StartTime == nil || classification.StartTime.Before(overrideClass.StartTime)) {
-				migratedBase.Lifecycle[i].StartTime = overrideClass.StartTime
+			if compareFunc(baseStage, overrideStage) > 0 &&
+				(baseStage.StartTime == nil || baseStage.StartTime.Before(overrideStage.StartTime)) {
+				migratedBase.Lifecycle[i].StartTime = overrideStage.StartTime
 			}
 		}
 	}

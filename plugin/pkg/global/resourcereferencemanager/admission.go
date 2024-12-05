@@ -505,8 +505,8 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 				if removedKubernetesVersions.Has(existingVersion.Version) {
 					continue
 				}
-				for _, existingLifecycleClass := range existingVersion.Lifecycles {
-					if slices.ContainsFunc(newKubernetesVersions[existingVersion.Version].Lifecycles, func(newLifecycle core.LifecycleStage) bool {
+				for _, existingLifecycleClass := range existingVersion.Lifecycle {
+					if slices.ContainsFunc(newKubernetesVersions[existingVersion.Version].Lifecycle, func(newLifecycle core.LifecycleStage) bool {
 						return newLifecycle.Classification == existingLifecycleClass.Classification
 					}) {
 						continue
@@ -549,6 +549,12 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 					ncpNamespacedName := types.NamespacedName{Name: ncp.Name, Namespace: ncp.Namespace}
 					relevantNamespacedCloudProfiles[ncpNamespacedName.String()] = ncp
 
+					matchesClassification := func(classification core.VersionClassification) func(stage gardencorev1beta1.LifecycleStage) bool {
+						return func(stage gardencorev1beta1.LifecycleStage) bool {
+							return core.VersionClassification(stage.Classification) == classification
+						}
+					}
+
 					go func(nscpfl *gardencorev1beta1.NamespacedCloudProfile) {
 						defer wg.Done()
 
@@ -559,9 +565,7 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 								}
 								if removedClassifications, exists := removedKubernetesClassificationLifecycles[kubernetesVersion.Version]; exists {
 									for _, c := range removedClassifications {
-										if slices.ContainsFunc(kubernetesVersion.Lifecycle, func(referencedLifecycle gardencorev1beta1.LifecycleStage) bool {
-											return core.VersionClassification(referencedLifecycle.Classification) == c
-										}) {
+										if slices.ContainsFunc(kubernetesVersion.Lifecycle, matchesClassification(c)) {
 											channel <- fmt.Errorf("unable to delete Kubernetes classification lifecycle %q from version %q from CloudProfile %q still in use by NamespacedCloudProfile '%s/%s'", c, kubernetesVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
 										}
 									}
@@ -585,9 +589,7 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 								}
 								if removedClassifications, exists := diff.RemovedVersionClassifications[machineImage.Name]; exists {
 									for _, c := range removedClassifications[imageVersion.Version] {
-										if slices.ContainsFunc(imageVersion.Lifecycle, func(referencedLifecycle gardencorev1beta1.LifecycleStage) bool {
-											return core.VersionClassification(referencedLifecycle.Classification) == c
-										}) {
+										if slices.ContainsFunc(imageVersion.Lifecycle, matchesClassification(c)) {
 											channel <- fmt.Errorf("unable to delete classification lifecycle %q from MachineImage version '%s/%s' from CloudProfile %q still in use by NamespacedCloudProfile '%s/%s'", c, machineImage.Name, imageVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
 										}
 

@@ -642,7 +642,7 @@ func shouldKubernetesVersionBeUpdated(kubernetesVersion string, autoUpdate bool,
 		return true, updateReason, true, nil
 	}
 
-	if ExpirationDateExpired(version.ExpirationDate) {
+	if v1beta1helper.VersionIsExpired(version) {
 		updateReason = "Kubernetes version expired - force update required"
 		return true, updateReason, true, nil
 	}
@@ -800,7 +800,7 @@ func shouldMachineImageVersionBeUpdated(shootMachineImage *gardencorev1beta1.Sho
 		return true, updateReason, true
 	}
 
-	if ExpirationDateExpired(machineImage.Versions[versionIndex].ExpirationDate) {
+	if v1beta1helper.VersionIsExpired(machineImage.Versions[versionIndex].ExpirableVersion) {
 		updateReason = fmt.Sprintf("Machine image version expired - force update required (image update strategy: %s)", *machineImage.UpdateStrategy)
 		return true, updateReason, true
 	}
@@ -884,14 +884,6 @@ func determineVersionForStrategy(expirableVersions []gardencorev1beta1.Expirable
 	}
 
 	return versionForForceUpdate, nil
-}
-
-// ExpirationDateExpired returns if now is equal or after the given expirationDate
-func ExpirationDateExpired(timestamp *metav1.Time) bool {
-	if timestamp == nil {
-		return false
-	}
-	return time.Now().UTC().After(timestamp.Time) || time.Now().UTC().Equal(timestamp.Time)
 }
 
 // ensureSufficientMaxWorkers ensures that the number of max workers of a worker group is greater or equal to its number of zones

@@ -227,7 +227,7 @@ var _ = Describe("Reconciler", func() {
 		})
 
 		var (
-			testStatus = func(spec gardencorev1beta1.CloudProfileSpec, wantStatus gardencorev1beta1.CloudProfileStatus) {
+			testStatus = func(spec gardencorev1beta1.CloudProfileSpec, wantStatus gardencorev1beta1.CloudProfileStatus) reconcile.Result {
 				cloudProfile.Spec = spec
 
 				c.EXPECT().Get(gomock.Any(), client.ObjectKey{Name: cloudProfileName}, gomock.AssignableToTypeOf(&gardencorev1beta1.CloudProfile{})).DoAndReturn(func(_ context.Context, _ client.ObjectKey, obj *gardencorev1beta1.CloudProfile, _ ...client.GetOption) error {
@@ -244,12 +244,13 @@ var _ = Describe("Reconciler", func() {
 				})
 
 				result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: cloudProfileName}})
-				Expect(result).To(Equal(reconcile.Result{}))
 				Expect(err).NotTo(HaveOccurred())
+
+				return result
 			}
 		)
 
-		It("should reconcile status of lifecycle classifications", func() {
+		It("should reconcile status of lifecycle classifications and requeue due to upcoming stage", func() {
 			var (
 				now = time.Now()
 
@@ -283,7 +284,44 @@ var _ = Describe("Reconciler", func() {
 				}
 			)
 
-			testStatus(spec, wantStatus)
+			result := testStatus(spec, wantStatus)
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically("~", 3*time.Hour, time.Second))
+		})
+
+		It("should reconcile status of lifecycle classifications but not requeue without upcoming stages", func() {
+			var (
+				now = time.Now()
+
+				spec = gardencorev1beta1.CloudProfileSpec{
+					Kubernetes: gardencorev1beta1.KubernetesSettings{
+						Versions: []gardencorev1beta1.ExpirableVersion{
+							{
+								Version: "1.28.2",
+								Lifecycle: []gardencorev1beta1.LifecycleStage{
+									{
+										Classification: gardencorev1beta1.ClassificationPreview,
+										StartTime:      ptr.To(metav1.NewTime(now.Add(-1 * time.Hour))),
+									},
+								},
+							},
+						},
+					},
+				}
+
+				wantStatus = gardencorev1beta1.CloudProfileStatus{
+					KubernetesVersions: []gardencorev1beta1.ExpirableVersionStatus{
+						{
+							Version:        "1.28.2",
+							Classification: gardencorev1beta1.ClassificationPreview,
+						},
+					},
+				}
+			)
+
+			result := testStatus(spec, wantStatus)
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
 		})
 	})
 })

@@ -73,3 +73,42 @@ func VersionIsSupported(version v1beta1.ExpirableVersion) bool {
 func VersionIsPreview(version v1beta1.ExpirableVersion) bool {
 	return CurrentLifecycleClassification(version) == v1beta1.ClassificationPreview
 }
+
+func DurationUntilNextVersionLifecycleStage(cloudProfile *v1beta1.CloudProfileSpec) time.Duration {
+	var (
+		next time.Time
+		now  = time.Now()
+	)
+
+	for _, version := range cloudProfile.Kubernetes.Versions {
+		for _, stage := range version.Lifecycle {
+			if stage.StartTime == nil {
+				continue
+			}
+			time := stage.StartTime.Time
+			if now.Before(time) && next.IsZero() || next.After(time) {
+				next = time
+			}
+		}
+	}
+
+	for _, image := range cloudProfile.MachineImages {
+		for _, version := range image.Versions {
+
+			for _, stage := range version.Lifecycle {
+				if stage.StartTime == nil {
+					continue
+				}
+				time := stage.StartTime.Time
+				if now.Before(time) && next.After(time) {
+					next = time
+				}
+			}
+		}
+	}
+
+	if next.IsZero() {
+		return 0
+	}
+	return next.Sub(now)
+}

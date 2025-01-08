@@ -395,8 +395,9 @@ var _ = Describe("NamespacedCloudProfile Reconciler", func() {
 			)
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: namespacedCloudProfileName, Namespace: namespaceName}})
-			Expect(result).To(Equal(reconcile.Result{}))
 			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically("~", 48*time.Hour, time.Second))
 		})
 
 		It("should set observedGeneration correctly", func() {

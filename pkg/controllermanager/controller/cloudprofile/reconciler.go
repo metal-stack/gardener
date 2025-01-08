@@ -107,7 +107,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{}, nil
+	return reconcile.Result{
+		RequeueAfter: helper.DurationUntilNextVersionLifecycleStage(&cloudProfile.Spec),
+	}, nil
 }
 
 func status(cloudProfile *gardencorev1beta1.CloudProfile) gardencorev1beta1.CloudProfileStatus {

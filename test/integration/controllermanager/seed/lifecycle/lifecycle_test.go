@@ -20,7 +20,7 @@ import (
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 )
 
-var _ = Describe("Seed Lifecycle controller tests", func() {
+var _ = Describe("Seed Lifecycles controller tests", func() {
 	var (
 		seed            *gardencorev1beta1.Seed
 		lease           *coordinationv1.Lease

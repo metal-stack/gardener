@@ -38,7 +38,7 @@ import (
 
 func TestLifecycle(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Test Integration ControllerManager Seed Lifecycle Suite")
+	RunSpecs(t, "Test Integration ControllerManager Seed Lifecycles Suite")
 }
 
 const (

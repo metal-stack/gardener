@@ -12,7 +12,6 @@ import (
 	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/utils/ptr"
@@ -198,35 +197,17 @@ func (c *validationContext) validateKubernetesVersionOverrides(attr admission.At
 		return nil
 	}
 
-	now := ptr.To(metav1.Now())
 	parentVersions := utils.CreateMapFromSlice(c.parentCloudProfile.Spec.Kubernetes.Versions, func(version gardencorev1beta1.ExpirableVersion) string { return version.Version })
-	currentVersionsMerged := make(map[string]gardencore.ExpirableVersion)
-	if attr.GetOperation() == admission.Update {
-		currentVersionsMerged = utils.CreateMapFromSlice(c.oldNamespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions, func(version gardencore.ExpirableVersion) string { return version.Version })
-	}
 	for _, newVersion := range c.namespacedCloudProfile.Spec.Kubernetes.Versions {
 		if _, exists := parentVersions[newVersion.Version]; !exists {
 			return fmt.Errorf("invalid kubernetes version specified: '%s' does not exist in parent CloudProfile and thus cannot be overridden", newVersion.Version)
-		}
-		if newVersion.ExpirationDate == nil {
-			return fmt.Errorf("specified version '%s' does not set expiration date", newVersion.Version)
-		}
-		if attr.GetOperation() == admission.Update && newVersion.ExpirationDate.Before(now) {
-			if override, exists := currentVersionsMerged[newVersion.Version]; !exists || !override.ExpirationDate.Equal(newVersion.ExpirationDate) {
-				return fmt.Errorf("expiration date for version %q is in the past", newVersion.Version)
-			}
 		}
 	}
 	return nil
 }
 
 func (c *validationContext) validateMachineImageOverrides(attr admission.Attributes) error {
-	now := ptr.To(metav1.Now())
 	parentImages := util.NewV1beta1ImagesContext(c.parentCloudProfile.Spec.MachineImages)
-	var currentVersionsMerged *util.ImagesContext[gardencore.MachineImage, gardencore.MachineImageVersion]
-	if attr.GetOperation() == admission.Update {
-		currentVersionsMerged = util.NewCoreImagesContext(c.oldNamespacedCloudProfile.Status.CloudProfileSpec.MachineImages)
-	}
 
 	allErrs := field.ErrorList{}
 	for imageIndex, image := range c.namespacedCloudProfile.Spec.MachineImages {
@@ -246,22 +227,6 @@ func (c *validationContext) validateMachineImageOverrides(attr admission.Attribu
 					imageVersionIndexPath := imageIndexPath.Child("versions").Index(imageVersionIndex)
 
 					allErrs = append(allErrs, validateNamespacedCloudProfileExtendedMachineImages(imageVersion, imageVersionIndexPath)...)
-
-					if imageVersion.ExpirationDate == nil {
-						allErrs = append(allErrs, field.Invalid(imageVersionIndexPath.Child("expirationDate"), imageVersion.ExpirationDate, fmt.Sprintf("expiration date for version %q must be set", imageVersion.Version)))
-					}
-					if attr.GetOperation() == admission.Update && imageVersion.ExpirationDate.Before(now) {
-						var (
-							override gardencore.MachineImageVersion
-							exists   bool
-						)
-						if currentVersionsMerged != nil {
-							override, exists = currentVersionsMerged.GetImageVersion(image.Name, imageVersion.Version)
-						}
-						if !exists || !override.ExpirationDate.Equal(imageVersion.ExpirationDate) {
-							allErrs = append(allErrs, field.Invalid(imageVersionIndexPath.Child("expirationDate"), imageVersion.ExpirationDate, fmt.Sprintf("expiration date for version %q is in the past", imageVersion.Version)))
-						}
-					}
 				}
 			}
 		} else {

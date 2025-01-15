@@ -27,11 +27,13 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 
 		mergedCloudProfileSpec *gardencorev1beta1.CloudProfileSpec
 
-		expirationDateFuture metav1.Time
+		expirationDateNearFuture metav1.Time
+		expirationDateFuture     metav1.Time
 	)
 
 	BeforeEach(func() {
 		dateNow, _ := time.Parse(time.DateOnly, time.Now().Format(time.DateOnly))
+		expirationDateNearFuture = metav1.Time{Time: dateNow.Local().Add(24 * time.Hour)}
 		expirationDateFuture = metav1.Time{Time: dateNow.Local().Add(48 * time.Hour)}
 
 		updateStrategy := gardencorev1beta1.MachineImageUpdateStrategy("major")
@@ -43,13 +45,44 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 			Spec: gardencorev1beta1.CloudProfileSpec{
 				Type: "some-type",
 				Kubernetes: gardencorev1beta1.KubernetesSettings{
-					Versions: []gardencorev1beta1.ExpirableVersion{{Version: "1.3.0"}, {Version: "1.2.3"}},
+					Versions: []gardencorev1beta1.ExpirableVersion{
+						{Version: "1.3.0"},
+						{Version: "1.2.3",
+							Lifecycle: []gardencorev1beta1.LifecycleStage{
+								{Classification: gardencorev1beta1.ClassificationSupported},
+								{
+									Classification: gardencorev1beta1.ClassificationExpired,
+									StartTime:      &expirationDateNearFuture,
+								},
+							},
+						},
+					},
 				},
 				MachineImages: []gardencorev1beta1.MachineImage{
 					{
-						Name: "some-image",
+						Name:           "some-image",
+						UpdateStrategy: &updateStrategy,
 						Versions: []gardencorev1beta1.MachineImageVersion{
-							{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "4.5.6"}},
+							{
+								ExpirableVersion: gardencorev1beta1.ExpirableVersion{
+									Version: "4.5.6",
+									Lifecycle: []gardencorev1beta1.LifecycleStage{
+										{Classification: gardencorev1beta1.ClassificationSupported},
+										{
+											Classification: gardencorev1beta1.ClassificationExpired,
+											StartTime:      &expirationDateNearFuture,
+										},
+									},
+								},
+								CRI: []gardencorev1beta1.CRI{
+									{
+										Name:              "containerd",
+										ContainerRuntimes: nil},
+								},
+								Architectures: []string{
+									"amd64",
+								},
+							},
 						},
 					},
 				},
@@ -86,7 +119,11 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 					{
 						Name: "custom-image",
 						Versions: []gardencorev1beta1.MachineImageVersion{
-							{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.1.2"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}, Architectures: []string{"amd64"}},
+							{
+								ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.1.2"},
+								CRI:              []gardencorev1beta1.CRI{{Name: "containerd"}},
+								Architectures:    []string{"amd64"},
+							},
 						},
 						UpdateStrategy: &updateStrategy,
 					},
@@ -108,8 +145,13 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 				Versions: []gardencorev1beta1.ExpirableVersion{
 					{Version: "1.3.0"},
 					{
-						Version:        "1.2.3",
-						ExpirationDate: &expirationDateFuture,
+						Version: "1.2.3", Lifecycle: []gardencorev1beta1.LifecycleStage{
+							{Classification: gardencorev1beta1.ClassificationSupported},
+							{
+								Classification: gardencorev1beta1.ClassificationExpired,
+								StartTime:      &expirationDateFuture,
+							},
+						},
 					},
 				},
 			},
@@ -123,12 +165,20 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 							Architectures:    []string{"amd64"},
 						},
 						{
-							ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "4.5.6", ExpirationDate: &expirationDateFuture},
+							ExpirableVersion: gardencorev1beta1.ExpirableVersion{
+								Version: "4.5.6",
+								Lifecycle: []gardencorev1beta1.LifecycleStage{
+									{Classification: gardencorev1beta1.ClassificationSupported},
+									{
+										Classification: gardencorev1beta1.ClassificationExpired,
+										StartTime:      &expirationDateFuture,
+									},
+								},
+							},
 							CRI: []gardencorev1beta1.CRI{
 								{
 									Name:              "containerd",
-									ContainerRuntimes: nil,
-								},
+									ContainerRuntimes: nil},
 							},
 							Architectures: []string{
 								"amd64",
@@ -143,7 +193,8 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 						{
 							ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.1.2"},
 							CRI:              []gardencorev1beta1.CRI{{Name: "containerd"}},
-							Architectures:    []string{"amd64"}},
+							Architectures:    []string{"amd64"},
+						},
 					},
 					UpdateStrategy: &updateStrategy,
 				},
@@ -342,6 +393,7 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 			Eventually(func(g Gomega) {
 				err := testClient.Get(ctx, client.ObjectKeyFromObject(namespacedCloudProfile), namespacedCloudProfile)
 				g.Expect(err).NotTo(HaveOccurred())
+				_ = mergedCloudProfileSpec
 				g.Expect(withSortedArrays(namespacedCloudProfile.Status.CloudProfileSpec)).To(Equal(*mergedCloudProfileSpec))
 				g.Expect(namespacedCloudProfile.Status.ObservedGeneration).To(Equal(namespacedCloudProfile.Generation))
 			}).Should(Succeed())
@@ -357,7 +409,13 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 
 			expectedKubernetesVersions := gardencorev1beta1.KubernetesSettings{
 				Versions: []gardencorev1beta1.ExpirableVersion{
-					{Version: "1.2.3"},
+					{
+						Version: "1.2.3",
+						Lifecycle: []gardencorev1beta1.LifecycleStage{
+							{Classification: gardencorev1beta1.ClassificationSupported},
+							{Classification: gardencorev1beta1.ClassificationExpired, StartTime: &expirationDateNearFuture},
+						},
+					},
 					{Version: "1.3.0"},
 				},
 			}
@@ -379,7 +437,13 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 
 			expectedKubernetesVersions := gardencorev1beta1.KubernetesSettings{
 				Versions: []gardencorev1beta1.ExpirableVersion{
-					{Version: "1.2.3", ExpirationDate: &expirationDateFuture},
+					{
+						Version: "1.2.3",
+						Lifecycle: []gardencorev1beta1.LifecycleStage{
+							{Classification: gardencorev1beta1.ClassificationSupported},
+							{Classification: gardencorev1beta1.ClassificationExpired, StartTime: &expirationDateFuture},
+						},
+					},
 					{Version: "1.3.0"},
 					{Version: "1.4.0"},
 				},
@@ -392,134 +456,6 @@ var _ = Describe("NamespacedCloudProfile controller tests", func() {
 				g.Expect(namespacedCloudProfile.Status.ObservedGeneration).To(Equal(namespacedCloudProfile.Generation))
 				g.Expect(namespacedCloudProfile.Status.ObservedGeneration).NotTo(BeEquivalentTo(0))
 			}).Should(Succeed())
-		})
-	})
-
-	Context("handling NamespacedCloudProfile expiration date overrides", func() {
-		var (
-			expirationDatePast metav1.Time
-		)
-
-		BeforeEach(func() {
-			dateNow, _ := time.Parse(time.DateOnly, time.Now().Format(time.DateOnly))
-			expirationDatePast = metav1.Time{Time: dateNow.Local().Add(-96 * time.Hour)}
-		})
-
-		JustBeforeEach(func() {
-			By("Create parent CloudProfile")
-			Expect(testClient.Create(ctx, parentCloudProfile)).To(Succeed())
-			log.Info("Created parent CloudProfile for test", "parentCloudProfile", client.ObjectKeyFromObject(parentCloudProfile))
-
-			namespacedCloudProfile.Spec.Parent = gardencorev1beta1.CloudProfileReference{
-				Kind: "CloudProfile",
-				Name: parentCloudProfile.Name,
-			}
-
-			DeferCleanup(func() {
-				By("Delete ParentCloudProfile")
-				Expect(testClient.Delete(ctx, parentCloudProfile)).To(Succeed())
-			})
-		})
-
-		It("should allow creation with an already expired Kubernetes version but remove it from the persisted spec and not render it into the status", func() {
-			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
-				{Version: "1.2.3", ExpirationDate: &expirationDatePast},
-			}
-
-			Eventually(func() error {
-				return testClient.Create(ctx, namespacedCloudProfile)
-			}).Should(Succeed())
-			log.Info("Created NamespacedCloudProfile for test", "namespacedCloudProfile", client.ObjectKeyFromObject(namespacedCloudProfile))
-
-			expectedKubernetesVersions := gardencorev1beta1.KubernetesSettings{
-				Versions: []gardencorev1beta1.ExpirableVersion{
-					{Version: "1.2.3"},
-					{Version: "1.3.0"},
-				},
-			}
-
-			Eventually(func(g Gomega) {
-				err := testClient.Get(ctx, client.ObjectKeyFromObject(namespacedCloudProfile), namespacedCloudProfile)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(namespacedCloudProfile.Spec.Kubernetes.Versions).To(BeEmpty())
-				g.Expect(namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions).To(ContainElements(expectedKubernetesVersions.Versions))
-				g.Expect(namespacedCloudProfile.Status.ObservedGeneration).To(Equal(namespacedCloudProfile.Generation))
-			}).Should(Succeed())
-		})
-
-		It("should allow creation with an already expired MachineImage version but remove it from persisted spec and not render it into the status", func() {
-			namespacedCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
-				{
-					Name: "some-image",
-					Versions: []gardencorev1beta1.MachineImageVersion{
-						{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "4.5.6", ExpirationDate: &expirationDatePast}},
-					},
-				},
-			}
-
-			Eventually(func() error {
-				return testClient.Create(ctx, namespacedCloudProfile)
-			}).Should(Succeed())
-			log.Info("Created NamespacedCloudProfile for test", "namespacedCloudProfile", client.ObjectKeyFromObject(namespacedCloudProfile))
-
-			expectedMachineImages := []gardencorev1beta1.MachineImage{
-				{
-					Name: "some-image",
-					Versions: []gardencorev1beta1.MachineImageVersion{
-						{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "4.5.6"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}, Architectures: []string{"amd64"}},
-					},
-					UpdateStrategy: ptr.To(gardencorev1beta1.UpdateStrategyMajor),
-				},
-			}
-
-			Eventually(func(g Gomega) {
-				err := testClient.Get(ctx, client.ObjectKeyFromObject(namespacedCloudProfile), namespacedCloudProfile)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(namespacedCloudProfile.Spec.MachineImages).To(BeEmpty())
-				g.Expect(namespacedCloudProfile.Status.CloudProfileSpec.MachineImages).To(Equal(expectedMachineImages))
-				g.Expect(namespacedCloudProfile.Status.ObservedGeneration).To(Equal(namespacedCloudProfile.Generation))
-			}).Should(Succeed())
-		})
-
-		It("should not allow update with an already expired Kubernetes version", func() {
-			Eventually(func() error {
-				return testClient.Create(ctx, namespacedCloudProfile)
-			}).Should(Succeed())
-			log.Info("Created NamespacedCloudProfile for test", "namespacedCloudProfile", client.ObjectKeyFromObject(namespacedCloudProfile))
-			Eventually(func(g Gomega) {
-				Expect(testClient.Get(ctx, client.ObjectKeyFromObject(namespacedCloudProfile), namespacedCloudProfile)).To(Succeed())
-				g.Expect(namespacedCloudProfile.Status.ObservedGeneration).To(Equal(namespacedCloudProfile.Generation))
-			}).Should(Succeed())
-
-			namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
-				{Version: "1.2.3", ExpirationDate: &expirationDatePast},
-			}
-			Expect(testClient.Update(ctx, namespacedCloudProfile)).To(MatchError(
-				ContainSubstring("expiration date for version \"1.2.3\" is in the past"),
-			))
-		})
-
-		It("should not allow update with an already expired MachineImage version", func() {
-			Eventually(func() error {
-				return testClient.Create(ctx, namespacedCloudProfile)
-			}).Should(Succeed())
-			log.Info("Created NamespacedCloudProfile for test", "namespacedCloudProfile", client.ObjectKeyFromObject(namespacedCloudProfile))
-			Eventually(func(g Gomega) {
-				Expect(testClient.Get(ctx, client.ObjectKeyFromObject(namespacedCloudProfile), namespacedCloudProfile)).To(Succeed())
-				g.Expect(namespacedCloudProfile.Status.ObservedGeneration).To(Equal(namespacedCloudProfile.Generation))
-			}).Should(Succeed())
-
-			namespacedCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
-				{
-					Name: "some-image",
-					Versions: []gardencorev1beta1.MachineImageVersion{
-						{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "4.5.6", ExpirationDate: &expirationDatePast}},
-					},
-				},
-			}
-			Expect(testClient.Update(ctx, namespacedCloudProfile)).To(MatchError(
-				ContainSubstring("expiration date for version \"4.5.6\" is in the past"),
-			))
 		})
 	})
 })

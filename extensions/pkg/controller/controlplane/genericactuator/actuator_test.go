@@ -230,17 +230,17 @@ var _ = Describe("Actuator", func() {
 			Data:       map[string]string{"abc": "xyz"},
 		}
 
-		resourceKeyCPShootChart = client.ObjectKey{Namespace: namespace, Name: ControlPlaneShootChartResourceName}
+		resourceKeyCPShootChart = client.ObjectKey{Namespace: namespace, Name: ControlPlaneShootResourceName}
 		createdMRSecretForCPShootChart = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootResourceName, Namespace: namespace},
 			Data:       map[string][]byte{chartName: []byte(renderedContent)},
 			Type:       corev1.SecretTypeOpaque,
 		}
 		createdMRForCPShootChart = &resourcesv1alpha1.ManagedResource{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootResourceName, Namespace: namespace},
 			Spec: resourcesv1alpha1.ManagedResourceSpec{
 				SecretRefs: []corev1.LocalObjectReference{
-					{Name: ControlPlaneShootChartResourceName},
+					{Name: ControlPlaneShootResourceName},
 				},
 				InjectLabels:              map[string]string{v1beta1constants.ShootNoCleanup: "true"},
 				KeepObjects:               pFalse,
@@ -248,23 +248,23 @@ var _ = Describe("Actuator", func() {
 			},
 		}
 		deletedMRSecretForCPShootChart = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootResourceName, Namespace: namespace},
 		}
 		deletedMRForCPShootChart = &resourcesv1alpha1.ManagedResource{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootResourceName, Namespace: namespace},
 		}
 
-		resourceKeyCPShootCRDsChart = client.ObjectKey{Namespace: namespace, Name: ControlPlaneShootCRDsChartResourceName}
+		resourceKeyCPShootCRDsChart = client.ObjectKey{Namespace: namespace, Name: ControlPlaneShootCRDsResourceName}
 		createdMRSecretForCPShootCRDsChart = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsResourceName, Namespace: namespace},
 			Data:       map[string][]byte{chartName: []byte(renderedContent)},
 			Type:       corev1.SecretTypeOpaque,
 		}
 		createdMRForCPShootCRDsChart = &resourcesv1alpha1.ManagedResource{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsResourceName, Namespace: namespace},
 			Spec: resourcesv1alpha1.ManagedResourceSpec{
 				SecretRefs: []corev1.LocalObjectReference{
-					{Name: ControlPlaneShootCRDsChartResourceName},
+					{Name: ControlPlaneShootCRDsResourceName},
 				},
 				InjectLabels:              map[string]string{v1beta1constants.ShootNoCleanup: "true"},
 				KeepObjects:               pFalse,
@@ -272,23 +272,23 @@ var _ = Describe("Actuator", func() {
 			},
 		}
 		deletedMRSecretForCPShootCRDsChart = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsResourceName, Namespace: namespace},
 		}
 		deletedMRForCPShootCRDsChart = &resourcesv1alpha1.ManagedResource{
-			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: ControlPlaneShootCRDsResourceName, Namespace: namespace},
 		}
 
-		resourceKeyStorageClassesChart = client.ObjectKey{Namespace: namespace, Name: StorageClassesChartResourceName}
+		resourceKeyStorageClassesChart = client.ObjectKey{Namespace: namespace, Name: StorageClassesShootResourceName}
 		createdMRSecretForStorageClassesChart = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesShootResourceName, Namespace: namespace},
 			Data:       map[string][]byte{chartName: []byte(renderedContent)},
 			Type:       corev1.SecretTypeOpaque,
 		}
 		createdMRForStorageClassesChart = &resourcesv1alpha1.ManagedResource{
-			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesShootResourceName, Namespace: namespace},
 			Spec: resourcesv1alpha1.ManagedResourceSpec{
 				SecretRefs: []corev1.LocalObjectReference{
-					{Name: StorageClassesChartResourceName},
+					{Name: StorageClassesShootResourceName},
 				},
 				InjectLabels:              map[string]string{v1beta1constants.ShootNoCleanup: "true"},
 				KeepObjects:               pFalse,
@@ -296,10 +296,10 @@ var _ = Describe("Actuator", func() {
 			},
 		}
 		deletedMRSecretForStorageClassesChart = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesShootResourceName, Namespace: namespace},
 		}
 		deletedMRForStorageClassesChart = &resourcesv1alpha1.ManagedResource{
-			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesChartResourceName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: StorageClassesShootResourceName, Namespace: namespace},
 		}
 
 		resourceKeyShootWebhooks = client.ObjectKey{Namespace: namespace, Name: ShootWebhooksResourceName}

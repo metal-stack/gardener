@@ -87,12 +87,6 @@ var (
 			},
 		},
 	}
-
-	storageClassChart = &chart.Chart{
-		Name:       "shoot-storageclasses",
-		EmbeddedFS: charts.ChartShootStorageClasses,
-		Path:       charts.ChartPathShootStorageClasses,
-	}
 )
 
 // GetControlPlaneShootChartValues returns the values for the control plane shoot chart applied by the generic actuator.

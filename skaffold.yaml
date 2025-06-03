@@ -768,7 +768,6 @@ build:
             - pkg/provider-local/apis/local/install
             - pkg/provider-local/apis/local/v1alpha1
             - pkg/provider-local/charts
-            - pkg/provider-local/charts/shoot-storageclasses
             - pkg/provider-local/charts/shoot-system-components
             - pkg/provider-local/controller/backupbucket
             - pkg/provider-local/controller/backupentry

@@ -6,6 +6,7 @@ package genericactuator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -27,6 +28,7 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	kubernetesclient "github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/chart"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -36,7 +38,7 @@ import (
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
 
-// ValuesProvider provides values for the 2 charts applied by this actuator.
+// ValuesProvider provides values for the charts applied by this actuator.
 type ValuesProvider interface {
 	// GetConfigChartValues returns the values for the config chart applied by this actuator.
 	GetConfigChartValues(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster) (map[string]any, error)
@@ -55,6 +57,27 @@ type ValuesProvider interface {
 	GetControlPlaneExposureChartValues(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster, secretsReader secretsmanager.Reader, checksums map[string]string) (map[string]any, error)
 }
 
+// ObjectsProvider provides objects for the control plane applied by this actuator.
+// This can be used as an alternative to chart-based approach of the ValuesProvider interface.
+// If one of the function returns a NotImplemented error, it falls back to the implementation of the ValuesProvider.
+type ObjectsProvider interface {
+	// GetConfigObjects returns the objects for the control plane config applied by this actuator.
+	GetConfigObjects(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster) ([]client.Object, error)
+	// GetControlPlaneObjects returns the objects for the control plane applied by this actuator.
+	GetControlPlaneObjects(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster, secretsReader secretsmanager.Reader, checksums map[string]string, scaledDown bool) ([]client.Object, error)
+	// GetControlPlaneShootObjects returns the objects for the control plane applied to the shoot by this actuator.
+	GetControlPlaneShootObjects(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster, secretsReader secretsmanager.Reader, checksums map[string]string) ([]client.Object, error)
+	// GetControlPlaneShootCRDsObjects returns the objects for the control plane CRDs applied to the shoot by this actuator.
+	GetControlPlaneShootCRDsObjects(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster) ([]client.Object, error)
+	// GetStorageClassesObjects returns the objects for the storage classes applied to the shoot by this actuator.
+	GetStorageClassesObjects(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster) ([]client.Object, error)
+	// GetControlPlaneExposureObjects returns the objects for the control plane exposure by this actuator.
+	//
+	// Deprecated: Control plane with purpose `exposure` is being deprecated and will be removed in gardener v1.123.0.
+	// TODO(theoddora): Remove this function in v1.123.0 when the Purpose field is removed.
+	GetControlPlaneExposureObjects(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster, secretsReader secretsmanager.Reader, checksums map[string]string) ([]client.Object, error)
+}
+
 // NewActuator creates a new Actuator that acts upon and updates the status of ControlPlane resources.
 // It creates / deletes the given secrets and applies / deletes the given charts, using the given image vector and
 // the values provided by the given values provider.
@@ -65,6 +88,7 @@ func NewActuator(
 	exposureSecretConfigs func(namespace string) []extensionssecretsmanager.SecretConfigWithOptions, exposureShootAccessSecrets func(namespace string) []*gardenerutils.AccessSecret,
 	configChart, controlPlaneChart, controlPlaneShootChart, controlPlaneShootCRDsChart, storageClassesChart, controlPlaneExposureChart chart.Interface,
 	vp ValuesProvider,
+	op ObjectsProvider,
 	chartRendererFactory extensionscontroller.ChartRendererFactory,
 	imageVector imagevector.ImageVector,
 	configName string,
@@ -95,6 +119,7 @@ func NewActuator(
 		storageClassesChart:        storageClassesChart,
 		controlPlaneExposureChart:  controlPlaneExposureChart,
 		vp:                         vp,
+		op:                         op,
 		chartRendererFactory:       chartRendererFactory,
 		imageVector:                imageVector,
 		configName:                 configName,
@@ -127,6 +152,7 @@ type actuator struct {
 	storageClassesChart        chart.Interface
 	controlPlaneExposureChart  chart.Interface
 	vp                         ValuesProvider
+	op                         ObjectsProvider
 	chartRendererFactory       extensionscontroller.ChartRendererFactory
 	imageVector                imagevector.ImageVector
 	configName                 string
@@ -140,12 +166,18 @@ type actuator struct {
 }
 
 const (
-	// ControlPlaneShootChartResourceName is the name of the managed resource for the control plane
-	ControlPlaneShootChartResourceName = "extension-controlplane-shoot"
-	// ControlPlaneShootCRDsChartResourceName is the name of the managed resource for the extension control plane shoot CRDs
-	ControlPlaneShootCRDsChartResourceName = "extension-controlplane-shoot-crds"
-	// StorageClassesChartResourceName is the name of the managed resource for the extension control plane storageclasses
-	StorageClassesChartResourceName = "extension-controlplane-storageclasses"
+	// ControlPlaneSeedResourceName is the name of the managed resource for the control plane seed
+	ControlPlaneSeedResourceName = "extension-controlplane-seed"
+	// ControlPlaneSeedConfigurationResourceName is the name of the managed resource for the control plane configuration seed
+	ControlPlaneSeedConfigurationResourceName = "extension-controlplane-seed-configuration"
+	// ControlPlaneSeedExposureResourceName is the name of the managed resource for the control plane exposure seed
+	ControlPlaneSeedExposureResourceName = "extension-controlplane-seed-exposure"
+	// ControlPlaneShootResourceName is the name of the managed resource for the control plane shoot
+	ControlPlaneShootResourceName = "extension-controlplane-shoot"
+	// ControlPlaneShootCRDsResourceName is the name of the managed resource for the extension control plane shoot CRDs
+	ControlPlaneShootCRDsResourceName = "extension-controlplane-shoot-crds"
+	// StorageClassesShootResourceName is the name of the managed resource for the extension control plane storageclasses
+	StorageClassesShootResourceName = "extension-controlplane-storageclasses"
 	// ShootWebhooksResourceName is the name of the managed resource for the extension control plane webhooks
 	ShootWebhooksResourceName = "extension-controlplane-shoot-webhooks"
 )
@@ -208,17 +240,26 @@ func (a *actuator) reconcileControlPlaneExposure(
 	// Compute all needed checksums
 	checksums := controlplane.ComputeChecksums(deployedSecrets, nil)
 
-	// Get control plane exposure chart values
-	values, err := a.vp.GetControlPlaneExposureChartValues(ctx, cp, cluster, sm, checksums)
+	applyThroughValuesProvider, err := a.createSeedManagedResource(ctx, cp, ControlPlaneSeedExposureResourceName, func() ([]client.Object, error) {
+		return a.op.GetControlPlaneExposureObjects(ctx, cp, cluster, sm, checksums)
+	})
 	if err != nil {
 		return false, err
 	}
 
-	// Apply control plane exposure chart
-	log.Info("Applying control plane exposure chart", "values", values)
-	version := cluster.Shoot.Spec.Kubernetes.Version
-	if err := a.controlPlaneExposureChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, a.imageVector, a.gardenerClientset.Version(), version, values); err != nil {
-		return false, fmt.Errorf("could not apply control plane exposure chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	if applyThroughValuesProvider {
+		// Get control plane exposure chart values
+		values, err := a.vp.GetControlPlaneExposureChartValues(ctx, cp, cluster, sm, checksums)
+		if err != nil {
+			return false, err
+		}
+
+		// Apply control plane exposure chart
+		log.Info("Applying control plane exposure chart", "values", values)
+		version := cluster.Shoot.Spec.Kubernetes.Version
+		if err := a.controlPlaneExposureChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, a.imageVector, a.gardenerClientset.Version(), version, values); err != nil {
+			return false, fmt.Errorf("could not apply control plane exposure chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+		}
 	}
 
 	return false, sm.Cleanup(ctx)
@@ -273,17 +314,26 @@ func (a *actuator) reconcileControlPlane(
 		}
 	}
 
-	// Get config chart values
-	if a.configChart != nil {
-		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
-		if err != nil {
-			return false, err
-		}
+	applyThroughValuesProvider, err := a.createSeedManagedResource(ctx, cp, ControlPlaneSeedConfigurationResourceName, func() ([]client.Object, error) {
+		return a.op.GetConfigObjects(ctx, cp, cluster)
+	})
+	if err != nil {
+		return false, err
+	}
 
-		// Apply config chart
-		log.Info("Applying configuration chart")
-		if err := a.configChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, nil, "", "", values); err != nil {
-			return false, fmt.Errorf("could not apply configuration chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	if applyThroughValuesProvider {
+		// Get config chart values
+		if a.configChart != nil {
+			values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
+			if err != nil {
+				return false, err
+			}
+
+			// Apply config chart
+			log.Info("Applying configuration chart")
+			if err := a.configChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, nil, "", "", values); err != nil {
+				return false, fmt.Errorf("could not apply configuration chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+			}
 		}
 	}
 
@@ -320,16 +370,25 @@ func (a *actuator) reconcileControlPlane(
 	// Apply control plane chart
 	version := cluster.Shoot.Spec.Kubernetes.Version
 
-	if a.controlPlaneChart != nil {
-		// Get control plane chart values
-		values, err := a.vp.GetControlPlaneChartValues(ctx, cp, cluster, sm, checksums, scaledDown)
-		if err != nil {
-			return false, err
-		}
+	applyThroughValuesProvider, err = a.createSeedManagedResource(ctx, cp, ControlPlaneSeedResourceName, func() ([]client.Object, error) {
+		return a.op.GetControlPlaneObjects(ctx, cp, cluster, sm, checksums, scaledDown)
+	})
+	if err != nil {
+		return false, err
+	}
 
-		log.Info("Applying control plane chart")
-		if err := a.controlPlaneChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, a.imageVector, a.gardenerClientset.Version(), version, values); err != nil {
-			return false, fmt.Errorf("could not apply control plane chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	if applyThroughValuesProvider {
+		if a.controlPlaneChart != nil {
+			// Get control plane chart values
+			values, err := a.vp.GetControlPlaneChartValues(ctx, cp, cluster, sm, checksums, scaledDown)
+			if err != nil {
+				return false, err
+			}
+
+			log.Info("Applying control plane chart")
+			if err := a.controlPlaneChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, a.imageVector, a.gardenerClientset.Version(), version, values); err != nil {
+				return false, fmt.Errorf("could not apply control plane chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+			}
 		}
 	}
 
@@ -339,39 +398,66 @@ func (a *actuator) reconcileControlPlane(
 		return false, fmt.Errorf("could not create chart renderer for shoot '%s': %w", cp.Namespace, err)
 	}
 
-	if a.controlPlaneShootChart != nil {
-		// Get control plane shoot chart values
-		values, err := a.vp.GetControlPlaneShootChartValues(ctx, cp, cluster, sm, checksums)
-		if err != nil {
-			return false, err
-		}
+	applyThroughValuesProvider, err = a.createShootManagedResource(ctx, cp, ControlPlaneShootResourceName, func() ([]client.Object, error) {
+		return a.op.GetControlPlaneShootObjects(ctx, cp, cluster, sm, checksums)
+	})
+	if err != nil {
+		return false, err
+	}
 
-		if err := managedresources.RenderChartAndCreate(ctx, cp.Namespace, ControlPlaneShootChartResourceName, false, a.client, chartRenderer, a.controlPlaneShootChart, values, a.imageVector, metav1.NamespaceSystem, version, true, false); err != nil {
-			return false, fmt.Errorf("could not apply control plane shoot chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	if applyThroughValuesProvider {
+		if a.controlPlaneShootChart != nil {
+			// Get control plane shoot chart values
+			values, err := a.vp.GetControlPlaneShootChartValues(ctx, cp, cluster, sm, checksums)
+			if err != nil {
+				return false, err
+			}
+
+			if err := managedresources.RenderChartAndCreate(ctx, cp.Namespace, ControlPlaneShootResourceName, false, a.client, chartRenderer, a.controlPlaneShootChart, values, a.imageVector, metav1.NamespaceSystem, version, true, false); err != nil {
+				return false, fmt.Errorf("could not apply control plane shoot chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+			}
 		}
 	}
 
-	if a.controlPlaneShootCRDsChart != nil {
-		// Get control plane shoot CRDs chart values
-		values, err := a.vp.GetControlPlaneShootCRDsChartValues(ctx, cp, cluster)
-		if err != nil {
-			return false, err
-		}
+	applyThroughValuesProvider, err = a.createShootManagedResource(ctx, cp, ControlPlaneShootCRDsResourceName, func() ([]client.Object, error) {
+		return a.op.GetControlPlaneShootCRDsObjects(ctx, cp, cluster)
+	})
+	if err != nil {
+		return false, err
+	}
 
-		if err := managedresources.RenderChartAndCreate(ctx, cp.Namespace, ControlPlaneShootCRDsChartResourceName, false, a.client, chartRenderer, a.controlPlaneShootCRDsChart, values, a.imageVector, metav1.NamespaceSystem, version, true, false); err != nil {
-			return false, fmt.Errorf("could not apply control plane shoot CRDs chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	if applyThroughValuesProvider {
+		if a.controlPlaneShootCRDsChart != nil {
+			// Get control plane shoot CRDs chart values
+			values, err := a.vp.GetControlPlaneShootCRDsChartValues(ctx, cp, cluster)
+			if err != nil {
+				return false, err
+			}
+
+			if err := managedresources.RenderChartAndCreate(ctx, cp.Namespace, ControlPlaneShootCRDsResourceName, false, a.client, chartRenderer, a.controlPlaneShootCRDsChart, values, a.imageVector, metav1.NamespaceSystem, version, true, false); err != nil {
+				return false, fmt.Errorf("could not apply control plane shoot CRDs chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+			}
 		}
 	}
 
-	if a.storageClassesChart != nil {
-		// Get storage class chart values
-		values, err := a.vp.GetStorageClassesChartValues(ctx, cp, cluster)
-		if err != nil {
-			return false, err
-		}
+	applyThroughValuesProvider, err = a.createShootManagedResource(ctx, cp, StorageClassesShootResourceName, func() ([]client.Object, error) {
+		return a.op.GetStorageClassesObjects(ctx, cp, cluster)
+	})
+	if err != nil {
+		return false, err
+	}
 
-		if err := managedresources.RenderChartAndCreate(ctx, cp.Namespace, StorageClassesChartResourceName, false, a.client, chartRenderer, a.storageClassesChart, values, a.imageVector, metav1.NamespaceSystem, version, true, true); err != nil {
-			return false, fmt.Errorf("could not apply storage classes chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	if applyThroughValuesProvider {
+		if a.storageClassesChart != nil {
+			// Get storage class chart values
+			values, err := a.vp.GetStorageClassesChartValues(ctx, cp, cluster)
+			if err != nil {
+				return false, err
+			}
+
+			if err := managedresources.RenderChartAndCreate(ctx, cp.Namespace, StorageClassesShootResourceName, false, a.client, chartRenderer, a.storageClassesChart, values, a.imageVector, metav1.NamespaceSystem, version, true, true); err != nil {
+				return false, fmt.Errorf("could not apply storage classes chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+			}
 		}
 	}
 
@@ -452,26 +538,35 @@ func (a *actuator) deleteControlPlane(
 ) error {
 	forceDelete := cluster != nil && v1beta1helper.ShootNeedsForceDeletion(cluster.Shoot)
 
-	// Get config chart values
-	if a.configChart != nil {
-		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
-		if err != nil {
-			return fmt.Errorf("failed to get configuration chart values before deletion of controlplane %s: %w", client.ObjectKeyFromObject(cp), err)
-		}
+	applyThroughValuesProvider, err := a.createSeedManagedResource(ctx, cp, ControlPlaneSeedConfigurationResourceName, func() ([]client.Object, error) {
+		return a.op.GetConfigObjects(ctx, cp, cluster)
+	})
+	if err != nil {
+		return err
+	}
 
-		// Apply config chart
-		log.Info("Applying configuration chart before deletion")
-		if err := a.configChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, nil, "", "", values); err != nil {
-			return fmt.Errorf("could not apply configuration chart before deletion of controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	if applyThroughValuesProvider {
+		// Get config chart values
+		if a.configChart != nil {
+			values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
+			if err != nil {
+				return fmt.Errorf("failed to get configuration chart values before deletion of controlplane %s: %w", client.ObjectKeyFromObject(cp), err)
+			}
+
+			// Apply config chart
+			log.Info("Applying configuration chart before deletion")
+			if err := a.configChart.Apply(ctx, a.gardenerClientset.ChartApplier(), cp.Namespace, nil, "", "", values); err != nil {
+				return fmt.Errorf("could not apply configuration chart before deletion of controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+			}
 		}
 	}
 
 	// Delete the managed resources
-	if err := managedresources.Delete(ctx, a.client, cp.Namespace, StorageClassesChartResourceName, false); err != nil {
+	if err := managedresources.Delete(ctx, a.client, cp.Namespace, StorageClassesShootResourceName, false); err != nil {
 		return fmt.Errorf("could not delete managed resource containing storage classes chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 	}
 	if a.controlPlaneShootCRDsChart != nil {
-		if err := managedresources.Delete(ctx, a.client, cp.Namespace, ControlPlaneShootCRDsChartResourceName, false); err != nil {
+		if err := managedresources.Delete(ctx, a.client, cp.Namespace, ControlPlaneShootCRDsResourceName, false); err != nil {
 			return fmt.Errorf("could not delete managed resource containing shoot CRDs chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 		}
 
@@ -479,40 +574,58 @@ func (a *actuator) deleteControlPlane(
 			// Wait for shoot CRDs chart ManagedResource deletion before deleting the shoot chart ManagedResource
 			timeoutCtx1, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()
-			if err := managedresources.WaitUntilDeleted(timeoutCtx1, a.client, cp.Namespace, ControlPlaneShootCRDsChartResourceName); err != nil {
+			if err := managedresources.WaitUntilDeleted(timeoutCtx1, a.client, cp.Namespace, ControlPlaneShootCRDsResourceName); err != nil {
 				return fmt.Errorf("error while waiting for managed resource containing shoot CRDs chart for controlplane '%s' to be deleted: %w", client.ObjectKeyFromObject(cp), err)
 			}
 		}
 	}
-	if err := managedresources.Delete(ctx, a.client, cp.Namespace, ControlPlaneShootChartResourceName, false); err != nil {
+	if err := managedresources.Delete(ctx, a.client, cp.Namespace, ControlPlaneShootResourceName, false); err != nil {
 		return fmt.Errorf("could not delete managed resource containing shoot chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 	}
 
 	if !forceDelete {
 		timeoutCtx2, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
-		if err := managedresources.WaitUntilDeleted(timeoutCtx2, a.client, cp.Namespace, StorageClassesChartResourceName); err != nil {
+		if err := managedresources.WaitUntilDeleted(timeoutCtx2, a.client, cp.Namespace, StorageClassesShootResourceName); err != nil {
 			return fmt.Errorf("error while waiting for managed resource containing storage classes chart for controlplane '%s' to be deleted: %w", client.ObjectKeyFromObject(cp), err)
 		}
 
 		timeoutCtx3, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
-		if err := managedresources.WaitUntilDeleted(timeoutCtx3, a.client, cp.Namespace, ControlPlaneShootChartResourceName); err != nil {
+		if err := managedresources.WaitUntilDeleted(timeoutCtx3, a.client, cp.Namespace, ControlPlaneShootResourceName); err != nil {
 			return fmt.Errorf("error while waiting for managed resource containing shoot chart for controlplane '%s' to be deleted: %w", client.ObjectKeyFromObject(cp), err)
 		}
 	}
 
 	// Delete control plane objects
+	log.Info("Deleting control plane objects")
+
+	if a.op != nil {
+		timeoutCtx4, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if err := managedresources.WaitUntilDeleted(timeoutCtx4, a.client, cp.Namespace, ControlPlaneSeedResourceName); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("error while waiting for managed resource %s for controlplane '%s' to be deleted: %w", ControlPlaneSeedResourceName, client.ObjectKeyFromObject(cp), err)
+		}
+	}
+
 	if a.controlPlaneChart != nil {
-		log.Info("Deleting control plane objects")
 		if err := a.controlPlaneChart.Delete(ctx, a.client, cp.Namespace); client.IgnoreNotFound(err) != nil {
 			return fmt.Errorf("could not delete control plane objects for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 		}
 	}
 
+	// Delete config objects
+	log.Info("Deleting configuration objects")
+
+	if a.op != nil {
+		timeoutCtx5, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if err := managedresources.WaitUntilDeleted(timeoutCtx5, a.client, cp.Namespace, ControlPlaneSeedConfigurationResourceName); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("error while waiting for managed resource %s for controlplane '%s' to be deleted: %w", ControlPlaneSeedConfigurationResourceName, client.ObjectKeyFromObject(cp), err)
+		}
+	}
+
 	if a.configChart != nil {
-		// Delete config objects
-		log.Info("Deleting configuration objects")
 		if err := a.configChart.Delete(ctx, a.client, cp.Namespace); client.IgnoreNotFound(err) != nil {
 			return fmt.Errorf("could not delete configuration objects for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 		}
@@ -602,15 +715,15 @@ func (a *actuator) Migrate(
 	cluster *extensionscontroller.Cluster,
 ) error {
 	// Keep objects for shoot managed resources so that they are not deleted from the shoot during the migration
-	if err := managedresources.SetKeepObjects(ctx, a.client, cp.Namespace, ControlPlaneShootChartResourceName, true); err != nil {
+	if err := managedresources.SetKeepObjects(ctx, a.client, cp.Namespace, ControlPlaneShootResourceName, true); err != nil {
 		return fmt.Errorf("could not keep objects of managed resource containing shoot chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 	}
 	if a.controlPlaneShootCRDsChart != nil {
-		if err := managedresources.SetKeepObjects(ctx, a.client, cp.Namespace, ControlPlaneShootCRDsChartResourceName, true); err != nil {
+		if err := managedresources.SetKeepObjects(ctx, a.client, cp.Namespace, ControlPlaneShootCRDsResourceName, true); err != nil {
 			return fmt.Errorf("could not keep objects of managed resource containing shoot CRDs chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 		}
 	}
-	if err := managedresources.SetKeepObjects(ctx, a.client, cp.Namespace, StorageClassesChartResourceName, true); err != nil {
+	if err := managedresources.SetKeepObjects(ctx, a.client, cp.Namespace, StorageClassesShootResourceName, true); err != nil {
 		return fmt.Errorf("could not keep objects of managed resource containing storage classes chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
 	}
 
@@ -624,4 +737,64 @@ func (a *actuator) newSecretsManagerForControlPlane(ctx context.Context, log log
 	}
 
 	return a.newSecretsManager(ctx, log.WithName("secretsmanager"), clock.RealClock{}, a.client, cluster, identity, secretConfigs)
+}
+
+func (a *actuator) createSeedManagedResource(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, managedResourceName string, objectsGetter func() ([]client.Object, error)) (bool, error) {
+	if a.op == nil {
+		return true, nil
+	}
+
+	objects, err := objectsGetter()
+
+	if err != nil {
+		if errors.Is(err, NotImplemented) {
+			// allow fallback to valuesprovider implementation
+			return true, nil
+		}
+
+		return false, fmt.Errorf("could not retrieve objects of managed resource %s for controlplane '%s': %w", client.ObjectKeyFromObject(cp), managedResourceName, err)
+	}
+
+	registry := managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+
+	resources, err := registry.AddAllAndSerialize(objects...)
+	if err != nil {
+		return false, fmt.Errorf("could not serialize objects of managed resource %s for controlplane '%s': %w", client.ObjectKeyFromObject(cp), managedResourceName, err)
+	}
+
+	if err := managedresources.CreateForSeed(ctx, a.client, cp.Namespace, managedResourceName, false, resources); err != nil {
+		return false, fmt.Errorf("could not create managed resource %s for controlplane '%s': %w", managedResourceName, client.ObjectKeyFromObject(cp), err)
+	}
+
+	return false, nil
+}
+
+func (a *actuator) createShootManagedResource(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, managedResourceName string, objectsGetter func() ([]client.Object, error)) (bool, error) {
+	if a.op == nil {
+		return true, nil
+	}
+
+	objects, err := objectsGetter()
+
+	if err != nil {
+		if errors.Is(err, NotImplemented) {
+			// allow fallback to valuesprovider implementation
+			return true, nil
+		}
+
+		return false, fmt.Errorf("could not retrieve objects of managed resource %s for controlplane '%s': %w", client.ObjectKeyFromObject(cp), managedResourceName, err)
+	}
+
+	registry := managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
+
+	resources, err := registry.AddAllAndSerialize(objects...)
+	if err != nil {
+		return false, fmt.Errorf("could not serialize objects of managed resource %s for controlplane '%s': %w", client.ObjectKeyFromObject(cp), managedResourceName, err)
+	}
+
+	if err := managedresources.CreateForShoot(ctx, a.client, cp.Namespace, managedResourceName, a.providerName, false, resources); err != nil {
+		return false, fmt.Errorf("could not create managed resource %s for controlplane '%s': %w", managedResourceName, client.ObjectKeyFromObject(cp), err)
+	}
+
+	return false, nil
 }

@@ -55,7 +55,7 @@ func (fakeAuthorizerType) Authorize(_ context.Context, a authorizer.Attributes) 
 }
 
 var _ = Describe("resourcereferencemanager", func() {
-	Describe("#Admit", func() {
+	Describe("#Validate", func() {
 		var (
 			admissionHandler              *ReferenceManager
 			kubeInformerFactory           kubeinformers.SharedInformerFactory
@@ -1984,6 +1984,40 @@ var _ = Describe("resourcereferencemanager", func() {
 				Expect(admissionHandler.Validate(context.TODO(), attrs, nil)).To(MatchError(And(
 					ContainSubstring("unable to delete Kubernetes version"),
 					ContainSubstring("1.24.1"),
+					ContainSubstring("still in use by NamespacedCloudProfile"),
+				)))
+			})
+
+			It("should reject removal of kubernetes version classification lifecycle that are still in use by a NamespacedCloudProfile", func() {
+				namespacedCloudProfile := &gardencorev1beta1.NamespacedCloudProfile{
+					Spec: gardencorev1beta1.NamespacedCloudProfileSpec{
+						Parent: gardencorev1beta1.CloudProfileReference{Kind: "CloudProfile", Name: cloudProfile.Name},
+						Kubernetes: &gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+							{Version: "1.24.1", Lifecycle: []gardencorev1beta1.LifecycleStage{
+								{Classification: gardencorev1beta1.ClassificationExpired, StartTime: ptr.To(metav1.Now())},
+							}},
+						}},
+					},
+				}
+				Expect(gardenCoreInformerFactory.Core().V1beta1().NamespacedCloudProfiles().Informer().GetStore().Add(namespacedCloudProfile)).To(Succeed())
+
+				cloudProfile.Spec.Kubernetes.Versions[1].Lifecycle = []core.LifecycleStage{
+					{Classification: core.ClassificationSupported},
+					{Classification: core.ClassificationExpired, StartTime: ptr.To(metav1.Now())},
+				}
+				cloudProfileNew := cloudProfile.DeepCopy()
+				cloudProfileNew.Spec = core.CloudProfileSpec{
+					Kubernetes: core.KubernetesSettings{
+						Versions: []core.ExpirableVersion{
+							{Version: "1.24.1", Lifecycle: []core.LifecycleStage{{Classification: core.ClassificationSupported}}},
+						},
+					},
+				}
+
+				attrs := admission.NewAttributesRecord(cloudProfileNew, &cloudProfile, core.Kind("CloudProfile").WithVersion("version"), "", cloudProfile.Name, core.Resource("CloudProfile").WithVersion("version"), "", admission.Update, &metav1.UpdateOptions{}, false, defaultUserInfo)
+
+				Expect(admissionHandler.Validate(context.TODO(), attrs, nil)).To(MatchError(And(
+					ContainSubstring("unable to delete Kubernetes classification lifecycle \"expired\" from version \"1.24.1\""),
 					ContainSubstring("still in use by NamespacedCloudProfile"),
 				)))
 			})

@@ -20,6 +20,7 @@ import (
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	controllermanagerconfigv1alpha1 "github.com/gardener/gardener/pkg/controllermanager/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/controllerutils"
 )
@@ -100,5 +101,41 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
-	return reconcile.Result{}, nil
+	cloudProfile.Status = status(cloudProfile)
+
+	if err := r.Client.Status().Update(ctx, cloudProfile); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	return reconcile.Result{
+		RequeueAfter: v1beta1helper.DurationUntilNextVersionLifecycleStage(&cloudProfile.Spec),
+	}, nil
+}
+
+func status(cloudProfile *gardencorev1beta1.CloudProfile) gardencorev1beta1.CloudProfileStatus {
+	var result gardencorev1beta1.CloudProfileStatus
+
+	for _, version := range cloudProfile.Spec.Kubernetes.Versions {
+		result.KubernetesVersions = append(result.KubernetesVersions, gardencorev1beta1.ExpirableVersionStatus{
+			Version:        version.Version,
+			Classification: v1beta1helper.CurrentLifecycleClassification(version),
+		})
+	}
+
+	for _, machineImage := range cloudProfile.Spec.MachineImages {
+		status := gardencorev1beta1.MachineImageVersionStatus{
+			Name: machineImage.Name,
+		}
+
+		for _, version := range machineImage.Versions {
+			status.Versions = append(status.Versions, gardencorev1beta1.ExpirableVersionStatus{
+				Version:        version.Version,
+				Classification: v1beta1helper.CurrentLifecycleClassification(version.ExpirableVersion),
+			})
+		}
+
+		result.MachineImageVersions = append(result.MachineImageVersions, status)
+	}
+
+	return result
 }

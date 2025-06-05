@@ -237,6 +237,7 @@ var _ = Describe("Admission", func() {
 			})
 
 			It("should fail if the latest Kubernetes version has an expiration date", func() {
+				parentCloudProfile.Spec.Kubernetes.Versions[0] = gardencorev1beta1.ExpirableVersion{Version: "1.30.0", Classification: ptr.To(gardencorev1beta1.ClassificationExpired)}
 				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(parentCloudProfile)).To(Succeed())
 
 				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
@@ -317,27 +318,6 @@ var _ = Describe("Admission", func() {
 				attrs := admission.NewAttributesRecord(updatedNamespacedCloudProfile, namespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
 
 				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
-			})
-
-			It("should fail for updating a expiration date to a still invalid value", func() {
-				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(parentCloudProfile)).To(Succeed())
-
-				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
-					{Version: "1.28.0", ExpirationDate: expiredExpirationDate},
-				}}
-				updatedNamespacedCloudProfile := namespacedCloudProfile.DeepCopy()
-
-				namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions = []gardencore.ExpirableVersion{
-					{Version: "1.28.0", ExpirationDate: expiredExpirationDate}, {Version: "1.29.0"}, {Version: "1.30.0"},
-				}
-				stillExpiredDate := &metav1.Time{Time: time.Now().Add(-30 * time.Minute)}
-				updatedNamespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
-					{Version: "1.28.0", ExpirationDate: stillExpiredDate},
-				}}
-
-				attrs := admission.NewAttributesRecord(updatedNamespacedCloudProfile, namespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
-
-				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("expiration date for version \"1.28.0\" is in the past")))
 			})
 		})
 
@@ -496,45 +476,6 @@ var _ = Describe("Admission", func() {
 				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
 			})
 
-			It("should fail for creating a NamespacedCloudProfile that overrides an existing MachineImage version without specifying an expiration date", func() {
-				parentCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
-					{Name: "test-image", Versions: []gardencorev1beta1.MachineImageVersion{
-						{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.2.0"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}},
-						{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.0.0"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}},
-					}},
-				}
-				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(parentCloudProfile)).To(Succeed())
-
-				namespacedCloudProfile.Spec.MachineImages = []gardencore.MachineImage{
-					{Name: "test-image", Versions: []gardencore.MachineImageVersion{{ExpirableVersion: gardencore.ExpirableVersion{Version: "1.0.0"}}}},
-				}
-
-				attrs := admission.NewAttributesRecord(namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
-
-				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("expiration date for version \"1.0.0\" must be set")))
-			})
-
-			It("should fail for updating a NamespacedCloudProfile that specifies an already expired MachineImage version", func() {
-				parentCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
-					{Name: "test-image", Versions: []gardencorev1beta1.MachineImageVersion{
-						{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.1.0"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}},
-						{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.2.0"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}},
-					}},
-				}
-				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(parentCloudProfile)).To(Succeed())
-
-				oldNamespacedCloudProfile := namespacedCloudProfile.DeepCopy()
-				namespacedCloudProfile.Spec.MachineImages = []gardencore.MachineImage{
-					{Name: "test-image", Versions: []gardencore.MachineImageVersion{
-						{ExpirableVersion: gardencore.ExpirableVersion{Version: "1.1.0", ExpirationDate: expiredExpirationDate}},
-					}},
-				}
-
-				attrs := admission.NewAttributesRecord(namespacedCloudProfile, oldNamespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.UpdateOptions{}, false, nil)
-
-				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("expiration date for version \"1.1.0\" is in the past")))
-			})
-
 			It("should allow creating a NamespacedCloudProfile that specifies an already expired MachineImage version", func() {
 				parentCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
 					{Name: "test-image", Versions: []gardencorev1beta1.MachineImageVersion{
@@ -689,9 +630,9 @@ var _ = Describe("Admission", func() {
 				machineTypesConstraint []gardencorev1beta1.MachineType
 				volumeTypesConstraint  []gardencorev1beta1.VolumeType
 
-				supportedClassification  = gardencorev1beta1.ClassificationSupported
-				previewClassification    = gardencorev1beta1.ClassificationPreview
-				deprecatedClassification = gardencorev1beta1.ClassificationDeprecated
+				supportedClassification = gardencorev1beta1.ClassificationSupported
+				previewClassification   = gardencorev1beta1.ClassificationPreview
+				expiredClassification   = gardencorev1beta1.ClassificationExpired
 			)
 
 			BeforeEach(func() {
@@ -801,7 +742,7 @@ var _ = Describe("Admission", func() {
 						},
 						{
 							Version:        "1.2.0",
-							Classification: &deprecatedClassification,
+							Classification: &expiredClassification,
 						},
 					}
 					namespacedCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{
@@ -811,7 +752,7 @@ var _ = Describe("Admission", func() {
 						},
 						{
 							Version:        "1.2.0",
-							Classification: &deprecatedClassification,
+							Classification: &expiredClassification,
 							ExpirationDate: expirationDate,
 						},
 					}
@@ -820,7 +761,7 @@ var _ = Describe("Admission", func() {
 
 					Expect(errorList).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("status.cloudProfileSpec.kubernetes.versions[].expirationDate"),
+						"Field": Equal("status.cloudProfileSpec.kubernetes.versions[].lifecycle"),
 					}))))
 				})
 

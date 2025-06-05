@@ -101,6 +101,11 @@ const (
 	// owner: @dimityrmirchev
 	// alpha: v1.121.0
 	DoNotCopyBackupCredentials featuregate.Feature = "DoNotCopyBackupCredentials"
+
+	// WireguardVPN switches to wireguard as vpn technologie instead of openvpn in the vpn2 container
+	// owner: @axel7born
+	// alpha: v1.122.0
+	WireguardVPN featuregate.Feature = "WireguardVPN"
 )
 
 // DefaultFeatureGate is the central feature gate map used by all gardener components.
@@ -140,6 +145,7 @@ var AllFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	IstioTLSTermination:                      {Default: false, PreRelease: featuregate.Alpha},
 	CloudProfileCapabilities:                 {Default: false, PreRelease: featuregate.Alpha},
 	DoNotCopyBackupCredentials:               {Default: false, PreRelease: featuregate.Alpha},
+	WireguardVPN:                             {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // GetFeatures returns a feature gate map with the respective specifications. Non-existing feature gates are ignored.

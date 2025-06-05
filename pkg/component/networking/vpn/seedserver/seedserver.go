@@ -7,6 +7,8 @@ package seedserver
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -28,8 +30,10 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +46,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/shoot"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
 	"github.com/gardener/gardener/pkg/controllerutils"
+	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/resourcemanager/controller/garbagecollector/references"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -49,6 +54,9 @@ import (
 	netutils "github.com/gardener/gardener/pkg/utils/net"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
+
+	"github.com/haruue-net/mwgp"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 const (
@@ -63,6 +71,8 @@ const (
 	EnvoyPort = 9443
 	// OpenVPNPort is the port exposed by the vpn seed server for tcp tunneling.
 	OpenVPNPort = 1194
+	// WireguardPort is the port exposed by the vpn seed server if wireguard instead of openvpn is enabled.
+	WireguardPort = 51820
 	// HighAvailabilityReplicaCount is the replica count used when highly available VPN is configured.
 	HighAvailabilityReplicaCount = 2
 	metricsPortName              = "metrics"
@@ -85,6 +95,9 @@ const (
 	volumeNameTLSAuth     = "tlsauth"
 	volumeNameEnvoyConfig = "envoy-config"
 	volumeNameStatusDir   = "openvpn-status"
+
+	SecretNameWireguardSeedServer  = "vpn-seed-server-wireguard"
+	SecretNameWireguardShootClient = "vpn-shoot-client-wireguard"
 )
 
 var (
@@ -196,11 +209,40 @@ func (v *vpnSeedServer) Deploy(ctx context.Context) error {
 		}
 	)
 
+	// var (
+	// 	clientPrivateKey     wgtypes.Key
+	// 	seedServerPrivateKey wgtypes.Key
+	// )
+
+	// if clientPrivateKey, err = wgtypes.GeneratePrivateKey(); err != nil {
+	// 	return err
+	// }
+
+	// if seedServerPrivateKey, err = wgtypes.GeneratePrivateKey(); err != nil {
+	// 	return err
+	// }
+
+	// if err := v.ensureWireguardSecret(ctx, seedServerPrivateKey, clientPrivateKey.PublicKey(), SecretNameWireguardSeedServer, v.namespace); err != nil {
+	// 	return err
+	// }
+	// if err := v.ensureWireguardSecret(ctx, clientPrivateKey, seedServerPrivateKey.PublicKey(), SecretNameWireguardShootClient, "shoot "); err != nil {
+	// 	return err
+	// }
+
 	utilruntime.Must(kubernetesutils.MakeUnique(configMap))
 
 	secretCAVPN, found := v.secretsManager.Get(v1beta1constants.SecretNameCAVPN)
 	if !found {
 		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameCAVPN)
+	}
+
+	wireguardServerSecret, err := v.secretsManager.Generate(ctx, &secretsutils.WireguardConfig{Name: SecretNameWireguardSeedServer}, secretsmanager.Persist())
+	if err != nil {
+		return err
+	}
+	wireguardClientSecret, err := v.secretsManager.Generate(ctx, &secretsutils.WireguardConfig{Name: SecretNameWireguardShootClient}, secretsmanager.Persist())
+	if err != nil {
+		return err
 	}
 
 	secretServer, err := v.secretsManager.Generate(ctx, &secretsutils.CertificateSecretConfig{
@@ -225,7 +267,7 @@ func (v *vpnSeedServer) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	podTemplate := v.podTemplate(configMap, secretCAVPN, secretServer, secretTLSAuth)
+	podTemplate := v.podTemplate(configMap, secretCAVPN, secretServer, secretTLSAuth, wireguardServerSecret, wireguardClientSecret)
 	labels := getLabels()
 
 	if v.values.HighAvailabilityEnabled {
@@ -255,6 +297,9 @@ func (v *vpnSeedServer) Deploy(ctx context.Context) error {
 		if err := v.deployService(ctx, nil); err != nil {
 			return err
 		}
+		if err := v.deployWireguardService(ctx, nil); err != nil {
+			return err
+		}
 		if err := v.deployDestinationRule(ctx, nil); err != nil {
 			return err
 		}
@@ -272,10 +317,15 @@ func (v *vpnSeedServer) Deploy(ctx context.Context) error {
 		return err
 	}
 
+	// FIXME get istio-ingress namespace const
+	if err := v.ensureWireguardMultiplexerConfig(ctx, wireguardServerSecret.Name, wireguardClientSecret.Name, "istio-ingress"); err != nil {
+		return err
+	}
+
 	return v.deployVPA(ctx)
 }
 
-func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, secretServer, secretTLSAuth *corev1.Secret) *corev1.PodTemplateSpec {
+func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, secretServer, secretTLSAuth, wireguardServerSecret, wireguardClientSecret *corev1.Secret) *corev1.PodTemplateSpec {
 	hostPathCharDev := corev1.HostPathCharDev
 	var (
 		ipFamilies []string
@@ -288,6 +338,31 @@ func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, se
 	nodeNetwork := ""
 	if len(v.values.Network.NodeCIDRs) > 0 {
 		nodeNetwork = v.values.Network.NodeCIDRs[0].String()
+	}
+
+	ports := []corev1.ContainerPort{
+		{
+			Name:          "tcp-tunnel",
+			ContainerPort: OpenVPNPort,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}
+	readinessProbe := &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt32(OpenVPNPort),
+			},
+		},
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(features.WireguardVPN) {
+		ports = []corev1.ContainerPort{
+			{
+				Name:          "tcp-tunnel",
+				ContainerPort: WireguardPort,
+				Protocol:      corev1.ProtocolUDP,
+			},
+		}
+		readinessProbe = nil
 	}
 
 	template := &corev1.PodTemplateSpec{
@@ -306,7 +381,7 @@ func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, se
 				{
 					Name:            "setup",
 					Image:           v.values.ImageVPNSeedServer,
-					ImagePullPolicy: corev1.PullIfNotPresent,
+					ImagePullPolicy: corev1.PullAlways,
 					Command: []string{
 						"/bin/vpn-server",
 						"setup",
@@ -320,14 +395,8 @@ func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, se
 				{
 					Name:            deploymentName,
 					Image:           v.values.ImageVPNSeedServer,
-					ImagePullPolicy: corev1.PullIfNotPresent,
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "tcp-tunnel",
-							ContainerPort: OpenVPNPort,
-							Protocol:      corev1.ProtocolTCP,
-						},
-					},
+					ImagePullPolicy: corev1.PullAlways,
+					Ports:           ports,
 					Env: []corev1.EnvVar{
 						{
 							Name:  "IP_FAMILIES",
@@ -369,21 +438,35 @@ func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, se
 								},
 							},
 						},
-					},
-					ReadinessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							TCPSocket: &corev1.TCPSocketAction{
-								Port: intstr.FromInt32(OpenVPNPort),
+						{
+							Name: "WIREGUARD_PRIVATE_KEY",
+							ValueFrom: &corev1.EnvVarSource{
+								SecretKeyRef: &corev1.SecretKeySelector{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: wireguardServerSecret.Name,
+									},
+									Key: secretsutils.WireguardPrivateKey,
+								},
 							},
 						},
-					},
-					LivenessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							TCPSocket: &corev1.TCPSocketAction{
-								Port: intstr.FromInt32(OpenVPNPort),
+						{
+							Name: "WIREGUARD_PUBLIC_KEY",
+							ValueFrom: &corev1.EnvVarSource{
+								SecretKeyRef: &corev1.SecretKeySelector{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: wireguardClientSecret.Name,
+									},
+									Key: secretsutils.WireguardPublicKey,
+								},
 							},
 						},
+						{
+							Name:  "WIREGUARD_PORT",
+							Value: fmt.Sprintf("%d", WireguardPort),
+						},
 					},
+					ReadinessProbe: readinessProbe,
+					LivenessProbe:  readinessProbe,
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("10m"),
@@ -469,6 +552,24 @@ func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, se
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName:  secretTLSAuth.Name,
+							DefaultMode: ptr.To[int32](0400),
+						},
+					},
+				},
+				{
+					Name: SecretNameWireguardSeedServer,
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName:  wireguardServerSecret.Name,
+							DefaultMode: ptr.To[int32](0400),
+						},
+					},
+				},
+				{
+					Name: SecretNameWireguardShootClient,
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName:  wireguardClientSecret.Name,
 							DefaultMode: ptr.To[int32](0400),
 						},
 					},
@@ -730,6 +831,12 @@ func (v *vpnSeedServer) deployService(ctx context.Context, idx *int) error {
 				TargetPort: intstr.FromInt32(OpenVPNPort),
 			},
 			{
+				Name:       "wireguard",
+				Port:       WireguardPort,
+				TargetPort: intstr.FromInt32(WireguardPort),
+				Protocol:   corev1.ProtocolUDP,
+			},
+			{
 				Name:       "http-proxy",
 				Port:       EnvoyPort,
 				TargetPort: intstr.FromInt32(EnvoyPort),
@@ -738,6 +845,44 @@ func (v *vpnSeedServer) deployService(ctx context.Context, idx *int) error {
 				Name:       metricsPortName,
 				Port:       metricsPort,
 				TargetPort: intstr.FromInt32(metricsPort),
+			},
+		}
+
+		if idx == nil {
+			service.Spec.Selector = map[string]string{
+				v1beta1constants.LabelApp: deploymentName,
+			}
+		} else {
+			service.Spec.Selector = map[string]string{
+				"statefulset.kubernetes.io/pod-name": v.indexedName(idx),
+			}
+		}
+
+		return nil
+	})
+	return err
+}
+
+func (v *vpnSeedServer) deployWireguardService(ctx context.Context, idx *int) error {
+	service := v.emptyService(idx)
+	service.ObjectMeta.Name = "wireguard-server"
+
+	_, err := controllerutils.GetAndCreateOrMergePatch(ctx, v.client, service, func() error {
+		metav1.SetMetaDataAnnotation(&service.ObjectMeta, "networking.istio.io/exportTo", "*")
+
+		metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingPodLabelSelectorNamespaceAlias, v1beta1constants.LabelNetworkPolicyShootNamespaceAlias)
+		utilruntime.Must(gardenerutils.InjectNetworkPolicyNamespaceSelectors(service,
+			metav1.LabelSelector{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleIstioIngress}},
+			metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: v1beta1constants.LabelExposureClassHandlerName, Operator: metav1.LabelSelectorOpExists}}}))
+		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForScrapeTargets(service, networkingv1.NetworkPolicyPort{Port: ptr.To(intstr.FromInt32(WireguardPort)), Protocol: ptr.To(corev1.ProtocolUDP)}))
+
+		service.Spec.Type = corev1.ServiceTypeLoadBalancer
+		service.Spec.Ports = []corev1.ServicePort{
+			{
+				Name:       "wireguard",
+				Port:       WireguardPort,
+				TargetPort: intstr.FromInt32(WireguardPort),
+				Protocol:   corev1.ProtocolUDP,
 			},
 		}
 
@@ -1060,3 +1205,135 @@ func (v *vpnSeedServer) getEnvoyConfig() (string, error) {
 
 	return envoyConfig.String(), nil
 }
+
+func (v *vpnSeedServer) ensureWireguardSecret(ctx context.Context, privateKey, publicKey wgtypes.Key, secretName, targetNamespace string) error {
+	privateKeyString := hex.EncodeToString(privateKey[:])
+	publicKeyString := hex.EncodeToString(publicKey[:])
+
+	// Store them in a secret
+	wireguardSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: targetNamespace,
+		},
+		// We must store the own private key and the remote public key in this this secret
+		StringData: map[string]string{
+			"privateKey":       privateKeyString,
+			"privateKeyBase64": privateKey.String(),
+			"publicKey":        publicKeyString,
+			"publicKeyBase64":  publicKey.String(),
+		},
+	}
+
+	if err := v.client.Create(ctx, wireguardSecret); client.IgnoreAlreadyExists(err) != nil {
+		return err
+	}
+	return nil
+}
+
+// FIXME for now only one shoot is supported
+func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vpnSeedSecretName, vpnShootSecretName, targetNamespace string) error {
+
+	vpnSeedSecret := &corev1.Secret{}
+	if err := v.client.Get(ctx, types.NamespacedName{Namespace: v.namespace, Name: vpnSeedSecretName}, vpnSeedSecret); err != nil {
+		return err
+	}
+	vpnShootSecret := &corev1.Secret{}
+	if err := v.client.Get(ctx, types.NamespacedName{Namespace: v.namespace, Name: vpnShootSecretName}, vpnShootSecret); err != nil {
+		return err
+	}
+
+	var (
+		privateKey = &mwgp.NoisePrivateKey{}
+		publicKey  = &mwgp.NoisePublicKey{}
+	)
+
+	privateKeyHex, ok := vpnSeedSecret.Data[secretsutils.WireguardPrivateKey]
+	if !ok {
+		return fmt.Errorf("private key is not present in %s", vpnSeedSecret.Name)
+	}
+	publicKeyHex, ok := vpnShootSecret.Data[secretsutils.WireguardPublicKey]
+	if !ok {
+		return fmt.Errorf("public key is not present in %s", vpnSeedSecret.Name)
+	}
+
+	if err := privateKey.FromHex(string(privateKeyHex)); err != nil {
+		return fmt.Errorf("unable to decode private key from hex: %w", err)
+	}
+	if err := publicKey.FromHex(string(publicKeyHex)); err != nil {
+		return fmt.Errorf("unable to decode public key from hex: %w", err)
+	}
+
+	config := &mwgp.ServerConfig{
+		Listen:  fmt.Sprintf(":%d", WireguardPort),
+		Timeout: 60,
+		Servers: []*mwgp.ServerConfigServer{
+			{
+				PrivateKey: privateKey,
+				Peers: []*mwgp.ServerConfigPeer{
+					{
+						ClientPublicKey: publicKey,
+						ForwardTo:       fmt.Sprintf("%s.%s:%d", deploymentName, v.namespace, WireguardPort),
+					},
+				},
+			},
+		},
+	}
+
+	b, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	// Store it in a secret
+	wireguardMultiplexerSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wireguard-multiplexer-config", // FIXME constify
+			Namespace: targetNamespace,
+		},
+		StringData: map[string]string{
+			"config.json": string(b),
+		},
+	}
+
+	if err := v.client.Create(ctx, wireguardMultiplexerSecret); client.IgnoreAlreadyExists(err) != nil {
+		return err
+	}
+
+	return nil
+}
+
+// { // begin
+//   "listen": ":51820",  // Listen address
+//   "timeout": 60,      // Timeout before a forwarding entry expired, in seconds
+//   "servers": [ // begin
+//     { // begin
+//       "privkey": "EFt3ELmZeM/M47qFkgF4RbSOijtdHS43BNIxvxstREI=", // The private key of the WireGuard server, which is required to decrypt the handshake_initiation message for the public_key of the client
+//       "address": "192.0.2.1", // The IP address of the WireGuard server, which would be combined with the peer."forward_to" for a completed UDP address
+//       "peers": [
+//         {
+//           "pubkey": "mCXTsTRyjQKV74eWR2Ka1LIdIptCG9K0FXlrG2NC4EQ=", // The public key of the client who would be connected to the WireGuard interface listening on the "forward_to" address
+//           "forward_to": ":1000" // The endpoint of the server WireGuard, will be combined with the server."address" if the IP address part gets omitted
+//         },
+//         {
+//           "pubkey": "WKn3Dtne0ZYj/BXa6uzqMVU+xrLIQRsPA/F/SkgFsVY=",
+//           "forward_to": "192.0.2.2:1002" // A complete UDP address will also be accepted, for forwarding to another host other than the server."address"
+//         },
+//         {
+//           // If the "pubkey" is not specified, it will define a "fallback" peer which matches any unmatched public keys, this is useful for edge nodes
+//           "forward_to": ":1003"
+//         } // end
+//       ], // end
+//     }, // end
+//     { // begin
+//       // Servers with different private keys can be defined in one mwgp-server and share the listen port
+//       "privkey": "6GwcQf52eLIBckRygN+LaW3SfVpv4/Lc4kUyVkYfIkg=",
+//       "address": "192.0.2.3",
+//       "peers": [ /*comments*/
+//         { /*comments*/ "pubkey": "mCXTsTRyjQKV74eWR2Ka1LIdIptCG9K0FXlrG2NC4EQ=", "forward_to": ":1000" }, // comments
+//         { "pubkey": "OPdP2G4hfQasp/+/AZ6LiHJXIY62UKQQY4iNHJVJwH4=", "forward_to": ":1001" }, // comments
+//       ]
+//     }
+//   ],
+//   "obfs": "kisekimo, mahoumo, muryoudewaarimasen" // Obfuscation password (optional)
+// }

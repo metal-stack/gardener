@@ -168,6 +168,35 @@ spec:
           - name: ingressgateway-ca-certs
             mountPath: "/etc/istio/ingressgateway-ca-certs"
             readOnly: true
+        - name: wireguard-multiplexer
+          image: ghcr.io/majst01/mwgp:pr-1
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: false
+          ports:
+          - containerPort: 51820
+            protocol: UDP
+          args:
+          - server
+          - /wireguard-multiplexer/config.json
+          resources:
+            requests:
+              cpu: 200m
+              memory: 64Mi
+            limits:
+              memory: 64Mi
+          env:
+          - name: MWGP_CACHE_FILE
+            value: /wireguard/cache/cache.json
+          volumeMounts:
+          - name: wireguard-multiplexer-config
+            mountPath: "/wireguard-multiplexer"
+            readOnly: true
+          - name: wireguard-cache-volume
+            mountPath: /wireguard/cache
+          
       volumes:
       - emptyDir: {}
         name: workload-socket
@@ -210,4 +239,21 @@ spec:
         secret:
           secretName: "istio-ingressgateway-ca-certs"
           optional: true
+      - name: wireguard-multiplexer-config
+        secret:
+          secretName: "wireguard-multiplexer-config"
+          optional: true
+      # TODO this should be a PVC
+      - emptyDir: {}
+        name: wireguard-cache-volume
       priorityClassName: {{ .Values.priorityClassName }}
+
+# ---
+# # Ensure at the beginning a empty secret is present
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: wireguard-multiplexer-config
+#   namespace: {{ .Release.Namespace }}
+# data:
+#   config.json: e30=

@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/gardener/gardener/imagevector"
+	"github.com/gardener/gardener/pkg/component/networking/vpn/seedserver"
 	vpnseedserver "github.com/gardener/gardener/pkg/component/networking/vpn/seedserver"
 	vpnshoot "github.com/gardener/gardener/pkg/component/networking/vpn/shoot"
 	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
@@ -26,10 +27,11 @@ func (b *Botanist) DefaultVPNShoot() (vpnshoot.Interface, error) {
 		VPAEnabled:        b.Shoot.WantsVerticalPodAutoscaler,
 		VPAUpdateDisabled: b.Shoot.VPNVPAUpdateDisabled,
 		ReversedVPN: vpnshoot.ReversedVPNValues{
-			Header:      "outbound|1194||" + vpnseedserver.ServiceName + "." + b.Shoot.ControlPlaneNamespace + ".svc.cluster.local",
-			Endpoint:    b.outOfClusterAPIServerFQDN(),
-			OpenVPNPort: 8132,
-			IPFamilies:  b.Shoot.GetInfo().Spec.Networking.IPFamilies,
+			Header:        "outbound|1194||" + vpnseedserver.ServiceName + "." + b.Shoot.ControlPlaneNamespace + ".svc.cluster.local",
+			Endpoint:      b.outOfClusterAPIServerFQDN(),
+			OpenVPNPort:   8132,
+			WireGuardPort: seedserver.WireguardPort,
+			IPFamilies:    b.Shoot.GetInfo().Spec.Networking.IPFamilies,
 		},
 		HighAvailabilityEnabled:              b.Shoot.VPNHighAvailabilityEnabled,
 		HighAvailabilityNumberOfSeedServers:  b.Shoot.VPNHighAvailabilityNumberOfSeedServers,

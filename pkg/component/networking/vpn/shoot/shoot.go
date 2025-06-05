@@ -34,6 +34,7 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component"
 	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/constants"
+	"github.com/gardener/gardener/pkg/component/networking/vpn/seedserver"
 	vpnseedserver "github.com/gardener/gardener/pkg/component/networking/vpn/seedserver"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/shoot"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
@@ -73,6 +74,8 @@ type ReversedVPNValues struct {
 	Endpoint string
 	// OpenVPNPort is the port for the ReversedVPN.
 	OpenVPNPort int32
+	// WireGuardPort is the port for the ReversedVPN if wireguard is used.
+	WireGuardPort int32
 	// IPFamilies are the IPFamilies of the shoot.
 	IPFamilies []gardencorev1beta1.IPFamily
 }
@@ -280,6 +283,8 @@ func (v *vpnShoot) Deploy(ctx context.Context) error {
 		signingCA = v1beta1constants.SecretNameCAVPN
 	)
 
+	
+
 	secretCA, found := v.secretsManager.Get(signingCA)
 	if !found {
 		return fmt.Errorf("secret %q not found", signingCA)
@@ -383,6 +388,25 @@ func (v *vpnShoot) computeResourcesData(secretCAVPN *corev1.Secret, secretsVPNSh
 		return nil, fmt.Errorf("secret %q not found", vpnseedserver.SecretNameTLSAuth)
 	}
 
+
+	vpnSeedServerWireguardSecret, found := v.secretsManager.Get(seedserver.SecretNameWireguardSeedServer)
+	if !found {
+		return nil, fmt.Errorf("secret vpn-seed-server-wireguard not found")
+	}
+	serverPublicKey, ok := vpnSeedServerWireguardSecret.Data[secretsutils.WireguardPublicKey]
+	if !ok {
+		return nil, fmt.Errorf("wireguard seed server public key not found")
+	}
+
+	vpnShootClientWireguardSecret, found := v.secretsManager.Get(seedserver.SecretNameWireguardShootClient)
+	if !found {
+		return nil, fmt.Errorf("secret vpn-seed-server-wireguard not found")
+	}
+	shootPrivateKey, ok := vpnShootClientWireguardSecret.Data[secretsutils.WireguardPrivateKey]
+	if !ok {
+		return nil, fmt.Errorf("wireguard shoot client private key not found")
+	}
+
 	var (
 		registry = managedresources.NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer)
 
@@ -402,12 +426,24 @@ func (v *vpnShoot) computeResourcesData(secretCAVPN *corev1.Secret, secretsVPNSh
 			Type: corev1.SecretTypeOpaque,
 			Data: secretVPNSeedServerTLSAuth.Data,
 		}
+		secretWireguard = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "vpn-shoot-wireguard",
+				Namespace: metav1.NamespaceSystem,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				secretsutils.WireguardPrivateKey: shootPrivateKey,
+				secretsutils.WireguardPublicKey: serverPublicKey,
+			},
+		}
 		clusterRole        *rbacv1.ClusterRole
 		clusterRoleBinding *rbacv1.ClusterRoleBinding
 	)
 
 	utilruntime.Must(kubernetesutils.MakeUnique(secretCA))
 	utilruntime.Must(kubernetesutils.MakeUnique(secretTLSAuth))
+
 
 	for i, item := range secretsVPNShoot {
 		secret := &corev1.Secret{
@@ -553,6 +589,7 @@ func (v *vpnShoot) computeResourcesData(secretCAVPN *corev1.Secret, secretsVPNSh
 	objects = append(objects,
 		secretCA,
 		secretTLSAuth,
+		secretWireguard,
 		serviceAccount,
 		networkPolicy,
 		networkPolicyFromSeed,
@@ -781,6 +818,32 @@ func (v *vpnShoot) getEnvVars(index *int) []corev1.EnvVar {
 		corev1.EnvVar{
 			Name:  "SHOOT_NODE_NETWORKS",
 			Value: netutils.JoinByComma(v.values.Network.NodeCIDRs),
+		},
+		corev1.EnvVar{
+			Name: "WIREGUARD_PRIVATE_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "vpn-shoot-wireguard",
+					},
+					Key: "privateKey",
+				},
+			},
+		},
+		corev1.EnvVar{
+			Name: "WIREGUARD_PUBLIC_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "vpn-shoot-wireguard",
+					},
+					Key: "publicKey",
+				},
+			},
+		},
+		corev1.EnvVar{
+			Name:  "WIREGUARD_PORT",
+			Value: strconv.Itoa(int(v.values.ReversedVPN.WireGuardPort)),
 		},
 	)
 

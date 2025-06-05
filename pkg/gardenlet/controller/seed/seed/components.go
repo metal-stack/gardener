@@ -297,6 +297,7 @@ func (r *Reconciler) newIstio(ctx context.Context, seed *seedpkg.Seed, isGardenC
 
 	servicePorts := []corev1.ServicePort{
 		{Name: "tcp", Port: 443, TargetPort: intstr.FromInt32(9443)},
+		{Name: "wireguard", Port: 51820, TargetPort: intstr.FromInt32(51820), Protocol: corev1.ProtocolUDP},
 		{Name: "tls-tunnel", Port: vpnseedserver.GatewayPort, TargetPort: intstr.FromInt32(vpnseedserver.GatewayPort)},
 	}
 

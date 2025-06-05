@@ -24,6 +24,7 @@ require (
 	github.com/google/gnostic-models v0.6.9
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-containerregistry v0.20.0
+	github.com/haruue-net/mwgp v0.0.0-20241125024905-bd3cbaa3b81f
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/ironcore-dev/vgopath v0.1.5
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.2.0
@@ -52,6 +53,7 @@ require (
 	golang.org/x/text v0.25.0
 	golang.org/x/time v0.11.0
 	golang.org/x/tools v0.33.0
+	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	gomodules.xyz/jsonpatch/v2 v2.5.0
 	gonum.org/v1/gonum v0.16.0
 	google.golang.org/protobuf v1.36.6
@@ -259,6 +261,8 @@ require (
 	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
+	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173 // indirect
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect

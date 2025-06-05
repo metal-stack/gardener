@@ -147,6 +147,11 @@ const (
 	// owner: @rfranzke
 	// alpha: v1.142.0
 	BackupEntryForGarden featuregate.Feature = "BackupEntryForGarden"
+
+	// WireguardVPN switches to wireguard as vpn technologie instead of openvpn in the vpn2 container
+	// owner: @axel7born
+	// alpha: v1.122.0
+	WireguardVPN featuregate.Feature = "WireguardVPN"
 )
 
 // DefaultFeatureGate is the central feature gate map used by all gardener components.
@@ -194,6 +199,7 @@ var AllFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	DisableNginxIngressInShoot:     {Default: false, PreRelease: featuregate.Alpha},
 	LiveControlPlaneMigration:      {Default: false, PreRelease: featuregate.Alpha},
 	BackupEntryForGarden:           {Default: false, PreRelease: featuregate.Alpha},
+	WireguardVPN:                   {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // GetFeatures returns a feature gate map with the respective specifications. Non-existing feature gates are ignored.

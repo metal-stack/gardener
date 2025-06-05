@@ -39,6 +39,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core/helper"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/apis/security"
 	securityv1alpha1 "github.com/gardener/gardener/pkg/apis/security/v1alpha1"
 	"github.com/gardener/gardener/pkg/apis/seedmanagement"
@@ -478,15 +479,33 @@ func (r *ReferenceManager) Validate(ctx context.Context, a admission.Attributes,
 				return apierrors.NewBadRequest("could not convert old resource into CloudProfile object")
 			}
 
+			kubernetesKeyFunc := func(v core.ExpirableVersion) string { return v.Version }
+			newKubernetesVersions := utils.CreateMapFromSlice(cloudProfile.Spec.Kubernetes.Versions, kubernetesKeyFunc)
+
 			// getting Kubernetes versions that have been removed from the CloudProfile
 			removedKubernetesVersions := sets.StringKeySet(helper.GetRemovedVersions(oldCloudProfile.Spec.Kubernetes.Versions, cloudProfile.Spec.Kubernetes.Versions))
+			removedKubernetesClassificationLifecycles := make(map[string][]core.VersionClassification)
+
+			for _, existingVersion := range oldCloudProfile.Spec.Kubernetes.Versions {
+				if removedKubernetesVersions.Has(existingVersion.Version) {
+					continue
+				}
+				for _, existingLifecycleClass := range existingVersion.Lifecycle {
+					if slices.ContainsFunc(newKubernetesVersions[existingVersion.Version].Lifecycle, func(newLifecycle core.LifecycleStage) bool {
+						return newLifecycle.Classification == existingLifecycleClass.Classification
+					}) {
+						continue
+					}
+					removedKubernetesClassificationLifecycles[existingVersion.Version] = append(removedKubernetesClassificationLifecycles[existingVersion.Version], existingLifecycleClass.Classification)
+				}
+			}
 
 			// getting Machine image versions that have been removed from or added to the CloudProfile
-			removedMachineImages, removedMachineImageVersions, addedMachineImages, addedMachineImageVersions := helper.GetMachineImageDiff(oldCloudProfile.Spec.MachineImages, cloudProfile.Spec.MachineImages)
+			diff := helper.GetMachineImageDiff(oldCloudProfile.Spec.MachineImages, cloudProfile.Spec.MachineImages)
 
 			wasLimitAdded := !apiequality.Semantic.DeepEqual(cloudProfile.Spec.Limits, oldCloudProfile.Spec.Limits)
 
-			if len(removedKubernetesVersions) > 0 || len(removedMachineImageVersions) > 0 || len(addedMachineImageVersions) > 0 || wasLimitAdded {
+			if len(removedKubernetesVersions) > 0 || len(diff.RemovedVersions) > 0 || len(diff.AddedVersions) > 0 || len(diff.RemovedVersionClassifications) > 0 || len(removedKubernetesClassificationLifecycles) > 0 || wasLimitAdded {
 				shootList, err1 := r.shootLister.List(labels.Everything())
 				if err1 != nil {
 					return apierrors.NewInternalError(fmt.Errorf("could not list shoots to verify that Kubernetes and/or Machine image version can be removed: %v", err1))
@@ -517,6 +536,12 @@ func (r *ReferenceManager) Validate(ctx context.Context, a admission.Attributes,
 					ncpNamespacedName := types.NamespacedName{Name: ncp.Name, Namespace: ncp.Namespace}
 					relevantNamespacedCloudProfiles[ncpNamespacedName.String()] = ncp
 
+					matchesClassification := func(classification core.VersionClassification) func(stage gardencorev1beta1.LifecycleStage) bool {
+						return func(stage gardencorev1beta1.LifecycleStage) bool {
+							return core.VersionClassification(stage.Classification) == classification
+						}
+					}
+
 					go func(nscpfl *gardencorev1beta1.NamespacedCloudProfile) {
 						defer wg.Done()
 
@@ -525,20 +550,36 @@ func (r *ReferenceManager) Validate(ctx context.Context, a admission.Attributes,
 								if removedKubernetesVersions.Has(kubernetesVersion.Version) {
 									channel <- fmt.Errorf("unable to delete Kubernetes version %q from CloudProfile %q - version is still in use by NamespacedCloudProfile '%s/%s'", kubernetesVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
 								}
+								if removedClassifications, exists := removedKubernetesClassificationLifecycles[kubernetesVersion.Version]; exists {
+									for _, c := range removedClassifications {
+										if slices.ContainsFunc(kubernetesVersion.Lifecycle, matchesClassification(c)) {
+											channel <- fmt.Errorf("unable to delete Kubernetes classification lifecycle %q from version %q from CloudProfile %q still in use by NamespacedCloudProfile '%s/%s'", c, kubernetesVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
+										}
+									}
+								}
 							}
 						}
 
 						for _, machineImage := range nscpfl.Spec.MachineImages {
-							if removedMachineImages.Has(machineImage.Name) {
+							if diff.RemovedImages.Has(machineImage.Name) {
 								channel <- fmt.Errorf("unable to delete MachineImage %q from CloudProfile %q - MachineImage is still in use by NamespacedCloudProfile %q", machineImage.Name, cloudProfile.Name, ncpNamespacedName.String())
 							}
-							if addedMachineImages.Has(machineImage.Name) {
+							if diff.AddedImages.Has(machineImage.Name) {
 								channel <- fmt.Errorf("unable to add MachineImage %q to CloudProfile %q - MachineImage is already defined by NamespacedCloudProfile %q", machineImage.Name, cloudProfile.Name, ncpNamespacedName.String())
 							}
-							if removedVersions, exists := removedMachineImageVersions[machineImage.Name]; exists {
-								for _, imageVersion := range machineImage.Versions {
+							for _, imageVersion := range machineImage.Versions {
+								if removedVersions, exists := diff.RemovedVersions[machineImage.Name]; exists {
 									if removedVersions.Has(imageVersion.Version) {
 										channel <- fmt.Errorf("unable to delete MachineImage version '%s/%s' from CloudProfile %q - version is still in use by NamespacedCloudProfile '%s/%s'", machineImage.Name, imageVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
+									}
+
+								}
+								if removedClassifications, exists := diff.RemovedVersionClassifications[machineImage.Name]; exists {
+									for _, c := range removedClassifications[imageVersion.Version] {
+										if slices.ContainsFunc(imageVersion.Lifecycle, matchesClassification(c)) {
+											channel <- fmt.Errorf("unable to delete classification lifecycle %q from MachineImage version '%s/%s' from CloudProfile %q still in use by NamespacedCloudProfile '%s/%s'", c, machineImage.Name, imageVersion.Version, cloudProfile.Name, nscpfl.Namespace, nscpfl.Name)
+										}
+
 									}
 								}
 							}
@@ -565,11 +606,11 @@ func (r *ReferenceManager) Validate(ctx context.Context, a admission.Attributes,
 								continue
 							}
 							// happens if Shoot runs an image that does not exist in the old CloudProfile - in this case: ignore
-							if _, ok := removedMachineImageVersions[worker.Machine.Image.Name]; !ok {
+							if _, ok := diff.RemovedVersions[worker.Machine.Image.Name]; !ok {
 								continue
 							}
 
-							if removedMachineImageVersions[worker.Machine.Image.Name].Has(*worker.Machine.Image.Version) {
+							if diff.RemovedVersions[worker.Machine.Image.Name].Has(*worker.Machine.Image.Version) {
 								channel <- fmt.Errorf("unable to delete Machine image version '%s/%s' from CloudProfile %q - version is still in use by shoot '%s/%s' by worker %q", worker.Machine.Image.Name, *worker.Machine.Image.Version, cloudProfile.Name, shoot.Namespace, shoot.Name, worker.Name)
 							}
 						}
@@ -1156,7 +1197,7 @@ func getRemovedMachineImageVersions(namespacedCloudProfile, oldNamespacedCloudPr
 func validateShootForRemovedKubernetesVersions(channel chan error, shoot *gardencorev1beta1.Shoot, removedKubernetesVersions sets.Set[string], parentCloudProfileKubernetesVersions map[string]gardencorev1beta1.ExpirableVersion, namespacedCloudProfile *core.NamespacedCloudProfile) {
 	shootKubernetesVersion := shoot.Spec.Kubernetes.Version
 	if removedKubernetesVersions.Has(shootKubernetesVersion) {
-		if parentCloudProfileKubernetesVersions[shootKubernetesVersion].ExpirationDate != nil && parentCloudProfileKubernetesVersions[shootKubernetesVersion].ExpirationDate.Before(&metav1.Time{Time: time.Now()}) {
+		if v1beta1helper.VersionIsExpired(parentCloudProfileKubernetesVersions[shootKubernetesVersion]) {
 			channel <- fmt.Errorf("unable to delete Kubernetes version %q from NamespacedCloudProfile '%s/%s' - version with extended expiration date is still in use by shoot '%s/%s'", shootKubernetesVersion, namespacedCloudProfile.Namespace, namespacedCloudProfile.Name, shoot.Namespace, shoot.Name)
 		}
 	}
@@ -1175,7 +1216,7 @@ func validateShootWorkersForRemovedMachineImageVersions(channel chan error, shoo
 
 		if removedMachineImageVersions[worker.Machine.Image.Name].Has(*worker.Machine.Image.Version) {
 			parentVersion, exists := parentCloudProfileMachineImageVersions[worker.Machine.Image.Name][*worker.Machine.Image.Version]
-			if !exists || parentVersion.ExpirationDate != nil && parentVersion.ExpirationDate.Before(&metav1.Time{Time: time.Now()}) {
+			if !exists || v1beta1helper.VersionIsExpired(parentVersion.ExpirableVersion) {
 				channel <- fmt.Errorf("unable to delete Machine image version '%s/%s' from NamespacedCloudProfile '%s/%s' - version is still in use by shoot '%s/%s' by worker %q", worker.Machine.Image.Name, *worker.Machine.Image.Version, namespacedCloudProfile.Namespace, namespacedCloudProfile.Name, shoot.Namespace, shoot.Name, worker.Name)
 			}
 		}

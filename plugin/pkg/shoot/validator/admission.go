@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Masterminds/semver/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -1403,12 +1402,12 @@ func findLatestVersion(constraints []gardencorev1beta1.ExpirableVersion, major, 
 	var latestVersion *semver.Version
 	for _, versionConstraint := range constraints {
 		// ignore expired versions
-		if versionConstraint.ExpirationDate != nil && versionConstraint.ExpirationDate.Time.UTC().Before(time.Now().UTC()) {
+		if !v1beta1helper.VersionIsActive(versionConstraint) {
 			continue
 		}
 
 		// filter preview versions for defaulting
-		if ptr.Deref(versionConstraint.Classification, "") == gardencorev1beta1.ClassificationPreview {
+		if v1beta1helper.VersionIsPreview(versionConstraint) {
 			continue
 		}
 
@@ -1444,7 +1443,7 @@ func validateKubernetesVersionConstraints(a admission.Attributes, constraints []
 		// Disallow usage of an expired Kubernetes version on Shoot creation and new worker pool creation
 		// Updating an existing worker to a higher (ensured by validation) expired Kubernetes version is necessary for consecutive maintenance force updates
 		if a.GetOperation() == admission.Create || isNewWorkerPool {
-			if versionConstraint.ExpirationDate != nil && versionConstraint.ExpirationDate.Time.UTC().Before(time.Now().UTC()) {
+			if !v1beta1helper.VersionIsActive(versionConstraint) {
 				continue
 			}
 		}
@@ -1454,7 +1453,7 @@ func validateKubernetesVersionConstraints(a admission.Attributes, constraints []
 		}
 
 		versionStr := versionConstraint.Version
-		if ptr.Deref(versionConstraint.Classification, "") == gardencorev1beta1.ClassificationPreview {
+		if v1beta1helper.VersionIsPreview(versionConstraint) {
 			versionStr += " (preview)"
 		}
 		validValues = append(validValues, versionStr)
@@ -1853,9 +1852,9 @@ func validateMachineImagesConstraints(a admission.Attributes, constraints []gard
 			for _, machineVersion := range machineImage.Versions {
 				machineImageVersion := fmt.Sprintf("%s:%s", machineImage.Name, machineVersion.Version)
 
-				if machineVersion.ExpirationDate == nil || machineVersion.ExpirationDate.Time.UTC().After(time.Now().UTC()) {
+				if v1beta1helper.VersionIsActive(machineVersion.ExpirableVersion) {
 					activeMachineImageVersions.Insert(machineImageVersion)
-				} else if machineVersion.ExpirationDate != nil && machineVersion.ExpirationDate.Time.UTC().Before(time.Now().UTC()) && a.GetOperation() == admission.Update && !isNewWorkerPool {
+				} else if v1beta1helper.VersionIsExpired(machineVersion.ExpirableVersion) && a.GetOperation() == admission.Update && !isNewWorkerPool {
 					// An already expired machine image version is a viable machine image version for the worker pool if-and-only-if:
 					//  - this is an update call (no new Shoot creation)
 					//  - updates an existing worker pool (not for a new worker pool)

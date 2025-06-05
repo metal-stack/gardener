@@ -7,6 +7,7 @@ package namespacedcloudprofile
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"golang.org/x/exp/maps"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,7 @@ import (
 	gardencore "github.com/gardener/gardener/pkg/apis/core"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	controllermanagerconfigv1alpha1 "github.com/gardener/gardener/pkg/controllermanager/apis/config/v1alpha1"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/utils"
@@ -103,7 +105,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{}, nil
+	return reconcile.Result{
+		RequeueAfter: v1beta1helper.DurationUntilNextVersionLifecycleStage(&namespacedCloudProfile.Status.CloudProfileSpec),
+	}, nil
 }
 
 func mergeAndPatchCloudProfile(ctx context.Context, c client.Client, namespacedCloudProfile *gardencorev1beta1.NamespacedCloudProfile, parentCloudProfile *gardencorev1beta1.CloudProfile) error {
@@ -119,7 +123,7 @@ func MergeCloudProfiles(namespacedCloudProfile *gardencorev1beta1.NamespacedClou
 	namespacedCloudProfile.Status.CloudProfileSpec = cloudProfile.Spec
 
 	if namespacedCloudProfile.Spec.Kubernetes != nil {
-		namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions = mergeDeep(namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions, namespacedCloudProfile.Spec.Kubernetes.Versions, expirableVersionKeyFunc, mergeExpirationDates, false)
+		namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions = mergeDeep(namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions, namespacedCloudProfile.Spec.Kubernetes.Versions, expirableVersionKeyFunc, mergeExpirableVersions, false)
 	}
 	namespacedCloudProfile.Status.CloudProfileSpec.MachineImages = mergeDeep(namespacedCloudProfile.Status.CloudProfileSpec.MachineImages, namespacedCloudProfile.Spec.MachineImages, machineImageKeyFunc, mergeMachineImages, true)
 	namespacedCloudProfile.Status.CloudProfileSpec.MachineTypes = mergeDeep(namespacedCloudProfile.Status.CloudProfileSpec.MachineTypes, namespacedCloudProfile.Spec.MachineTypes, machineTypeKeyFunc, nil, true)
@@ -159,16 +163,93 @@ func defaultMachineTypeArchitectures(cloudProfile gardencore.CloudProfileSpec) {
 }
 
 var (
-	expirableVersionKeyFunc    = func(v gardencorev1beta1.ExpirableVersion) string { return v.Version }
-	machineImageKeyFunc        = func(i gardencorev1beta1.MachineImage) string { return i.Name }
-	machineImageVersionKeyFunc = func(v gardencorev1beta1.MachineImageVersion) string { return v.Version }
-	machineTypeKeyFunc         = func(t gardencorev1beta1.MachineType) string { return t.Name }
-	volumeTypeKeyFunc          = func(t gardencorev1beta1.VolumeType) string { return t.Name }
+	expirableVersionKeyFunc        = func(v gardencorev1beta1.ExpirableVersion) string { return v.Version }
+	classificationLifecycleKeyFunc = func(c gardencorev1beta1.LifecycleStage) string { return string(c.Classification) }
+	machineImageKeyFunc            = func(i gardencorev1beta1.MachineImage) string { return i.Name }
+	machineImageVersionKeyFunc     = func(v gardencorev1beta1.MachineImageVersion) string { return v.Version }
+	machineTypeKeyFunc             = func(t gardencorev1beta1.MachineType) string { return t.Name }
+	volumeTypeKeyFunc              = func(t gardencorev1beta1.VolumeType) string { return t.Name }
 )
 
-func mergeExpirationDates(base, override gardencorev1beta1.ExpirableVersion) gardencorev1beta1.ExpirableVersion {
-	base.ExpirationDate = override.ExpirationDate
+func mergeExpirableVersions(base, override gardencorev1beta1.ExpirableVersion) gardencorev1beta1.ExpirableVersion {
+	migratedBase := migrateExpirableVersionToLifecycle(base)
+	migratedOverride := migrateExpirableVersionToLifecycle(override)
+
+	migratedBase.Lifecycle = mergeDeep(migratedBase.Lifecycle, migratedOverride.Lifecycle, classificationLifecycleKeyFunc, mergeClassificationLifecycles, false)
+
+	order := map[gardencorev1beta1.VersionClassification]int{
+		gardencorev1beta1.ClassificationUnavailable: 0,
+		gardencorev1beta1.ClassificationPreview:     1,
+		gardencorev1beta1.ClassificationSupported:   2,
+		gardencorev1beta1.ClassificationDeprecated:  3,
+		gardencorev1beta1.ClassificationExpired:     4,
+	}
+	stageCompareFunc := func(a, b gardencorev1beta1.LifecycleStage) int {
+		return order[a.Classification] - order[b.Classification]
+	}
+	slices.SortFunc(migratedBase.Lifecycle, stageCompareFunc)
+
+	for _, overrideStage := range migratedOverride.Lifecycle {
+		// Push startTimes of all subsequent classifications after last custom version
+		for i, baseStage := range migratedBase.Lifecycle {
+			if stageCompareFunc(baseStage, overrideStage) < 0 &&
+				(baseStage.StartTime != nil && overrideStage.StartTime.Before(baseStage.StartTime)) {
+				migratedBase.Lifecycle[i].StartTime = overrideStage.StartTime
+			}
+
+			if stageCompareFunc(baseStage, overrideStage) > 0 &&
+				(baseStage.StartTime == nil || baseStage.StartTime.Before(overrideStage.StartTime)) {
+				migratedBase.Lifecycle[i].StartTime = overrideStage.StartTime
+			}
+		}
+	}
+
+	return migratedBase
+}
+
+func mergeClassificationLifecycles(base, override gardencorev1beta1.LifecycleStage) gardencorev1beta1.LifecycleStage {
+	base.StartTime = override.StartTime
 	return base
+}
+
+func migrateExpirableVersionToLifecycle(version gardencorev1beta1.ExpirableVersion) gardencorev1beta1.ExpirableVersion {
+	var result = version.DeepCopy()
+
+	if result.Classification != nil || result.ExpirationDate != nil {
+		// old cloud profile definition, convert to lifecycle
+		// this can be removed as soon as we remove the old classification and expiration date fields
+
+		if result.Classification != nil {
+			result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
+				Classification: *result.Classification,
+			})
+		}
+
+		if result.ExpirationDate != nil {
+			if result.Classification == nil {
+				result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
+					Classification: gardencorev1beta1.ClassificationSupported,
+				})
+			}
+
+			result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
+				Classification: gardencorev1beta1.ClassificationExpired,
+				StartTime:      result.ExpirationDate,
+			})
+		}
+	}
+
+	if len(result.Lifecycle) == 0 {
+		// when there is no classification lifecycle defined then default to supported
+		result.Lifecycle = append(result.Lifecycle, gardencorev1beta1.LifecycleStage{
+			Classification: gardencorev1beta1.ClassificationSupported,
+		})
+	}
+
+	result.Classification = nil
+	result.ExpirationDate = nil
+
+	return *result
 }
 
 func mergeMachineImages(base, override gardencorev1beta1.MachineImage) gardencorev1beta1.MachineImage {
@@ -188,7 +269,7 @@ func mergeMachineImageVersions(base, override gardencorev1beta1.MachineImageVers
 		// If the NamespacedCloudProfile machine image version has been there before, do not merge it with the parent CloudProfile machine image version.
 		return override
 	}
-	base.ExpirableVersion = mergeExpirationDates(base.ExpirableVersion, override.ExpirableVersion)
+	base.ExpirableVersion = mergeExpirableVersions(base.ExpirableVersion, override.ExpirableVersion)
 	return base
 }
 

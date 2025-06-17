@@ -167,6 +167,7 @@ var _ = Describe("Gardenlet Validation Tests", func() {
 			},
 				Entry("reconcile", "reconcile"),
 				Entry("renew-kubeconfig", "renew-kubeconfig"),
+				Entry("force-redeploy", "force-redeploy"),
 			)
 		})
 

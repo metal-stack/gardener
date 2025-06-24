@@ -46,13 +46,13 @@ func validateOverlapWithSeed(fldPath *field.Path, shootNetwork []string, network
 	allErrs := field.ErrorList{}
 
 	for _, network := range shootNetwork {
-		if NetworksIntersect(seedServices, network) {
-			allErrs = append(allErrs, field.Invalid(fldPath, network, fmt.Sprintf("shoot %s network intersects with seed service network", networkType)))
-		}
+		// if NetworksIntersect(seedServices, network) {
+		// 	allErrs = append(allErrs, field.Invalid(fldPath, network, fmt.Sprintf("shoot %s network intersects with seed service network", networkType)))
+		// }
 
-		if NetworksIntersect(seedPods, network) {
-			allErrs = append(allErrs, field.Invalid(fldPath, network, fmt.Sprintf("shoot %s network intersects with seed pod network", networkType)))
-		}
+		// if NetworksIntersect(seedPods, network) {
+		// 	allErrs = append(allErrs, field.Invalid(fldPath, network, fmt.Sprintf("shoot %s network intersects with seed pod network", networkType)))
+		// }
 
 		if seedNodes != nil && NetworksIntersect(*seedNodes, network) {
 			allErrs = append(allErrs, field.Invalid(fldPath, network, fmt.Sprintf("shoot %s network intersects with seed node network", networkType)))

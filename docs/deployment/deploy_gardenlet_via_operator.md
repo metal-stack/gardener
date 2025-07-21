@@ -13,7 +13,7 @@ If you have used the [`gardener/controlplane` Helm chart](../../charts/gardener/
 ## Deployment of gardenlets
 
 Using this method, `gardener-operator` is only taking care of the very first deployment of gardenlet.
-Once running, the gardenlet leverages the [self upgrade](deploy_gardenlet_manually.md#self-upgrades) strategy in order to keep itself up-to-date.
+Once running, the gardenlet leverages the [self-upgrade](deploy_gardenlet_manually.md#self-upgrades) strategy in order to keep itself up-to-date.
 Concretely, `gardener-operator` only acts when there is no respective `Seed` resource yet.
 
 In order to request a gardenlet deployment, create following resource in the (virtual) garden cluster:

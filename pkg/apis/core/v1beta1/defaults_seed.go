@@ -15,6 +15,9 @@ func SetDefaults_Seed(obj *Seed) {
 	if obj.Spec.Settings == nil {
 		obj.Spec.Settings = &SeedSettings{}
 	}
+	if obj.Spec.Backup != nil && obj.Spec.Backup.BucketName == nil {
+		obj.Spec.Backup.BucketName = ptr.To(string(obj.GetUID()))
+	}
 }
 
 // SetDefaults_SeedSettings sets default values for SeedSettings objects.

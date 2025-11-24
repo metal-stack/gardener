@@ -303,11 +303,6 @@ message BackupEntryStatus {
   // MigrationStartTime is the time when a migration to a different seed was initiated.
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time migrationStartTime = 5;
-
-  // BucketName is the name of the bucket in which the backup entry is located. When relocating
-  // a bucket a full snapshot will be taken after this field changes to a new value.
-  // +optional
-  optional string bucketName = 6;
 }
 
 // Bastion contains the bastions creation info

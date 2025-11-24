@@ -3252,19 +3252,6 @@ Kubernetes meta/v1.Time
 <p>MigrationStartTime is the time when a migration to a different seed was initiated.</p>
 </td>
 </tr>
-<tr>
-<td>
-<code>bucketName</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>BucketName is the name of the bucket in which the backup entry is located. When relocating
-a bucket a full snapshot will be taken after this field changes to a new value.</p>
-</td>
-</tr>
 </tbody>
 </table>
 <h3 id="core.gardener.cloud/v1beta1.Bastion">Bastion

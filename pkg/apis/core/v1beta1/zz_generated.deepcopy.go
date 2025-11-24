@@ -573,11 +573,6 @@ func (in *BackupEntryStatus) DeepCopyInto(out *BackupEntryStatus) {
 		in, out := &in.MigrationStartTime, &out.MigrationStartTime
 		*out = (*in).DeepCopy()
 	}
-	if in.BucketName != nil {
-		in, out := &in.BucketName, &out.BucketName
-		*out = new(string)
-		**out = **in
-	}
 	return
 }
 

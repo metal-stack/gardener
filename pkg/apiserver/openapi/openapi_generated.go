@@ -1853,13 +1853,6 @@ func schema_pkg_apis_core_v1beta1_BackupEntryStatus(ref common.ReferenceCallback
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
-					"bucketName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "BucketName is the name of the bucket in which the backup entry is located. When relocating a bucket a full snapshot will be taken after this field changes to a new value.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 				},
 			},
 		},

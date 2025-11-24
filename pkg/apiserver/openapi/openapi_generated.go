@@ -1447,6 +1447,13 @@ func schema_pkg_apis_core_v1beta1_Backup(ref common.ReferenceCallback) common.Op
 							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
 						},
 					},
+					"bucketName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name of the backup bucket used at the provider. Defaults to the seed's UID. Through a subresource call this field can be altered in order to relocate a bucket location.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"provider"},
 			},
@@ -1844,6 +1851,13 @@ func schema_pkg_apis_core_v1beta1_BackupEntryStatus(ref common.ReferenceCallback
 						SchemaProps: spec.SchemaProps{
 							Description: "MigrationStartTime is the time when a migration to a different seed was initiated.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"bucketName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BucketName is the name of the bucket in which the backup entry is located. When relocating a bucket a full snapshot will be taken after this field changes to a new value.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

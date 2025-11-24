@@ -306,6 +306,11 @@ func (in *Backup) DeepCopyInto(out *Backup) {
 		*out = new(v1.ObjectReference)
 		**out = **in
 	}
+	if in.BucketName != nil {
+		in, out := &in.BucketName, &out.BucketName
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 
@@ -567,6 +572,11 @@ func (in *BackupEntryStatus) DeepCopyInto(out *BackupEntryStatus) {
 	if in.MigrationStartTime != nil {
 		in, out := &in.MigrationStartTime, &out.MigrationStartTime
 		*out = (*in).DeepCopy()
+	}
+	if in.BucketName != nil {
+		in, out := &in.BucketName, &out.BucketName
+		*out = new(string)
+		**out = **in
 	}
 	return
 }

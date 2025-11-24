@@ -2333,6 +2333,7 @@ func autoConvert_v1beta1_Backup_To_core_Backup(in *Backup, out *core.Backup, s c
 	out.ProviderConfig = (*runtime.RawExtension)(unsafe.Pointer(in.ProviderConfig))
 	out.Region = (*string)(unsafe.Pointer(in.Region))
 	out.CredentialsRef = (*v1.ObjectReference)(unsafe.Pointer(in.CredentialsRef))
+	out.BucketName = (*string)(unsafe.Pointer(in.BucketName))
 	return nil
 }
 
@@ -2346,6 +2347,7 @@ func autoConvert_core_Backup_To_v1beta1_Backup(in *core.Backup, out *Backup, s c
 	out.ProviderConfig = (*runtime.RawExtension)(unsafe.Pointer(in.ProviderConfig))
 	out.Region = (*string)(unsafe.Pointer(in.Region))
 	out.CredentialsRef = (*v1.ObjectReference)(unsafe.Pointer(in.CredentialsRef))
+	out.BucketName = (*string)(unsafe.Pointer(in.BucketName))
 	return nil
 }
 
@@ -2570,6 +2572,7 @@ func autoConvert_v1beta1_BackupEntryStatus_To_core_BackupEntryStatus(in *BackupE
 	out.ObservedGeneration = in.ObservedGeneration
 	out.SeedName = (*string)(unsafe.Pointer(in.SeedName))
 	out.MigrationStartTime = (*metav1.Time)(unsafe.Pointer(in.MigrationStartTime))
+	out.BucketName = (*string)(unsafe.Pointer(in.BucketName))
 	return nil
 }
 
@@ -2584,6 +2587,7 @@ func autoConvert_core_BackupEntryStatus_To_v1beta1_BackupEntryStatus(in *core.Ba
 	out.ObservedGeneration = in.ObservedGeneration
 	out.SeedName = (*string)(unsafe.Pointer(in.SeedName))
 	out.MigrationStartTime = (*metav1.Time)(unsafe.Pointer(in.MigrationStartTime))
+	out.BucketName = (*string)(unsafe.Pointer(in.BucketName))
 	return nil
 }
 

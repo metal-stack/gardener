@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
@@ -252,6 +253,17 @@ func (r *Reconciler) reconcileDesiredPolicies(ctx context.Context, log logr.Logg
 		addTasksForPort(port, policyID, r.Config.IngressControllerSelector.Namespace, r.Config.IngressControllerSelector.PodSelector, ingressPolicyObjectMetaWhenExposedViaIngressFor, egressPolicyObjectMetaWhenExposedViaIngressFor)
 	}
 
+	portsExposedViaHttpRoutes, err := r.portsExposedByHttpRouteResources(ctx, service)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, route := range portsExposedViaHttpRoutes {
+		port := route.networkPolicyPort
+		policyID := policyIDFor(service.Name, port)
+		addTasksForPort(port, policyID, route.namespace, route.podSelector, ingressPolicyObjectMetaWhenExposedViaHttpRouteFor, egressPolicyObjectMetaWhenExposedViaHttpRouteFor)
+	}
+
 	return taskFns, desiredObjectMetaKeys, nil
 }
 
@@ -442,6 +454,105 @@ func serviceBackendPortsToNetworkPolicyPorts(service *corev1.Service, serviceBac
 	return
 }
 
+type gatewayResources struct {
+	networkPolicyPort networkingv1.NetworkPolicyPort
+	namespace         string
+	podSelector       metav1.LabelSelector
+}
+
+func (r *Reconciler) portsExposedByHttpRouteResources(ctx context.Context, service *corev1.Service) ([]gatewayResources, error) {
+	httpRouteList := &gwapiv1.HTTPRouteList{}
+	if err := r.TargetClient.List(ctx, httpRouteList, client.InNamespace(service.Namespace)); err != nil {
+		return nil, err
+	}
+
+	var resources []gatewayResources
+
+	for _, httpRoute := range httpRouteList.Items {
+		if len(httpRoute.Spec.ParentRefs) != 1 {
+			continue
+		}
+
+		parentRef := httpRoute.Spec.ParentRefs[0]
+
+		for _, rule := range httpRoute.Spec.Rules {
+			for _, ref := range rule.BackendRefs {
+				if string(ref.BackendObjectReference.Name) == service.Name && ref.BackendObjectReference.Port != nil {
+					parentNamespace := httpRoute.Namespace
+					if parentRef.Namespace != nil {
+						parentNamespace = string(*parentRef.Namespace)
+					}
+
+					gw := &gwapiv1.Gateway{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      string(parentRef.Name),
+							Namespace: string(parentNamespace),
+						},
+					}
+					if err := r.TargetClient.Get(ctx, client.ObjectKeyFromObject(gw), gw); err != nil {
+						return nil, err
+					}
+
+					// i don't know, we made a convention here
+					if len(gw.Spec.Addresses) != 1 {
+						continue
+					}
+
+					backendServiceName, _, found := strings.Cut(gw.Spec.Addresses[0].Value, ".")
+					if !found {
+						continue
+					}
+
+					backendService := &corev1.Service{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      backendServiceName,
+							Namespace: parentNamespace,
+						},
+					}
+					if err := r.TargetClient.Get(ctx, client.ObjectKeyFromObject(backendService), backendService); err != nil {
+						return nil, err
+					}
+
+					networkPolicyPorts := serviceBackendPortsToNetworkPolicyPorts(service, []networkingv1.ServiceBackendPort{
+						{
+							Name:   service.Name,
+							Number: *ref.BackendObjectReference.Port,
+						},
+					})
+
+					if len(networkPolicyPorts) == 0 {
+						continue
+					}
+
+					backendNamespace := httpRoute.Namespace
+					if ref.BackendObjectReference.Namespace != nil {
+						backendNamespace = string(*ref.BackendObjectReference.Namespace)
+					}
+
+					resources = append(resources,
+						gatewayResources{
+							networkPolicyPort: networkPolicyPorts[0], // there can only be a single element because our input is a single element
+							namespace:         backendNamespace,
+							podSelector: metav1.LabelSelector{
+								MatchLabels: backendService.Spec.Selector,
+							},
+						},
+						gatewayResources{
+							networkPolicyPort: networkPolicyPorts[0], // there can only be a single element because our input is a single element
+							namespace:         parentNamespace,
+							podSelector: metav1.LabelSelector{
+								MatchLabels: backendService.Spec.Selector,
+							},
+						},
+					)
+				}
+			}
+		}
+	}
+
+	return resources, nil
+}
+
 func policyIDFor(serviceName string, port networkingv1.NetworkPolicyPort) string {
 	return fmt.Sprintf("%s-%s-%s", serviceName, strings.ToLower(string(*port.Protocol)), port.Port.String())
 }
@@ -511,6 +622,20 @@ func egressPolicyObjectMetaWhenExposedViaIngressFor(policyID, serviceNamespace, 
 	}
 
 	return metav1.ObjectMeta{Name: name + "-from-ingress-controller", Namespace: ingressControllerNamespace}
+}
+
+func ingressPolicyObjectMetaWhenExposedViaHttpRouteFor(policyID, serviceNamespace, _ string) metav1.ObjectMeta {
+	name := "ingress-to-" + policyID + "-from-http-route"
+	return metav1.ObjectMeta{Name: name, Namespace: serviceNamespace}
+}
+
+func egressPolicyObjectMetaWhenExposedViaHttpRouteFor(policyID, serviceNamespace, backendServiceNamespace string) metav1.ObjectMeta {
+	name := "egress-to-" + policyID
+	if serviceNamespace != backendServiceNamespace {
+		name = "egress-to-" + serviceNamespace + "-" + policyID
+	}
+
+	return metav1.ObjectMeta{Name: name + "-from-http-route", Namespace: backendServiceNamespace}
 }
 
 func ingressNamespaceSelectorFor(serviceNamespace, namespaceName string) *metav1.LabelSelector {

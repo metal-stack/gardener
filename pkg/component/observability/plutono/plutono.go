@@ -25,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwapiv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
@@ -36,10 +38,12 @@ import (
 	"github.com/gardener/gardener/pkg/resourcemanager/controller/garbagecollector/references"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	"github.com/gardener/gardener/pkg/utils/istio"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
+	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 )
 
 const (
@@ -281,22 +285,30 @@ func (p *plutono) computeResourcesData(ctx context.Context) (*corev1.ConfigMap, 
 	utilruntime.Must(kubernetesutils.MakeUnique(plutonoConfigSecret))
 	utilruntime.Must(kubernetesutils.MakeUnique(providerConfigMap))
 
-	ingress, err := p.getIngress(ctx)
+	// TODO:
+	// ingress, err := p.getIngress(ctx)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+
+	gwResources, err := p.getGatewayResources(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	data, err := registry.AddAllAndSerialize(
+	resources := []client.Object{
 		plutonoConfigSecret,
 		providerConfigMap,
 		dataSourceConfigMap,
 		p.getDeployment(providerConfigMap, plutonoConfigSecret, plutonoAdminUserSecret),
 		p.getService(),
-		ingress,
 		p.getServiceAccount(),
 		p.getRole(),
 		p.getRoleBinding(),
-	)
+	}
+	resources = append(resources, gwResources...)
+
+	data, err := registry.AddAllAndSerialize(resources...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -869,6 +881,160 @@ func (p *plutono) getIngress(ctx context.Context) (*networkingv1.Ingress, error)
 	}
 
 	return ingress, nil
+}
+
+func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, error) {
+	var (
+		ingressNamespace      = v1beta1constants.DefaultSNIIngressNamespace // TODO: take care of exposure classes and zonal istios
+		credentialsSecretName = p.values.AuthSecretName
+		caName                = v1beta1constants.SecretNameCASeed
+	)
+
+	if p.values.IsGardenCluster {
+		credentialsSecret, found := p.secretsManager.Get(v1beta1constants.SecretNameObservabilityIngress)
+		if !found {
+			return nil, fmt.Errorf("secret %q not found", v1beta1constants.SecretNameObservabilityIngress)
+		}
+
+		credentialsSecretName = credentialsSecret.Name
+		caName = operatorv1alpha1.SecretNameCARuntime
+		ingressNamespace = "virtual-garden-istio-ingress"
+	}
+
+	if p.values.ClusterType == component.ClusterTypeShoot {
+		credentialsSecret, found := p.secretsManager.Get(v1beta1constants.SecretNameObservabilityIngressUsers)
+		if !found {
+			return nil, fmt.Errorf("secret %q not found", v1beta1constants.SecretNameObservabilityIngressUsers)
+		}
+
+		credentialsSecretName = credentialsSecret.Name
+		caName = v1beta1constants.SecretNameCACluster
+	}
+
+	var ingressTLSSecretName string
+	if p.values.WildcardCertName != nil {
+		ingressTLSSecretName = *p.values.WildcardCertName
+	} else {
+		ingressTLSSecret, err := p.secretsManager.Generate(ctx, &secretsutils.CertificateSecretConfig{
+			Name:                        "plutono-tls",
+			CommonName:                  "plutono",
+			Organization:                []string{"gardener.cloud:monitoring:ingress"},
+			DNSNames:                    []string{p.values.IngressHost},
+			CertType:                    secretsutils.ServerCert,
+			Validity:                    ptr.To(ingressTLSCertificateValidity),
+			SkipPublishingCACertificate: true,
+		}, secretsmanager.SignedByCA(caName))
+		if err != nil {
+			return nil, err
+		}
+		ingressTLSSecretName = ingressTLSSecret.Name
+	}
+
+	var (
+		gw = &gwapiv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ingressNamespace,
+			},
+			Spec: gwapiv1.GatewaySpec{
+				GatewayClassName: "istio",
+				Addresses: []gwapiv1.GatewaySpecAddress{
+					{
+						Type:  ptr.To(gwapiv1.HostnameAddressType),
+						Value: fmt.Sprintf("%s.%s.svc.cluster.local", v1beta1constants.DefaultSNIIngressServiceName, ingressNamespace),
+					},
+				},
+				Listeners: []gwapiv1.Listener{
+					{
+						Name:     name,
+						Hostname: ptr.To(gwapiv1.Hostname(p.values.IngressHost)),
+						Port:     gwapiv1.PortNumber(443),
+						Protocol: gwapiv1.HTTPSProtocolType,
+						TLS: &gwapiv1.ListenerTLSConfig{
+							Mode: ptr.To(gwapiv1.TLSModeTerminate),
+							CertificateRefs: []gwapiv1.SecretObjectReference{
+								{
+									Kind:      ptr.To(gwapiv1.Kind("Secret")),
+									Name:      gwapiv1.ObjectName(ingressTLSSecretName),
+									Namespace: ptr.To(gwapiv1.Namespace(p.namespace)), // TODO: wildcard cert is probably somewhere else?
+								},
+							},
+						},
+						AllowedRoutes: &gwapiv1.AllowedRoutes{
+							Namespaces: &gwapiv1.RouteNamespaces{
+								From: ptr.To(gwapiv1.NamespacesFromAll), // TODO: replace by selector
+							},
+						},
+					},
+				},
+			},
+		}
+
+		refGrant = &gwapiv1beta1.ReferenceGrant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "allow-gateway-to-ref-plutono-secrets",
+				Namespace: p.namespace,
+			},
+			Spec: gwapiv1beta1.ReferenceGrantSpec{
+				From: []gwapiv1beta1.ReferenceGrantFrom{
+					{
+						Group:     gwapiv1.Group("gateway.networking.k8s.io"),
+						Kind:      gwapiv1.Kind("Gateway"),
+						Namespace: gwapiv1.Namespace(ingressNamespace),
+					},
+				},
+				To: []gwapiv1beta1.ReferenceGrantTo{
+					{
+						Kind: "Secret",
+						Name: ptr.To(gwapiv1.ObjectName(ingressTLSSecretName)),
+					},
+				},
+			},
+		}
+
+		httpRoute = &gwapiv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: p.namespace,
+				Annotations: map[string]string{
+					"basic-auth-secret-name": credentialsSecretName,
+				},
+			},
+			Spec: gwapiv1.HTTPRouteSpec{
+				CommonRouteSpec: gwapiv1.CommonRouteSpec{
+					ParentRefs: []gwapiv1.ParentReference{
+						{
+							Namespace: ptr.To(gwapiv1.Namespace(gw.Namespace)),
+							Name:      gwapiv1.ObjectName(gw.Name),
+						},
+					},
+				},
+				Hostnames: []gwapiv1.Hostname{gwapiv1.Hostname(p.values.IngressHost)},
+				Rules: []gwapiv1.HTTPRouteRule{
+					{
+						BackendRefs: []gwapiv1.HTTPBackendRef{
+							{
+								BackendRef: gwapiv1.BackendRef{
+									BackendObjectReference: gwapiv1.BackendObjectReference{
+										Name: name,
+										Port: ptr.To(gwapiv1.PortNumber(port)),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	)
+
+	destinationHost := kubernetesutils.FQDNForService(name, p.namespace)
+	destinationRule := &istionetworkingv1beta1.DestinationRule{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: p.namespace}}
+	if err := istio.DestinationRuleWithLocalityPreference(destinationRule, getLabels(), destinationHost)(); err != nil {
+		return nil, err
+	}
+
+	return []client.Object{gw, httpRoute, refGrant, destinationRule}, nil
 }
 
 func (p *plutono) dashboardLabel() string {

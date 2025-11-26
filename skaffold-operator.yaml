@@ -103,8 +103,6 @@ build:
             - pkg/component/extensions/operatingsystemconfig/original/components/rootcertificates
             - pkg/component/extensions/operatingsystemconfig/original/components/rootcertificates/templates/scripts/update-local-ca-certificates.tpl.sh
             - pkg/component/extensions/operatingsystemconfig/utils
-            - pkg/component/garden/system/runtime
-            - pkg/component/garden/system/virtual
             - pkg/component/gardener/access
             - pkg/component/gardener/admissioncontroller
             - pkg/component/gardener/apiserver
@@ -118,6 +116,8 @@ build:
             - pkg/component/gardener/resourcemanager/assets/crd-resources.gardener.cloud_managedresources.yaml
             - pkg/component/gardener/resourcemanager/constants
             - pkg/component/gardener/scheduler
+            - pkg/component/garden/system/runtime
+            - pkg/component/garden/system/virtual
             - pkg/component/kubernetes/apiserver
             - pkg/component/kubernetes/apiserver/constants
             - pkg/component/kubernetes/apiserverexposure
@@ -130,6 +130,7 @@ build:
             - pkg/component/networking/istio/charts/istio/istio-crds/crd-all.gen.yaml
             - pkg/component/networking/istio/charts/istio/istio-ingress
             - pkg/component/networking/istio/charts/istio/istio-istiod
+            - pkg/component/networking/istio/charts/k8s-gateway-api/standard-install.yaml
             - pkg/component/networking/nginxingress
             - pkg/component/networking/nodelocaldns/constants
             - pkg/component/networking/vpn/envoy
@@ -165,9 +166,9 @@ build:
             - pkg/component/observability/monitoring/gardenermetricsexporter
             - pkg/component/observability/monitoring/kubestatemetrics
             - pkg/component/observability/monitoring/persesoperator
-            - pkg/component/observability/monitoring/persesoperator/templates/crd-perses.dev_perses.yaml
             - pkg/component/observability/monitoring/persesoperator/templates/crd-perses.dev_persesdashboards.yaml
             - pkg/component/observability/monitoring/persesoperator/templates/crd-perses.dev_persesdatasources.yaml
+            - pkg/component/observability/monitoring/persesoperator/templates/crd-perses.dev_perses.yaml
             - pkg/component/observability/monitoring/prometheus
             - pkg/component/observability/monitoring/prometheus/aggregate
             - pkg/component/observability/monitoring/prometheus/aggregate/assets/prometheusrules/metering.rules.stateful.yaml
@@ -188,16 +189,6 @@ build:
             - pkg/component/observability/monitoring/prometheus/longterm
             - pkg/component/observability/monitoring/prometheus/longterm/assets/prometheusrules/recording.yaml
             - pkg/component/observability/monitoring/prometheus/longterm/assets/prometheusrules/sla.yaml
-            - pkg/component/observability/monitoring/prometheus/seed
-            - pkg/component/observability/monitoring/prometheus/shoot
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/optional/alertmanager.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/prometheus.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/verticalpodautoscaler.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/kube-kubelet.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/kube-pods.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/networking.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/workerless/kube-pods.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/workerless/networking.yaml
             - pkg/component/observability/monitoring/prometheusoperator
             - pkg/component/observability/monitoring/prometheusoperator/templates/crd-monitoring.coreos.com_alertmanagerconfigs.yaml
             - pkg/component/observability/monitoring/prometheusoperator/templates/crd-monitoring.coreos.com_alertmanagers.yaml
@@ -209,6 +200,16 @@ build:
             - pkg/component/observability/monitoring/prometheusoperator/templates/crd-monitoring.coreos.com_scrapeconfigs.yaml
             - pkg/component/observability/monitoring/prometheusoperator/templates/crd-monitoring.coreos.com_servicemonitors.yaml
             - pkg/component/observability/monitoring/prometheusoperator/templates/crd-monitoring.coreos.com_thanosrulers.yaml
+            - pkg/component/observability/monitoring/prometheus/seed
+            - pkg/component/observability/monitoring/prometheus/shoot
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/optional/alertmanager.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/prometheus.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/verticalpodautoscaler.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/kube-kubelet.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/kube-pods.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/workerless/kube-pods.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/workerless/networking.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/networking.yaml
             - pkg/component/observability/monitoring/utils
             - pkg/component/observability/opentelemetry/operator
             - pkg/component/observability/opentelemetry/operator/assets/crd-opentelemetry.io_instrumentations.yaml
@@ -224,18 +225,18 @@ build:
             - pkg/component/observability/plutono/dashboards/shoot
             - pkg/component/shared
             - pkg/controller/gardenletdeployer
+            - pkg/controllermanager/apis/config/v1alpha1
             - pkg/controller/networkpolicy
             - pkg/controller/networkpolicy/helper
             - pkg/controller/networkpolicy/hostnameresolver
             - pkg/controller/reference
             - pkg/controller/service
-            - pkg/controller/vpaevictionrequirements
-            - pkg/controllermanager/apis/config/v1alpha1
             - pkg/controllerutils
             - pkg/controllerutils/mapper
             - pkg/controllerutils/predicate
             - pkg/controllerutils/reconciler
             - pkg/controllerutils/routes
+            - pkg/controller/vpaevictionrequirements
             - pkg/extensions
             - pkg/features
             - pkg/gardenlet/apis/config/v1alpha1
@@ -259,8 +260,8 @@ build:
             - pkg/operator/controller/garden
             - pkg/operator/controller/garden/care
             - pkg/operator/controller/garden/garden
-            - pkg/operator/controller/garden/reference
             - pkg/operator/controller/gardenlet
+            - pkg/operator/controller/garden/reference
             - pkg/operator/controller/virtual
             - pkg/operator/controller/virtual/access
             - pkg/operator/controller/virtual/cluster
@@ -469,33 +470,6 @@ build:
             - pkg/apis/core/v1beta1/constants
             - pkg/apis/core/v1beta1/helper
             - pkg/apis/core/validation
-            - pkg/apis/extensions
-            - pkg/apis/extensions/v1alpha1
-            - pkg/apis/extensions/v1alpha1/helper
-            - pkg/apis/operations
-            - pkg/apis/operations/install
-            - pkg/apis/operations/v1alpha1
-            - pkg/apis/operations/validation
-            - pkg/apis/operator
-            - pkg/apis/operator/v1alpha1
-            - pkg/apis/resources
-            - pkg/apis/resources/v1alpha1
-            - pkg/apis/security
-            - pkg/apis/security/install
-            - pkg/apis/security/v1alpha1
-            - pkg/apis/security/v1alpha1/constants
-            - pkg/apis/security/validation
-            - pkg/apis/seedmanagement
-            - pkg/apis/seedmanagement/encoding
-            - pkg/apis/seedmanagement/helper
-            - pkg/apis/seedmanagement/install
-            - pkg/apis/seedmanagement/v1alpha1
-            - pkg/apis/seedmanagement/v1alpha1/helper
-            - pkg/apis/seedmanagement/validation
-            - pkg/apis/settings
-            - pkg/apis/settings/install
-            - pkg/apis/settings/v1alpha1
-            - pkg/apis/settings/validation
             - pkg/apiserver
             - pkg/apiserver/admission/initializer
             - pkg/apiserver/features
@@ -528,9 +502,9 @@ build:
             - pkg/apiserver/registry/core/seed
             - pkg/apiserver/registry/core/seed/storage
             - pkg/apiserver/registry/core/shoot
-            - pkg/apiserver/registry/core/shoot/storage
             - pkg/apiserver/registry/core/shootstate
             - pkg/apiserver/registry/core/shootstate/storage
+            - pkg/apiserver/registry/core/shoot/storage
             - pkg/apiserver/registry/operations/bastion
             - pkg/apiserver/registry/operations/bastion/storage
             - pkg/apiserver/registry/operations/rest
@@ -542,9 +516,9 @@ build:
             - pkg/apiserver/registry/seedmanagement/gardenlet
             - pkg/apiserver/registry/seedmanagement/gardenlet/storage
             - pkg/apiserver/registry/seedmanagement/managedseed
-            - pkg/apiserver/registry/seedmanagement/managedseed/storage
             - pkg/apiserver/registry/seedmanagement/managedseedset
             - pkg/apiserver/registry/seedmanagement/managedseedset/storage
+            - pkg/apiserver/registry/seedmanagement/managedseed/storage
             - pkg/apiserver/registry/seedmanagement/rest
             - pkg/apiserver/registry/settings/clusteropenidconnectpreset
             - pkg/apiserver/registry/settings/clusteropenidconnectpreset/storage
@@ -552,6 +526,33 @@ build:
             - pkg/apiserver/registry/settings/openidconnectpreset/storage
             - pkg/apiserver/registry/settings/rest
             - pkg/apiserver/storage
+            - pkg/apis/extensions
+            - pkg/apis/extensions/v1alpha1
+            - pkg/apis/extensions/v1alpha1/helper
+            - pkg/apis/operations
+            - pkg/apis/operations/install
+            - pkg/apis/operations/v1alpha1
+            - pkg/apis/operations/validation
+            - pkg/apis/operator
+            - pkg/apis/operator/v1alpha1
+            - pkg/apis/resources
+            - pkg/apis/resources/v1alpha1
+            - pkg/apis/security
+            - pkg/apis/security/install
+            - pkg/apis/security/v1alpha1
+            - pkg/apis/security/v1alpha1/constants
+            - pkg/apis/security/validation
+            - pkg/apis/seedmanagement
+            - pkg/apis/seedmanagement/encoding
+            - pkg/apis/seedmanagement/helper
+            - pkg/apis/seedmanagement/install
+            - pkg/apis/seedmanagement/v1alpha1
+            - pkg/apis/seedmanagement/v1alpha1/helper
+            - pkg/apis/seedmanagement/validation
+            - pkg/apis/settings
+            - pkg/apis/settings/install
+            - pkg/apis/settings/v1alpha1
+            - pkg/apis/settings/validation
             - pkg/chartrenderer
             - pkg/client/core/clientset/versioned
             - pkg/client/core/clientset/versioned/scheme
@@ -715,7 +716,6 @@ build:
             - pkg/client/kubernetes/cache
             - pkg/component
             - pkg/component/garden/projectrbac
-            - pkg/controller/reference
             - pkg/controllermanager/apis/config/v1alpha1
             - pkg/controllermanager/apis/config/v1alpha1/validation
             - pkg/controllermanager/bootstrappers
@@ -756,9 +756,10 @@ build:
             - pkg/controllermanager/controller/shoot/quota
             - pkg/controllermanager/controller/shoot/reference
             - pkg/controllermanager/controller/shoot/retry
-            - pkg/controllermanager/controller/shoot/statuslabel
             - pkg/controllermanager/controller/shootstate
+            - pkg/controllermanager/controller/shoot/statuslabel
             - pkg/controllermanager/features
+            - pkg/controller/reference
             - pkg/controllerutils
             - pkg/controllerutils/mapper
             - pkg/controllerutils/predicate
@@ -1153,8 +1154,8 @@ build:
             - pkg/component/nodemanagement/machinecontrollermanager
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machineclasses.yaml
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machinedeployments.yaml
-            - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machines.yaml
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machinesets.yaml
+            - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machines.yaml
             - pkg/component/observability/monitoring/alertmanager
             - pkg/component/observability/monitoring/prometheus/shoot
             - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/optional/alertmanager.yaml
@@ -1162,9 +1163,9 @@ build:
             - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/verticalpodautoscaler.yaml
             - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/kube-kubelet.yaml
             - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/kube-pods.yaml
-            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/networking.yaml
             - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/workerless/kube-pods.yaml
             - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/workerless/networking.yaml
+            - pkg/component/observability/monitoring/prometheus/shoot/assets/prometheusrules/worker/networking.yaml
             - pkg/component/observability/monitoring/utils
             - pkg/controller/service
             - pkg/controllerutils

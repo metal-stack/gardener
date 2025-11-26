@@ -20,6 +20,8 @@ import (
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	kubernetesscheme "k8s.io/client-go/kubernetes/scheme"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwapiv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	gardencoreinstall "github.com/gardener/gardener/pkg/apis/core/install"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -56,6 +58,8 @@ var (
 		druidcorev1alpha1.AddToScheme,
 		istionetworkingv1beta1.AddToScheme,
 		istionetworkingv1alpha3.AddToScheme,
+		gwapiv1.Install,
+		gwapiv1beta1.Install,
 		extensionsv1alpha1.AddToScheme,
 		monitoringv1.AddToScheme,
 		monitoringv1beta1.AddToScheme,

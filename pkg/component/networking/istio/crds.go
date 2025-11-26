@@ -15,12 +15,14 @@ import (
 
 var (
 	//go:embed charts/istio/istio-crds/crd-all.gen.yaml
-	crds string
+	istioCRDs string
+	//go:embed charts/k8s-gateway-api/standard-install.yaml
+	gatewayCRDs string
 )
 
 // NewCRD can be used to deploy istio CRDs.
 func NewCRD(
 	client client.Client,
 ) (component.DeployWaiter, error) {
-	return crddeployer.New(client, []string{crds}, false)
+	return crddeployer.New(client, []string{istioCRDs, gatewayCRDs}, false)
 }

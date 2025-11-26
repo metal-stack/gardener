@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/controllerutils"
@@ -111,6 +112,15 @@ func (r *Reconciler) AddToManager(mgr manager.Manager, targetCluster cluster.Clu
 		}
 	}
 
+	if err := c.Watch(source.Kind[client.Object](
+		targetCluster.GetCache(),
+		&gwapiv1.HTTPRoute{},
+		handler.EnqueueRequestsFromMapFunc(r.MapHttpRouteToServices),
+		r.HttpRoutePredicate(),
+	)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -179,6 +189,26 @@ func (r *Reconciler) IngressPredicate() predicate.Predicate {
 			}
 
 			return !apiequality.Semantic.DeepEqual(oldIngress.Spec.Rules, ingress.Spec.Rules)
+		},
+	}
+}
+
+// HttpRoutePredicate returns a predicate which filters UPDATE events on HTTPRoutes such that only updates to the rules
+// are relevant.
+func (r *Reconciler) HttpRoutePredicate() predicate.Predicate {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			httpRoute, ok := e.ObjectNew.(*gwapiv1.HTTPRoute)
+			if !ok {
+				return false
+			}
+
+			oldHttpRoute, ok := e.ObjectOld.(*gwapiv1.HTTPRoute)
+			if !ok {
+				return false
+			}
+
+			return !apiequality.Semantic.DeepEqual(oldHttpRoute.Spec.Rules, httpRoute.Spec.Rules)
 		},
 	}
 }
@@ -289,6 +319,29 @@ func (r *Reconciler) MapIngressToServices(_ context.Context, obj client.Object) 
 			if path.Backend.Service != nil {
 				requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{Name: path.Backend.Service.Name, Namespace: ingress.Namespace}})
 			}
+		}
+	}
+
+	return requests
+}
+
+// MapHttpRouteToServices is a handler.MapFunc for mapping a HTTPRoute to all referenced services.
+func (r *Reconciler) MapHttpRouteToServices(_ context.Context, obj client.Object) []reconcile.Request {
+	httpRoute, ok := obj.(*gwapiv1.HTTPRoute)
+	if !ok {
+		return nil
+	}
+
+	var requests []reconcile.Request
+
+	for _, rule := range httpRoute.Spec.Rules {
+		for _, ref := range rule.BackendRefs {
+			backendNamespace := httpRoute.Namespace
+			if ref.BackendObjectReference.Namespace != nil {
+				backendNamespace = string(*ref.BackendObjectReference.Namespace)
+			}
+
+			requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{Name: string(ref.Name), Namespace: backendNamespace}})
 		}
 	}
 

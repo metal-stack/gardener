@@ -36,6 +36,8 @@ import (
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwapiv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	gardencoreinstall "github.com/gardener/gardener/pkg/apis/core/install"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -110,6 +112,8 @@ var (
 		istionetworkingv1beta1.AddToScheme,
 		istionetworkingv1alpha3.AddToScheme,
 		istiotelemetryv1.AddToScheme,
+		gwapiv1.Install,
+		gwapiv1beta1.Install,
 		fluentbitv1alpha2.AddToScheme,
 		monitoringv1.AddToScheme,
 		monitoringv1beta1.AddToScheme,

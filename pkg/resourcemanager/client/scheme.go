@@ -18,6 +18,8 @@ import (
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	kubernetesscheme "k8s.io/client-go/kubernetes/scheme"
 	apiregistrationinstall "k8s.io/kube-aggregator/pkg/apis/apiregistration/install"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwapiv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
@@ -63,4 +65,11 @@ func init() {
 	apiregistrationinstall.Install(TargetScheme)
 	apiextensionsinstall.Install(CombinedScheme)
 	apiregistrationinstall.Install(CombinedScheme)
+
+	gwapiv1.Install(SourceScheme)
+	gwapiv1.Install(TargetScheme)
+	gwapiv1.Install(CombinedScheme)
+	gwapiv1beta1.Install(SourceScheme)
+	gwapiv1beta1.Install(TargetScheme)
+	gwapiv1beta1.Install(CombinedScheme)
 }

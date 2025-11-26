@@ -20,6 +20,9 @@ requires:
       - etcd
 build:
   artifacts:
+    - image: local-skaffold/ext-authz-server
+      ko:
+        main: ./cmd/ext-authz-server
     - image: local-skaffold/gardener-apiserver
       ko:
         dependencies:

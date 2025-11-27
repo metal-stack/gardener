@@ -63,7 +63,7 @@ func (s *server) Check(
 
 	err := s.store.IsValid(hostParts[0], []byte(auth))
 	if err != nil {
-		log.Error(err, "denied request ", "auth", auth)
+		log.Error(err, "denied request")
 		return denyResponse(log, "invalid authorization"), nil
 	}
 

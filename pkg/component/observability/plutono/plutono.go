@@ -586,6 +586,9 @@ func (p *plutono) getService() *corev1.Service {
 			Name:      name,
 			Namespace: p.namespace,
 			Labels:    getLabels(),
+			Annotations: map[string]string{
+				"networking.istio.io/exportTo": "*",
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -789,6 +792,7 @@ func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, err
 		ingressNamespace      = v1beta1constants.DefaultSNIIngressNamespace // TODO: take care of exposure classes and zonal istios
 		credentialsSecretName = p.values.AuthSecretName
 		caName                = v1beta1constants.SecretNameCASeed
+		gatewayName           = name
 	)
 
 	if p.values.IsGardenCluster {
@@ -800,6 +804,7 @@ func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, err
 		credentialsSecretName = credentialsSecret.Name
 		caName = operatorv1alpha1.SecretNameCARuntime
 		ingressNamespace = "virtual-garden-istio-ingress"
+		gatewayName = gatewayName + "-garden"
 	}
 
 	if p.values.ClusterType == component.ClusterTypeShoot {
@@ -810,6 +815,7 @@ func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, err
 
 		credentialsSecretName = credentialsSecret.Name
 		caName = v1beta1constants.SecretNameCACluster
+		gatewayName = gatewayName + "-" + p.namespace
 	}
 
 	var ingressTLSSecretName string
@@ -834,7 +840,7 @@ func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, err
 	var (
 		gw = &gwapiv1.Gateway{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
+				Name:      gatewayName,
 				Namespace: ingressNamespace,
 			},
 			Spec: gwapiv1.GatewaySpec{

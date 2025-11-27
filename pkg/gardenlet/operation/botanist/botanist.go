@@ -115,6 +115,10 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 	if err != nil {
 		return nil, err
 	}
+	o.Shoot.Components.ControlPlane.ExtAuthServer, err = b.DefaultExtAuthServer()
+	if err != nil {
+		return nil, err
+	}
 	o.Shoot.Components.ControlPlane.Prometheus, err = b.DefaultPrometheus()
 	if err != nil {
 		return nil, err

@@ -137,6 +137,7 @@ type ControlPlane struct {
 	KubeControllerManager    kubecontrollermanager.Interface
 	KubeStateMetrics         component.DeployWaiter
 	MachineControllerManager machinecontrollermanager.Interface
+	ExtAuthServer            component.DeployWaiter
 	Plutono                  plutono.Interface
 	Prometheus               prometheus.Interface
 	ResourceManager          resourcemanager.Interface

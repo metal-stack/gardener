@@ -34,6 +34,7 @@ import (
 	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
@@ -84,6 +85,9 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      v1beta1constants.DeploymentNameExtAuthzServer,
 				Namespace: e.namespace,
+				Annotations: map[string]string{
+					"networking.istio.io/exportTo": "*",
+				},
 			},
 			Spec: corev1.ServiceSpec{
 				Selector: getLabels(),
@@ -102,6 +106,7 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 		metav1.LabelSelector{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleIstioIngress}},
 		metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: v1beta1constants.LabelExposureClassHandlerName, Operator: metav1.LabelSelectorOpExists}}},
 	))
+	metav1.SetMetaDataAnnotation(&svc.ObjectMeta, resourcesv1alpha1.NetworkingPodLabelSelectorNamespaceAlias, v1beta1constants.LabelNetworkPolicyShootNamespaceAlias)
 
 	httpRouteList := &gwapiv1.HTTPRouteList{}
 	err := e.client.List(ctx, httpRouteList, client.InNamespace(e.namespace), client.HasLabels{v1beta1constants.LabelBasicAuthSecretName})

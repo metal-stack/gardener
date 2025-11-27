@@ -76,8 +76,9 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 	var (
 		registry = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
 
-		volumes      = []corev1.Volume{}
-		volumeMounts = []corev1.VolumeMount{}
+		volumes       = []corev1.Volume{}
+		volumeMounts  = []corev1.VolumeMount{}
+		configPatches = []*v1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{}
 
 		svc = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -135,6 +136,50 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 				MountPath: path.Join(rootMountPath, subdomain),
 				SubPath:   subdomain,
 			})
+
+			configPatches = append(configPatches, &v1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
+				ApplyTo: v1alpha3.EnvoyFilter_HTTP_FILTER,
+				Match: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
+					Context: v1alpha3.EnvoyFilter_GATEWAY,
+					ObjectTypes: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
+						Listener: &v1alpha3.EnvoyFilter_ListenerMatch{
+							PortNumber: 9443,
+							FilterChain: &v1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
+								Filter: &v1alpha3.EnvoyFilter_ListenerMatch_FilterMatch{
+									Name: "envoy.filters.network.http_connection_manager",
+								},
+								Sni: string(hostname),
+							},
+						},
+					},
+				},
+				Patch: &v1alpha3.EnvoyFilter_Patch{
+					Operation:   v1alpha3.EnvoyFilter_Patch_INSERT_BEFORE,
+					FilterClass: v1alpha3.EnvoyFilter_Patch_AUTHZ,
+					Value: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"name": structpb.NewStringValue("envoy.filters.http.ext_authz"),
+							"typed_config": structpb.NewStructValue(&structpb.Struct{
+								Fields: map[string]*structpb.Value{
+									"@type":                 structpb.NewStringValue("type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz"),
+									"transport_api_version": structpb.NewStringValue("V3"),
+									"grpc_service": structpb.NewStructValue(&structpb.Struct{
+										Fields: map[string]*structpb.Value{
+											"timeout": structpb.NewStringValue("2s"),
+											"envoy_grpc": structpb.NewStructValue(&structpb.Struct{
+												Fields: map[string]*structpb.Value{
+													"cluster_name": structpb.NewStringValue(fmt.Sprintf("outbound|10000||%s.%s.svc.cluster.local", svc.Name, svc.Namespace)),
+												},
+											}),
+										},
+									}),
+								},
+							}),
+						},
+					},
+				},
+			},
+			)
 		}
 	}
 
@@ -191,49 +236,7 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 				Namespace: v1beta1constants.DefaultSNIIngressNamespace, // TODO: can be different depending on consumer
 			},
 			Spec: v1alpha3.EnvoyFilter{
-				ConfigPatches: []*v1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
-					{
-						ApplyTo: v1alpha3.EnvoyFilter_HTTP_FILTER,
-						Match: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
-							Context: v1alpha3.EnvoyFilter_GATEWAY,
-							ObjectTypes: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
-								Listener: &v1alpha3.EnvoyFilter_ListenerMatch{
-									PortNumber: 9443,
-									FilterChain: &v1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
-										Filter: &v1alpha3.EnvoyFilter_ListenerMatch_FilterMatch{
-											Name: "envoy.filters.network.http_connection_manager",
-										},
-									},
-								},
-							},
-						},
-						Patch: &v1alpha3.EnvoyFilter_Patch{
-							Operation:   v1alpha3.EnvoyFilter_Patch_INSERT_BEFORE,
-							FilterClass: v1alpha3.EnvoyFilter_Patch_AUTHZ,
-							Value: &structpb.Struct{
-								Fields: map[string]*structpb.Value{
-									"name": structpb.NewStringValue("envoy.filters.http.ext_authz"),
-									"typed_config": structpb.NewStructValue(&structpb.Struct{
-										Fields: map[string]*structpb.Value{
-											"@type":                 structpb.NewStringValue("type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz"),
-											"transport_api_version": structpb.NewStringValue("V3"),
-											"grpc_service": structpb.NewStructValue(&structpb.Struct{
-												Fields: map[string]*structpb.Value{
-													"timeout": structpb.NewStringValue("2s"),
-													"envoy_grpc": structpb.NewStructValue(&structpb.Struct{
-														Fields: map[string]*structpb.Value{
-															"cluster_name": structpb.NewStringValue(fmt.Sprintf("outbound|10000||%s.%s.svc.cluster.local", svc.Name, svc.Namespace)),
-														},
-													}),
-												},
-											}),
-										},
-									}),
-								},
-							},
-						},
-					},
-				},
+				ConfigPatches: configPatches,
 			},
 		},
 	}

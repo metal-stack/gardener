@@ -88,7 +88,7 @@ func denyResponse(log logr.Logger, message string) *envoy_service_auth_v3.CheckR
 		DeniedResponse: &envoy_service_auth_v3.DeniedHttpResponse{
 			Headers: []*envoycorev3.HeaderValueOption{
 				{
-					Header: &envoycorev3.HeaderValue{Key: "WWW-Authenticate", Value: "Basic realm=\"User Visible Realm\""},
+					Header: &envoycorev3.HeaderValue{Key: "WWW-Authenticate", Value: "Basic realm=\"Authentication Required\""},
 				},
 			},
 			Status: &envoytypev3.HttpStatus{Code: envoytypev3.StatusCode_Unauthorized},

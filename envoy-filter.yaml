@@ -13,27 +13,6 @@ spec:
           filter:
             name: envoy.filters.network.http_connection_manager
         portNumber: 9443
-    # patch:
-    #   operation: MERGE
-    #   value:
-    #     name: envoy.filters.network.http_connection_manager
-    #     typed_config:
-    #       '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-    #       route_config:
-    #         virtual_hosts:
-    #         - domains:
-    #           - g-seed.ingress.local.seed.local.gardener.cloud
-    #           name: g-seed
-    #           routes:
-    #           - match:
-    #               prefix: "/"
-    #             typed_per_filter_config:
-    #               envoy.filters.http.ext_authz:
-    #                 '@type': type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
-    #                 grpc_service:
-    #                   envoy_grpc:
-    #                     cluster_name: outbound|10000||ext-authz-server.garden.svc.cluster.local
-    #                   timeout: 2s
     patch:
       operation: INSERT_BEFORE
       filterClass: AUTHZ # This filter will run *after* the Istio authz filter.

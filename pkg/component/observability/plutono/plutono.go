@@ -924,6 +924,27 @@ func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, err
 							},
 						},
 					},
+					{
+						Matches: []gwapiv1.HTTPRouteMatch{
+							{
+								Path: &gwapiv1.HTTPPathMatch{
+									Type:  ptr.To(gwapiv1.PathMatchPathPrefix),
+									Value: ptr.To("/api/admin"),
+								},
+							},
+						},
+						Filters: []gwapiv1.HTTPRouteFilter{
+							{
+								Type: gwapiv1.HTTPRouteFilterRequestRedirect,
+								RequestRedirect: &gwapiv1.HTTPRequestRedirectFilter{
+									Path: &gwapiv1.HTTPPathModifier{
+										Type:            gwapiv1.FullPathHTTPPathModifier,
+										ReplaceFullPath: ptr.To("/"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		}

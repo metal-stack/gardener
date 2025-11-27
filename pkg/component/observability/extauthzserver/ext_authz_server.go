@@ -23,10 +23,13 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component"
+	"github.com/gardener/gardener/pkg/utils/istio"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/gardener/gardener/pkg/utils/secrets"
 
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
@@ -131,6 +134,12 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 		}
 	}
 
+	destinationHost := kubernetesutils.FQDNForService(svc.Name, svc.Namespace)
+	destinationRule := &istionetworkingv1beta1.DestinationRule{ObjectMeta: metav1.ObjectMeta{Name: v1beta1constants.DeploymentNameExtAuthzServer, Namespace: e.namespace}}
+	if err := istio.DestinationRuleWithLocalityPreference(destinationRule, getLabels(), destinationHost)(); err != nil {
+		return err
+	}
+
 	resources := []client.Object{
 		&appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -171,6 +180,7 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 			},
 		},
 		svc,
+		destinationRule,
 	}
 
 	serializedResources, err := registry.AddAllAndSerialize(resources...)

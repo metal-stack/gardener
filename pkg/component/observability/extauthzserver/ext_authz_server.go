@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/types/known/structpb"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,8 +30,11 @@ import (
 
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	"istio.io/api/networking/v1alpha3"
 	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
+	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 const (
@@ -181,6 +185,57 @@ func (e *extAuthz) Deploy(ctx context.Context) error {
 		},
 		svc,
 		destinationRule,
+		&istionetworkingv1alpha3.EnvoyFilter{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      v1beta1constants.DeploymentNameExtAuthzServer + "-" + e.namespace,
+				Namespace: v1beta1constants.DefaultSNIIngressNamespace, // TODO: can be different depending on consumer
+			},
+			Spec: v1alpha3.EnvoyFilter{
+				ConfigPatches: []*v1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
+					{
+						ApplyTo: v1alpha3.EnvoyFilter_HTTP_FILTER,
+						Match: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
+							Context: v1alpha3.EnvoyFilter_GATEWAY,
+							ObjectTypes: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
+								Listener: &v1alpha3.EnvoyFilter_ListenerMatch{
+									PortNumber: 9443,
+									FilterChain: &v1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
+										Filter: &v1alpha3.EnvoyFilter_ListenerMatch_FilterMatch{
+											Name: "envoy.filters.network.http_connection_manager",
+										},
+									},
+								},
+							},
+						},
+						Patch: &v1alpha3.EnvoyFilter_Patch{
+							Operation:   v1alpha3.EnvoyFilter_Patch_INSERT_BEFORE,
+							FilterClass: v1alpha3.EnvoyFilter_Patch_AUTHZ,
+							Value: &structpb.Struct{
+								Fields: map[string]*structpb.Value{
+									"name": structpb.NewStringValue("envoy.filters.http.ext_authz"),
+									"typed_config": structpb.NewStructValue(&structpb.Struct{
+										Fields: map[string]*structpb.Value{
+											"@type":                 structpb.NewStringValue("type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz"),
+											"transport_api_version": structpb.NewStringValue("V3"),
+											"grpc_service": structpb.NewStructValue(&structpb.Struct{
+												Fields: map[string]*structpb.Value{
+													"timeout": structpb.NewStringValue("2s"),
+													"envoy_grpc": structpb.NewStructValue(&structpb.Struct{
+														Fields: map[string]*structpb.Value{
+															"cluster_name": structpb.NewStringValue(fmt.Sprintf("outbound|10000||%s.%s.svc.cluster.local", svc.Name, svc.Namespace)),
+														},
+													}),
+												},
+											}),
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	serializedResources, err := registry.AddAllAndSerialize(resources...)

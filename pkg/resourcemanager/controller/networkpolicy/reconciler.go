@@ -524,19 +524,7 @@ func (r *Reconciler) portsExposedByHttpRouteResources(ctx context.Context, servi
 						continue
 					}
 
-					backendNamespace := httpRoute.Namespace
-					if ref.BackendObjectReference.Namespace != nil {
-						backendNamespace = string(*ref.BackendObjectReference.Namespace)
-					}
-
 					resources = append(resources,
-						gatewayResources{
-							networkPolicyPort: networkPolicyPorts[0], // there can only be a single element because our input is a single element
-							namespace:         backendNamespace,
-							podSelector: metav1.LabelSelector{
-								MatchLabels: backendService.Spec.Selector,
-							},
-						},
 						gatewayResources{
 							networkPolicyPort: networkPolicyPorts[0], // there can only be a single element because our input is a single element
 							namespace:         parentNamespace,

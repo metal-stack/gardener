@@ -363,6 +363,7 @@ func commonIstioIngressNetworkPolicyLabels(vpnEnabled bool) map[string]string {
 		v1beta1constants.LabelNetworkPolicyToDNS: v1beta1constants.LabelNetworkPolicyAllowed,
 		gardenerutils.NetworkPolicyLabel(v1beta1constants.IstioSystemNamespace+"-"+istio.IstiodServiceName, istio.IstiodPort):                         v1beta1constants.LabelNetworkPolicyAllowed,
 		gardenerutils.NetworkPolicyLabel(v1beta1constants.GardenNamespace+"-"+nginxingress.GetServiceName(), nginxingress.ServicePortControllerHttps): v1beta1constants.LabelNetworkPolicyAllowed,
+		gardenerutils.NetworkPolicyLabel(v1beta1constants.GardenNamespace+"-"+v1beta1constants.DeploymentNameExtAuthzServer, 10000):                   v1beta1constants.LabelNetworkPolicyAllowed,
 	}
 	if vpnEnabled {
 		labels[gardenerutils.NetworkPolicyLabel(v1beta1constants.LabelNetworkPolicyShootNamespaceAlias+"-"+v1beta1constants.DeploymentNameVPNSeedServer, vpnseedserver.OpenVPNPort)] = v1beta1constants.LabelNetworkPolicyAllowed

@@ -163,6 +163,7 @@ build:
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machinesets.yaml
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machines.yaml
             - pkg/component/nodemanagement/nodeproblemdetector
+            - pkg/component/observability/extauthzserver
             - pkg/component/observability/logging/eventlogger
             - pkg/component/observability/logging/fluentbit
             - pkg/component/observability/logging/fluentcustomresources
@@ -770,6 +771,7 @@ build:
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machinesets.yaml
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machines.yaml
             - pkg/component/nodemanagement/nodeproblemdetector
+            - pkg/component/observability/extauthzserver
             - pkg/component/observability/logging
             - pkg/component/observability/logging/eventlogger
             - pkg/component/observability/logging/fluentbit

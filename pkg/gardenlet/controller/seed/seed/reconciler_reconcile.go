@@ -454,7 +454,7 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents, deployFluentOperator),
 			SkipIf:       seedIsGarden,
 		})
-		_ = g.Add(flow.Task{
+		plutono = g.Add(flow.Task{
 			Name:         "Deploying Plutono",
 			Fn:           c.plutono.Deploy,
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
@@ -496,6 +496,11 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Fn:           c.persesOperator.Deploy,
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 			SkipIf:       seedIsGarden,
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Deploying ext-authz-server",
+			Fn:           c.extAuthzServer.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents, plutono),
 		})
 		deleteStaleExtensionResources = g.Add(flow.Task{
 			Name:         "Deleting stale extension resources",

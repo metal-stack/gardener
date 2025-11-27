@@ -27,6 +27,16 @@ metadata:
   name: gardenlet
 build:
   artifacts:
+    - image: local-skaffold/ext-authz-server
+      ko:
+        main: ./cmd/ext-authz-server
+      hooks:
+        after:
+          - command:
+              - bash
+              - dev-setup/gardenlet/base/generate-patch-gardenlet.sh
+              - image
+              - ext-authz-server
     - image: local-skaffold/gardenlet
       ko:
         dependencies:
@@ -187,6 +197,7 @@ build:
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machinesets.yaml
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machines.yaml
             - pkg/component/nodemanagement/nodeproblemdetector
+            - pkg/component/observability/extauthzserver
             - pkg/component/observability/logging
             - pkg/component/observability/logging/eventlogger
             - pkg/component/observability/logging/fluentbit

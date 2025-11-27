@@ -20,9 +20,6 @@ requires:
       - etcd
 build:
   artifacts:
-    - image: local-skaffold/ext-authz-server
-      ko:
-        main: ./cmd/ext-authz-server
     - image: local-skaffold/gardener-apiserver
       ko:
         dependencies:
@@ -1106,6 +1103,7 @@ build:
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machinesets.yaml
             - pkg/component/nodemanagement/machinecontrollermanager/templates/crd-machine.sapcloud.io_machines.yaml
             - pkg/component/nodemanagement/nodeproblemdetector
+            - pkg/component/observability/extauthzserver
             - pkg/component/observability/logging
             - pkg/component/observability/logging/eventlogger
             - pkg/component/observability/logging/fluentbit
@@ -1336,6 +1334,16 @@ build:
               - bash
               - dev-setup/gardenlet/base/generate-patch-gardenlet.sh
               - helm
+    - image: local-skaffold/ext-authz-server
+      ko:
+        main: ./cmd/ext-authz-server
+      hooks:
+        after:
+          - command:
+              - bash
+              - dev-setup/gardenlet/base/generate-patch-gardenlet.sh
+              - image
+              - ext-authz-server
     - image: local-skaffold/gardener-resource-manager
       ko:
         dependencies:
@@ -1610,6 +1618,9 @@ deploy:
             - name: gardener-resource-manager
               repository: '{{.IMAGE_REPO_local_skaffold_gardener_resource_manager}}'
               tag: '{{.IMAGE_TAG_local_skaffold_gardener_resource_manager}}@{{.IMAGE_DIGEST_local_skaffold_gardener_resource_manager}}'
+            - name: ext-authz-server
+              repository: '{{.IMAGE_REPO_local_skaffold_ext_authz_server}}'
+              tag: '{{.IMAGE_TAG_local_skaffold_ext_authz_server}}@{{.IMAGE_DIGEST_local_skaffold_ext_authz_server}}'
             - name: gardener-node-agent
               repository: '{{.IMAGE_REPO_local_skaffold_gardener_node_agent}}'
               tag: '{{.IMAGE_TAG_local_skaffold_gardener_node_agent}}@{{.IMAGE_DIGEST_local_skaffold_gardener_node_agent}}'

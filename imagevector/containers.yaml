@@ -840,6 +840,12 @@ images:
         value:
           - type: 'githubTeam'
             teamname: 'gardener/gardener-core-networking-maintainers'
+
+  - name: ext-authz-server
+    sourceRepository: github.com/gardener/ext-authz-server
+    repository: europe-docker.pkg.dev/gardener-project/releases/gardener/ext-authz-server
+    tag: "0.0.1"
+
   # API Server SNI, VPN-SeedServer and Kube-ApiServer Proxy
   - name: envoy-proxy
     sourceRepository: github.com/envoyproxy/envoy

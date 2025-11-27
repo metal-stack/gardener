@@ -1,0 +1,210 @@
+// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package extauthzserver
+
+import (
+	"context"
+	"fmt"
+	"path"
+	"strings"
+	"time"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/component"
+	"github.com/gardener/gardener/pkg/utils/managedresources"
+	"github.com/gardener/gardener/pkg/utils/secrets"
+
+	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+)
+
+const (
+	managedResourceName = "ext-authz-server"
+
+	rootMountPath = "/secrets"
+)
+
+// Values is the values for ext-authz-server configurations
+type Values struct {
+	// Image is the ext-authz-server image.
+	Image string
+	// PriorityClassName is the name of the priority class of the ext-authz-server.
+	PriorityClassName string
+	// Replicas is the number of pod replicas for the plutono.
+	Replicas int32
+}
+
+type extAuthz struct {
+	client    client.Client
+	namespace string
+	values    Values
+}
+
+// New creates a new instance of ext-authz-server deployer.
+func New(
+	client client.Client,
+	namespace string,
+	values Values,
+) component.DeployWaiter {
+	return &extAuthz{
+		client:    client,
+		namespace: namespace,
+		values:    values,
+	}
+}
+
+func (e *extAuthz) Deploy(ctx context.Context) error {
+	var (
+		registry = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
+
+		volumes      = []corev1.Volume{}
+		volumeMounts = []corev1.VolumeMount{}
+
+		svc = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      v1beta1constants.DeploymentNameExtAuthzServer,
+				Namespace: e.namespace,
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: getLabels(),
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "grpc",
+						Port:       10000,
+						TargetPort: intstr.FromInt32(10000),
+					},
+				},
+			},
+		}
+	)
+
+	utilruntime.Must(gardenerutils.InjectNetworkPolicyNamespaceSelectors(svc,
+		metav1.LabelSelector{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleIstioIngress}},
+		metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: v1beta1constants.LabelExposureClassHandlerName, Operator: metav1.LabelSelectorOpExists}}},
+	))
+
+	httpRouteList := &gwapiv1.HTTPRouteList{}
+	err := e.client.List(ctx, httpRouteList, client.InNamespace(e.namespace), client.HasLabels{v1beta1constants.LabelBasicAuthSecretName})
+	if err != nil {
+		return fmt.Errorf("unable to list http routes: %w", err)
+	}
+
+	for _, route := range httpRouteList.Items {
+		for _, hostname := range route.Spec.Hostnames {
+			subdomain, _, found := strings.Cut(string(hostname), ".")
+			if !found {
+				continue
+			}
+
+			volumes = append(volumes, corev1.Volume{
+				Name: subdomain,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: route.Labels[v1beta1constants.LabelBasicAuthSecretName],
+						Items: []corev1.KeyToPath{
+							{
+								Key:  secrets.DataKeyAuth,
+								Path: subdomain,
+							},
+						},
+					},
+				},
+			})
+
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      subdomain,
+				MountPath: path.Join(rootMountPath, subdomain),
+				SubPath:   subdomain,
+			})
+		}
+	}
+
+	resources := []client.Object{
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      v1beta1constants.DeploymentNameExtAuthzServer,
+				Namespace: e.namespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: getLabels(),
+				},
+				Replicas: &e.values.Replicas,
+				Strategy: appsv1.DeploymentStrategy{
+					Type: appsv1.RollingUpdateDeploymentStrategyType,
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: getLabels(),
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:            "server",
+								Image:           e.values.Image,
+								ImagePullPolicy: corev1.PullIfNotPresent,
+								Args:            []string{"--grpc-reflection"},
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 10000,
+										Name:          "grpc",
+									},
+								},
+								VolumeMounts: volumeMounts,
+							},
+						},
+						Volumes: volumes,
+					},
+				},
+			},
+		},
+		svc,
+	}
+
+	serializedResources, err := registry.AddAllAndSerialize(resources...)
+	if err != nil {
+		return err
+	}
+
+	return managedresources.CreateForSeedWithLabels(ctx, e.client, e.namespace, managedResourceName, false, map[string]string{v1beta1constants.LabelCareConditionType: v1beta1constants.ObservabilityComponentsHealthy}, serializedResources)
+}
+
+func (e *extAuthz) Destroy(ctx context.Context) error {
+	return managedresources.DeleteForSeed(ctx, e.client, e.namespace, managedResourceName)
+}
+
+var timeoutWaitForManagedResources = 2 * time.Minute
+
+func (e *extAuthz) Wait(ctx context.Context) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeoutWaitForManagedResources)
+	defer cancel()
+
+	return managedresources.WaitUntilHealthy(timeoutCtx, e.client, e.namespace, managedResourceName)
+}
+
+func (e *extAuthz) WaitCleanup(ctx context.Context) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeoutWaitForManagedResources)
+	defer cancel()
+
+	return managedresources.WaitUntilDeleted(timeoutCtx, e.client, e.namespace, managedResourceName)
+}
+
+func getLabels() map[string]string {
+	return map[string]string{
+		v1beta1constants.LabelApp:   v1beta1constants.DeploymentNameExtAuthzServer,
+		v1beta1constants.LabelRole:  v1beta1constants.LabelObservability,
+		v1beta1constants.GardenRole: v1beta1constants.GardenRoleObservability,
+	}
+}

@@ -112,6 +112,7 @@ type components struct {
 	fluentOperator                component.DeployWaiter
 	fluentBit                     component.DeployWaiter
 	fluentOperatorCustomResources component.DeployWaiter
+	extAuthzServer                component.DeployWaiter
 	plutono                       plutono.Interface
 	vali                          component.Deployer
 	kubeStateMetrics              component.DeployWaiter
@@ -235,6 +236,10 @@ func (r *Reconciler) instantiateComponents(
 		return
 	}
 	c.fluentOperatorCustomResources, err = r.newFluentCustomResources(seedIsGarden)
+	if err != nil {
+		return
+	}
+	c.extAuthzServer, err = r.newExtAuthzServer()
 	if err != nil {
 		return
 	}
@@ -835,6 +840,16 @@ func (r *Reconciler) newFluentBit() (component.DeployWaiter, error) {
 		r.GardenNamespace,
 		gardenlethelper.IsLoggingEnabled(&r.Config),
 		gardenlethelper.IsValiEnabled(&r.Config),
+		v1beta1constants.PriorityClassNameSeedSystem600,
+	)
+}
+
+func (r *Reconciler) newExtAuthzServer() (component.DeployWaiter, error) {
+	return sharedcomponent.NewExtAuthzServer(
+		r.SeedClientSet.Client(),
+		r.GardenNamespace,
+		gardenlethelper.IsMonitoringEnabled(&r.Config),
+		1,
 		v1beta1constants.PriorityClassNameSeedSystem600,
 	)
 }

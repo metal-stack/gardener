@@ -31,6 +31,8 @@ const (
 	ContainerImageNameCortex = "cortex"
 	// ContainerImageNameDependencyWatchdog is a constant for an image in the image vector with name 'dependency-watchdog'.
 	ContainerImageNameDependencyWatchdog = "dependency-watchdog"
+	// ContainerImageNameExtAuthzServer is a constant for an image in the image vector with name 'ext-authz-server'.
+	ContainerImageNameExtAuthzServer = "ext-authz-server"
 	// ContainerImageNameEnvoyProxy is a constant for an image in the image vector with name 'envoy-proxy'.
 	ContainerImageNameEnvoyProxy = "envoy-proxy"
 	// ContainerImageNameEtcd is a constant for an image in the image vector with name 'etcd'.

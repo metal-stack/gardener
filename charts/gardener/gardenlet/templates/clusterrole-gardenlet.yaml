@@ -462,3 +462,11 @@ rules:
   - patch
   - update
   - delete
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - httproutes
+  verbs:
+  - list
+  - watch
+  - get

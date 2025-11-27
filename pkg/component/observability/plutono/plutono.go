@@ -16,7 +16,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -785,104 +784,6 @@ func (p *plutono) refresherSidecar(what, label, folder string, volumeMount corev
 	}
 }
 
-func (p *plutono) getIngress(ctx context.Context) (*networkingv1.Ingress, error) {
-	var (
-		pathType              = networkingv1.PathTypePrefix
-		credentialsSecretName = p.values.AuthSecretName
-		caName                = v1beta1constants.SecretNameCASeed
-	)
-
-	if p.values.IsGardenCluster {
-		pathType = networkingv1.PathTypeImplementationSpecific
-
-		credentialsSecret, found := p.secretsManager.Get(v1beta1constants.SecretNameObservabilityIngress)
-		if !found {
-			return nil, fmt.Errorf("secret %q not found", v1beta1constants.SecretNameObservabilityIngress)
-		}
-
-		credentialsSecretName = credentialsSecret.Name
-		caName = operatorv1alpha1.SecretNameCARuntime
-	}
-
-	if p.values.ClusterType == component.ClusterTypeShoot {
-		credentialsSecret, found := p.secretsManager.Get(v1beta1constants.SecretNameObservabilityIngressUsers)
-		if !found {
-			return nil, fmt.Errorf("secret %q not found", v1beta1constants.SecretNameObservabilityIngressUsers)
-		}
-
-		credentialsSecretName = credentialsSecret.Name
-		caName = v1beta1constants.SecretNameCACluster
-	}
-
-	var ingressTLSSecretName string
-	if p.values.WildcardCertName != nil {
-		ingressTLSSecretName = *p.values.WildcardCertName
-	} else {
-		ingressTLSSecret, err := p.secretsManager.Generate(ctx, &secretsutils.CertificateSecretConfig{
-			Name:                        "plutono-tls",
-			CommonName:                  "plutono",
-			Organization:                []string{"gardener.cloud:monitoring:ingress"},
-			DNSNames:                    []string{p.values.IngressHost},
-			CertType:                    secretsutils.ServerCert,
-			Validity:                    ptr.To(ingressTLSCertificateValidity),
-			SkipPublishingCACertificate: true,
-		}, secretsmanager.SignedByCA(caName))
-		if err != nil {
-			return nil, err
-		}
-		ingressTLSSecretName = ingressTLSSecret.Name
-	}
-
-	ingress := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: p.namespace,
-			Annotations: map[string]string{
-				"nginx.ingress.kubernetes.io/auth-realm":  "Authentication Required",
-				"nginx.ingress.kubernetes.io/auth-secret": credentialsSecretName,
-				"nginx.ingress.kubernetes.io/auth-type":   "basic",
-				"nginx.ingress.kubernetes.io/server-snippet": `location /api/admin/ {
-  return 403;
-}`,
-			},
-		},
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: ptr.To(v1beta1constants.SeedNginxIngressClass),
-			TLS: []networkingv1.IngressTLS{{
-				SecretName: ingressTLSSecretName,
-				Hosts:      []string{p.values.IngressHost},
-			}},
-			Rules: []networkingv1.IngressRule{{
-				Host: p.values.IngressHost,
-				IngressRuleValue: networkingv1.IngressRuleValue{
-					HTTP: &networkingv1.HTTPIngressRuleValue{
-						Paths: []networkingv1.HTTPIngressPath{
-							{
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: name,
-										Port: networkingv1.ServiceBackendPort{
-											Number: int32(port),
-										},
-									},
-								},
-								Path:     "/",
-								PathType: &pathType,
-							},
-						},
-					},
-				},
-			}},
-		},
-	}
-
-	if p.values.ClusterType == component.ClusterTypeShoot {
-		ingress.Labels = getLabels()
-	}
-
-	return ingress, nil
-}
-
 func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, error) {
 	var (
 		ingressNamespace      = v1beta1constants.DefaultSNIIngressNamespace // TODO: take care of exposure classes and zonal istios
@@ -996,8 +897,8 @@ func (p *plutono) getGatewayResources(ctx context.Context) ([]client.Object, err
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: p.namespace,
-				Annotations: map[string]string{
-					"basic-auth-secret-name": credentialsSecretName,
+				Labels: map[string]string{
+					v1beta1constants.LabelBasicAuthSecretName: credentialsSecretName,
 				},
 			},
 			Spec: gwapiv1.HTTPRouteSpec{

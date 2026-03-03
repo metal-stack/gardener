@@ -50,7 +50,7 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 		botanist                *botanistpkg.Botanist
 		worker                  *extensionsv1alpha1.Worker
 		err                     error
-		isCopyOfBackupsRequired bool
+		isCopyOfBackupsRequired = false
 		tasksWithErrors         []string
 
 		isRestoring   = operationType == gardencorev1beta1.LastOperationTypeRestore
@@ -83,10 +83,10 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 		errors.ToExecute("Check required extensions", func() error {
 			return botanist.WaitUntilRequiredExtensionsReady(ctx)
 		}),
-		errors.ToExecute("Check if copy of backups is required", func() error {
-			isCopyOfBackupsRequired, err = botanist.IsCopyOfBackupsRequired(ctx)
-			return err
-		}),
+		// errors.ToExecute("Check if copy of backups is required", func() error {
+		// 	isCopyOfBackupsRequired, err = botanist.IsCopyOfBackupsRequired(ctx)
+		// 	return err
+		// }),
 		errors.ToExecute("Retrieve the Worker resource", func() error {
 			if o.Shoot.IsWorkerless {
 				return nil
@@ -280,28 +280,28 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			SkipIf:       skipReadiness || !allowBackup,
 			Dependencies: flow.NewTaskIDs(deployBackupEntryInGarden),
 		})
-		copyEtcdBackups = g.Add(flow.Task{
-			Name:         "Copying etcd backups to new seed's backup bucket",
-			Fn:           botanist.DeployEtcdCopyBackupsTask,
-			SkipIf:       !isCopyOfBackupsRequired,
-			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, deployCloudProviderSecret, waitUntilBackupEntryInGardenReconciled, waitUntilSourceBackupEntryInGardenReconciled),
-		})
-		waitUntilEtcdBackupsCopied = g.Add(flow.Task{
-			Name:         "Waiting until etcd backups are copied",
-			Fn:           botanist.Shoot.Components.ControlPlane.EtcdCopyBackupsTask.Wait,
-			SkipIf:       skipReadiness || !isCopyOfBackupsRequired,
-			Dependencies: flow.NewTaskIDs(copyEtcdBackups),
-		})
-		_ = g.Add(flow.Task{
-			Name:         "Destroying copy etcd backups task resource",
-			Fn:           botanist.Shoot.Components.ControlPlane.EtcdCopyBackupsTask.Destroy,
-			SkipIf:       !isCopyOfBackupsRequired,
-			Dependencies: flow.NewTaskIDs(waitUntilEtcdBackupsCopied),
-		})
+		// copyEtcdBackups = g.Add(flow.Task{
+		// 	Name:         "Copying etcd backups to new seed's backup bucket",
+		// 	Fn:           botanist.DeployEtcdCopyBackupsTask,
+		// 	SkipIf:       !isCopyOfBackupsRequired,
+		// 	Dependencies: flow.NewTaskIDs(initializeSecretsManagement, deployCloudProviderSecret, waitUntilBackupEntryInGardenReconciled, waitUntilSourceBackupEntryInGardenReconciled),
+		// })
+		// waitUntilEtcdBackupsCopied = g.Add(flow.Task{
+		// 	Name:         "Waiting until etcd backups are copied",
+		// 	Fn:           botanist.Shoot.Components.ControlPlane.EtcdCopyBackupsTask.Wait,
+		// 	SkipIf:       skipReadiness || !isCopyOfBackupsRequired,
+		// 	Dependencies: flow.NewTaskIDs(copyEtcdBackups),
+		// })
+		// _ = g.Add(flow.Task{
+		// 	Name:         "Destroying copy etcd backups task resource",
+		// 	Fn:           botanist.Shoot.Components.ControlPlane.EtcdCopyBackupsTask.Destroy,
+		// 	SkipIf:       !isCopyOfBackupsRequired,
+		// 	Dependencies: flow.NewTaskIDs(waitUntilEtcdBackupsCopied),
+		// })
 		deployETCD = g.Add(flow.Task{
 			Name:         "Deploying main and events etcd",
 			Fn:           flow.TaskFn(botanist.DeployEtcd).RetryUntilTimeout(defaultInterval, helper.GetEtcdDeployTimeout(o.Shoot, defaultTimeout)),
-			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, deployCloudProviderSecret, waitUntilBackupEntryInGardenReconciled, waitUntilEtcdBackupsCopied),
+			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, deployCloudProviderSecret, waitUntilBackupEntryInGardenReconciled),
 		})
 		destroySourceBackupEntry = g.Add(flow.Task{
 			Name:         "Destroying source backup entry",

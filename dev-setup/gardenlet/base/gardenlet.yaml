@@ -17,6 +17,7 @@ spec:
       PrometheusHealthChecks: true
       VictoriaLogsBackend: true
       DisableNginxIngressInSeed: true
+      WireguardVPN: true
     controllers:
       shoot:
         reconcileInMaintenanceOnly: true

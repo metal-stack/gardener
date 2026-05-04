@@ -36,6 +36,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
+github.com/Gerrit91/etcd-druid/api v0.0.0-20260504145719-b41ce31c758c h1:i67qr05FYZbbC8J2iJNNmXWvp0tmW1YMlvCgI4dBL98=
+github.com/Gerrit91/etcd-druid/api v0.0.0-20260504145719-b41ce31c758c/go.mod h1:RwZzKp8K415AS0zg8VoODjBxYepCAUYyLgXnZc1bmbo=
 github.com/Masterminds/goutils v1.1.1 h1:5nUrii3FMTL5diU80unEVvNevw1nH4+ZV4DSLVJLSYI=
 github.com/Masterminds/goutils v1.1.1/go.mod h1:8cTjp+g8YejhMuvIA5y2vz3BpJxksy863GQaJW2MFNU=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
@@ -265,8 +267,6 @@ github.com/gardener/cert-management v0.22.0 h1:82uZiLzYs+W/Qp/z1XnUSN+nmNDCMFUcd
 github.com/gardener/cert-management v0.22.0/go.mod h1:hJvxHEKHwdSywZUxDqO7vUZN4D7udfhgtpdfDOoaKNs=
 github.com/gardener/dependency-watchdog v1.7.0 h1:oTAmbmXbPOT/LnxDZ0A0DO0W8GDYe9oykF+I6lCLKpI=
 github.com/gardener/dependency-watchdog v1.7.0/go.mod h1:3nQlFmW17dWL+90KK3PPa52XSnpjnk5mOaC2Pev+VNo=
-github.com/gardener/etcd-druid/api v0.36.3 h1:mBhDE/TJmcn2BY8Fscd5SfBSeWvtK4ZBPEW+v6XsQIQ=
-github.com/gardener/etcd-druid/api v0.36.3/go.mod h1:RwZzKp8K415AS0zg8VoODjBxYepCAUYyLgXnZc1bmbo=
 github.com/gardener/machine-controller-manager v0.61.3 h1:w0JuHCKLmcK7B8E7mx3TvE3e0hSYwikchsMSiMhocqw=
 github.com/gardener/machine-controller-manager v0.61.3/go.mod h1:8eE1qLztrWIbOM71mHSQGaC6Q+pl5lvOyN08qP39D7o=
 github.com/gardener/terminal-controller-manager v0.35.0 h1:LccE3ZT8KCZtdfMtyVtHuFIXwFnnBpIKE68aoDpgJss=

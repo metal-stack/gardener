@@ -108,6 +108,8 @@ type Interface interface {
 	// SetStaticPodControlPlaneNodesIPAddresses sets the IP addresses of all control plane nodes when etcd is run as
 	// static pod.
 	SetStaticPodControlPlaneNodesIPAddresses(...net.IP)
+	// SetBackupEncryptionProvider sets the encryption provider type to be used for encrypting the etcd backup.
+	SetBackupEncryptionProvider(gardencorev1beta1.EncryptionProviderType)
 }
 
 // New creates a new instance of DeployWaiter for the Etcd.
@@ -164,6 +166,7 @@ type Values struct {
 	HighAvailabilityEnabled     bool
 	TopologyAwareRoutingEnabled bool
 	StaticPodConfig             *StaticPodConfig
+	EncryptionProviderToUse     gardencorev1beta1.EncryptionProviderType
 }
 
 // BackupConfig contains information for configuring the backup-restore sidecar so that it takes regularly backups of
@@ -292,6 +295,18 @@ func (e *etcd) Deploy(ctx context.Context) error {
 		}
 	}
 
+	etcdBackupEncryptionKey, err := e.secretsManager.Generate(ctx, &secretsutils.ETCDEncryptionKeySecretConfig{
+		Provider:     string(e.values.EncryptionProviderToUse),
+		Name:         v1beta1constants.SecretNameGardenerETCDBackupEncryptionKey,
+		SecretLength: 32,
+	},
+		secretsmanager.Persist(),
+		secretsmanager.Rotate(secretsmanager.KeepOld),
+	)
+	if err != nil {
+		return fmt.Errorf("unable to generate etcd backup encryption key: %w", err)
+	}
+
 	clientService := &corev1.Service{}
 	gardenerutils.ReconcileTopologyAwareRoutingSettings(clientService, e.values.TopologyAwareRoutingEnabled, e.values.RuntimeKubernetesVersion)
 
@@ -402,6 +417,10 @@ func (e *etcd) Deploy(ctx context.Context) error {
 			GarbageCollectionPolicy: &garbageCollectionPolicy,
 			GarbageCollectionPeriod: &garbageCollectionPeriod,
 			SnapshotCompression:     &compressionSpec,
+			EncryptionKeyRef: &corev1.SecretReference{
+				Name:      etcdBackupEncryptionKey.Name,
+				Namespace: etcdBackupEncryptionKey.Namespace,
+			},
 		}
 
 		if e.values.BackupConfig != nil {
@@ -883,6 +902,10 @@ func (e *etcd) Get(ctx context.Context) (*druidcorev1alpha1.Etcd, error) {
 }
 
 func (e *etcd) SetBackupConfig(backupConfig *BackupConfig) { e.values.BackupConfig = backupConfig }
+
+func (e *etcd) SetBackupEncryptionProvider(p gardencorev1beta1.EncryptionProviderType) {
+	e.values.EncryptionProviderToUse = p
+}
 
 func (e *etcd) Scale(ctx context.Context, replicas int32) error {
 	etcdObj := &druidcorev1alpha1.Etcd{}

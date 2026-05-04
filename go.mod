@@ -96,6 +96,8 @@ require github.com/gardener/gardener/pkg/apis v1.140.0 // overwritten by replace
 
 replace github.com/gardener/gardener/pkg/apis => ./pkg/apis
 
+replace github.com/gardener/etcd-druid/api => github.com/Gerrit91/etcd-druid/api v0.0.0-20260504145719-b41ce31c758c
+
 tool github.com/joelanford/go-apidiff
 
 require (

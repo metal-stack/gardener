@@ -114,6 +114,9 @@ func (b *Botanist) DeployEtcd(ctx context.Context) error {
 			LeaderElection:               backupLeaderElection,
 			DeltaSnapshotRetentionPeriod: deltaSnapshotRetentionPeriod,
 		})
+
+		// using the configuration from Spec.Kubernetes.KubeAPIServer for now, but probably need introduce dedicated fields
+		b.Shoot.Components.ControlPlane.EtcdMain.SetBackupEncryptionProvider(b.Shoot.EncryptionProviderToUse)
 	}
 
 	// Roll out the new peer CA first so that every member in the cluster trusts the old and the new CA.

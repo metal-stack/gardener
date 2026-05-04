@@ -15,6 +15,7 @@ import (
 	reflect "reflect"
 
 	v1alpha1 "github.com/gardener/etcd-druid/api/core/v1alpha1"
+	v1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	etcd "github.com/gardener/gardener/pkg/component/etcd/etcd"
 	gomock "go.uber.org/mock/gomock"
 	rest "k8s.io/client-go/rest"
@@ -153,6 +154,18 @@ func (m *MockInterface) SetBackupConfig(config *etcd.BackupConfig) {
 func (mr *MockInterfaceMockRecorder) SetBackupConfig(config any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBackupConfig", reflect.TypeOf((*MockInterface)(nil).SetBackupConfig), config)
+}
+
+// SetBackupEncryptionProvider mocks base method.
+func (m *MockInterface) SetBackupEncryptionProvider(arg0 v1beta1.EncryptionProviderType) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetBackupEncryptionProvider", arg0)
+}
+
+// SetBackupEncryptionProvider indicates an expected call of SetBackupEncryptionProvider.
+func (mr *MockInterfaceMockRecorder) SetBackupEncryptionProvider(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBackupEncryptionProvider", reflect.TypeOf((*MockInterface)(nil).SetBackupEncryptionProvider), arg0)
 }
 
 // SetReplicas mocks base method.

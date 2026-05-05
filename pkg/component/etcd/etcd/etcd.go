@@ -295,16 +295,25 @@ func (e *etcd) Deploy(ctx context.Context) error {
 		}
 	}
 
-	etcdBackupEncryptionKey, err := e.secretsManager.Generate(ctx, &secretsutils.ETCDEncryptionKeySecretConfig{
-		Provider:     string(e.values.EncryptionProviderToUse),
-		Name:         v1beta1constants.SecretNameGardenerETCDBackupEncryptionKey,
-		SecretLength: 32,
-	},
-		secretsmanager.Persist(),
-		secretsmanager.Rotate(secretsmanager.KeepOld),
-	)
-	if err != nil {
-		return fmt.Errorf("unable to generate etcd backup encryption key: %w", err)
+	var encryptionKeyRefs []*corev1.SecretReference
+
+	if e.values.EncryptionProviderToUse != "" {
+		etcdBackupEncryptionKey, err := e.secretsManager.Generate(ctx, &secretsutils.ETCDEncryptionKeySecretConfig{
+			Provider:     string(e.values.EncryptionProviderToUse),
+			Name:         v1beta1constants.SecretNameGardenerETCDBackupEncryptionKey,
+			SecretLength: 32,
+		},
+			secretsmanager.Persist(),
+			secretsmanager.Rotate(secretsmanager.KeepOld),
+		)
+		if err != nil {
+			return fmt.Errorf("unable to generate etcd backup encryption key: %w", err)
+		}
+
+		encryptionKeyRefs = append(encryptionKeyRefs, &corev1.SecretReference{
+			Name:      etcdBackupEncryptionKey.Name,
+			Namespace: etcdBackupEncryptionKey.Namespace,
+		})
 	}
 
 	clientService := &corev1.Service{}
@@ -417,12 +426,7 @@ func (e *etcd) Deploy(ctx context.Context) error {
 			GarbageCollectionPolicy: &garbageCollectionPolicy,
 			GarbageCollectionPeriod: &garbageCollectionPeriod,
 			SnapshotCompression:     &compressionSpec,
-			EncryptionKeyRefs: []*corev1.SecretReference{
-				{
-					Name:      etcdBackupEncryptionKey.Name,
-					Namespace: etcdBackupEncryptionKey.Namespace,
-				},
-			},
+			EncryptionKeyRefs:       encryptionKeyRefs,
 		}
 
 		if e.values.BackupConfig != nil {

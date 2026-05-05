@@ -417,9 +417,11 @@ func (e *etcd) Deploy(ctx context.Context) error {
 			GarbageCollectionPolicy: &garbageCollectionPolicy,
 			GarbageCollectionPeriod: &garbageCollectionPeriod,
 			SnapshotCompression:     &compressionSpec,
-			EncryptionKeyRef: &corev1.SecretReference{
-				Name:      etcdBackupEncryptionKey.Name,
-				Namespace: etcdBackupEncryptionKey.Namespace,
+			EncryptionKeyRefs: []*corev1.SecretReference{
+				{
+					Name:      etcdBackupEncryptionKey.Name,
+					Namespace: etcdBackupEncryptionKey.Namespace,
+				},
 			},
 		}
 

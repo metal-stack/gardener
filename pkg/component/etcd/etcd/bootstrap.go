@@ -374,7 +374,7 @@ func (b *bootstrapper) getClusterRole() *rbacv1.ClusterRole {
 			{
 				APIGroups: []string{corev1.GroupName},
 				Resources: []string{"secrets", "endpoints"},
-				Verbs:     []string{"get", "list", "patch", "update", "watch"},
+				Verbs:     []string{"create", "get", "list", "patch", "update", "watch"},
 			},
 			{
 				APIGroups: []string{corev1.GroupName},

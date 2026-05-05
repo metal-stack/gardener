@@ -183,8 +183,8 @@ spec:
           - containerPort: 51820
             protocol: UDP
           args:
-          - --allow-file
-          - /wireguard-multiplexer/allow
+          - --allow-dir
+          - /wireguard-multiplexer
           resources:
             requests:
               cpu: 200m
@@ -239,8 +239,8 @@ spec:
           secretName: "istio-ingressgateway-ca-certs"
           optional: true
       - name: wireguard-multiplexer-config
-        secret:
-          secretName: "wireguard-multiplexer-config"
+        configMap:
+          name: "wireguard-multiplexer-config"
           optional: true
       priorityClassName: {{ .Values.priorityClassName }}
 

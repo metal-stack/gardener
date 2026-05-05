@@ -16,7 +16,6 @@ import (
 	networkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	telemetryv1 "istio.io/client-go/pkg/apis/telemetry/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	podsecurityadmissionapi "k8s.io/pod-security-admission/api"
@@ -258,17 +257,18 @@ func (i *istiod) Deploy(ctx context.Context) error {
 		}
 
 		if istioIngressGateway.VPNEnabled && utilfeature.DefaultFeatureGate.Enabled(features.WireguardVPN) {
-			secretName := "wireguard-multiplexer-config"
-			wireguardSecret := &corev1.Secret{
+			wireguardMultiplexerConfig := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      secretName,
-					Namespace: istioIngressGateway.Namespace,
+					Name:        "wireguard-multiplexer-config",
+					Namespace:   istioIngressGateway.Namespace,
+					Annotations: map[string]string{resourcesv1alpha1.Ignore: "true"},
 				},
-				Data: map[string][]byte{
-					"allow": {},
+				Data: map[string]string{
+					"allow": "",
 				},
 			}
-			if err := i.client.Create(ctx, wireguardSecret); !apierrors.IsAlreadyExists(err) {
+
+			if err := registry.Add(wireguardMultiplexerConfig); err != nil {
 				return err
 			}
 		}

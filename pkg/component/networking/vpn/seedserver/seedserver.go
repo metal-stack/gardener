@@ -7,8 +7,8 @@ package seedserver
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -55,7 +55,6 @@ import (
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 
-	"github.com/haruue-net/mwgp"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
@@ -1157,97 +1156,37 @@ func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vp
 		return err
 	}
 
-	var (
-		privateKey = &mwgp.NoisePrivateKey{}
-		publicKey  = &mwgp.NoisePublicKey{}
-	)
-
-	privateKeyHex, ok := vpnSeedSecret.Data[secretsutils.WireguardPrivateKey]
-	if !ok {
-		return fmt.Errorf("private key is not present in %s", vpnSeedSecret.Name)
-	}
-	publicKeyHex, ok := vpnShootSecret.Data[secretsutils.WireguardPublicKey]
-	if !ok {
-		return fmt.Errorf("public key is not present in %s", vpnSeedSecret.Name)
-	}
-
-	if err := privateKey.FromHex(string(privateKeyHex)); err != nil {
-		return fmt.Errorf("unable to decode private key from hex: %w", err)
-	}
-	if err := publicKey.FromHex(string(publicKeyHex)); err != nil {
-		return fmt.Errorf("unable to decode public key from hex: %w", err)
-	}
-
-	config := &mwgp.ServerConfig{
-		Listen:  fmt.Sprintf(":%d", WireguardPort),
-		Timeout: 60,
-		Servers: []*mwgp.ServerConfigServer{
-			{
-				PrivateKey: privateKey,
-				Peers: []*mwgp.ServerConfigPeer{
-					{
-						ClientPublicKey: publicKey,
-						ForwardTo:       fmt.Sprintf("%s.%s:%d", deploymentName, v.namespace, WireguardPort),
-					},
-				},
-			},
-		},
-	}
-
-	b, err := json.Marshal(config)
-	if err != nil {
-		return err
-	}
-
-	// Store it in a secret
-	wireguardMultiplexerSecret := &corev1.Secret{
+	wireguardMultiplexerConfig := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "wireguard-multiplexer-config", // FIXME constify
 			Namespace: targetNamespace,
 		},
-		StringData: map[string]string{
-			"config.json": string(b),
-		},
 	}
 
-	if err := v.client.Create(ctx, wireguardMultiplexerSecret); client.IgnoreAlreadyExists(err) != nil {
+	if err := v.client.Get(ctx, client.ObjectKeyFromObject(wireguardMultiplexerConfig), wireguardMultiplexerConfig); err != nil {
+		return err
+	}
+
+	shootPublicKeyHex := vpnShootSecret.Data[secretsutils.WireguardPublicKey]
+	seedPublicKeyHex := vpnSeedSecret.Data[secretsutils.WireguardPublicKey]
+
+	shootPublicKey, err := hex.DecodeString(string(shootPublicKeyHex))
+	if err != nil {
+		return err
+	}
+
+	seedPublicKey, err := hex.DecodeString(string(seedPublicKeyHex))
+	if err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(wireguardMultiplexerConfig.DeepCopy())
+	wireguardMultiplexerConfig.Data["client-"+v.namespace] = base64.StdEncoding.EncodeToString(shootPublicKey)
+	wireguardMultiplexerConfig.Data["server-"+v.namespace] = base64.StdEncoding.EncodeToString(seedPublicKey)
+
+	if err := v.client.Patch(ctx, wireguardMultiplexerConfig, patch); err != nil {
 		return err
 	}
 
 	return nil
 }
-
-// { // begin
-//   "listen": ":51820",  // Listen address
-//   "timeout": 60,      // Timeout before a forwarding entry expired, in seconds
-//   "servers": [ // begin
-//     { // begin
-//       "privkey": "EFt3ELmZeM/M47qFkgF4RbSOijtdHS43BNIxvxstREI=", // The private key of the WireGuard server, which is required to decrypt the handshake_initiation message for the public_key of the client
-//       "address": "192.0.2.1", // The IP address of the WireGuard server, which would be combined with the peer."forward_to" for a completed UDP address
-//       "peers": [
-//         {
-//           "pubkey": "mCXTsTRyjQKV74eWR2Ka1LIdIptCG9K0FXlrG2NC4EQ=", // The public key of the client who would be connected to the WireGuard interface listening on the "forward_to" address
-//           "forward_to": ":1000" // The endpoint of the server WireGuard, will be combined with the server."address" if the IP address part gets omitted
-//         },
-//         {
-//           "pubkey": "WKn3Dtne0ZYj/BXa6uzqMVU+xrLIQRsPA/F/SkgFsVY=",
-//           "forward_to": "192.0.2.2:1002" // A complete UDP address will also be accepted, for forwarding to another host other than the server."address"
-//         },
-//         {
-//           // If the "pubkey" is not specified, it will define a "fallback" peer which matches any unmatched public keys, this is useful for edge nodes
-//           "forward_to": ":1003"
-//         } // end
-//       ], // end
-//     }, // end
-//     { // begin
-//       // Servers with different private keys can be defined in one mwgp-server and share the listen port
-//       "privkey": "6GwcQf52eLIBckRygN+LaW3SfVpv4/Lc4kUyVkYfIkg=",
-//       "address": "192.0.2.3",
-//       "peers": [ /*comments*/
-//         { /*comments*/ "pubkey": "mCXTsTRyjQKV74eWR2Ka1LIdIptCG9K0FXlrG2NC4EQ=", "forward_to": ":1000" }, // comments
-//         { "pubkey": "OPdP2G4hfQasp/+/AZ6LiHJXIY62UKQQY4iNHJVJwH4=", "forward_to": ":1001" }, // comments
-//       ]
-//     }
-//   ],
-//   "obfs": "kisekimo, mahoumo, muryoudewaarimasen" // Obfuscation password (optional)
-// }

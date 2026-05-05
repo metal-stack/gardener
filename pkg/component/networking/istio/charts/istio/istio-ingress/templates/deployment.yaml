@@ -185,6 +185,8 @@ spec:
           args:
           - --allow-dir
           - /wireguard-multiplexer
+          - --port
+          - "51820"
           resources:
             requests:
               cpu: 200m

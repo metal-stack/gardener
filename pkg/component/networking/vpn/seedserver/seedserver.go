@@ -54,8 +54,6 @@ import (
 	netutils "github.com/gardener/gardener/pkg/utils/net"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
-
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 const (
@@ -147,6 +145,8 @@ type Values struct {
 	HighAvailabilityNumberOfShootClients int
 	// VPAUpdateDisabled indicates whether the vertical pod autoscaler update should be disabled.
 	VPAUpdateDisabled bool
+	// TODO Describe
+	Endpoint string
 }
 
 // New creates a new instance of DeployWaiter for the vpn-seed-server.
@@ -192,26 +192,6 @@ func (v *vpnSeedServer) Deploy(ctx context.Context) error {
 			fileNameEnvoyConfig: envoyConfig,
 		},
 	}
-
-	// var (
-	// 	clientPrivateKey     wgtypes.Key
-	// 	seedServerPrivateKey wgtypes.Key
-	// )
-
-	// if clientPrivateKey, err = wgtypes.GeneratePrivateKey(); err != nil {
-	// 	return err
-	// }
-
-	// if seedServerPrivateKey, err = wgtypes.GeneratePrivateKey(); err != nil {
-	// 	return err
-	// }
-
-	// if err := v.ensureWireguardSecret(ctx, seedServerPrivateKey, clientPrivateKey.PublicKey(), SecretNameWireguardSeedServer, v.namespace); err != nil {
-	// 	return err
-	// }
-	// if err := v.ensureWireguardSecret(ctx, clientPrivateKey, seedServerPrivateKey.PublicKey(), SecretNameWireguardShootClient, "shoot "); err != nil {
-	// 	return err
-	// }
 
 	utilruntime.Must(kubernetesutils.MakeUnique(configMap))
 
@@ -301,8 +281,7 @@ func (v *vpnSeedServer) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	// FIXME get istio-ingress namespace const
-	if err := v.ensureWireguardMultiplexerConfig(ctx, wireguardServerSecret.Name, wireguardClientSecret.Name, "istio-ingress"); err != nil {
+	if err := v.ensureWireguardMultiplexerConfig(ctx, wireguardServerSecret.Name, wireguardClientSecret.Name); err != nil {
 		return err
 	}
 
@@ -425,6 +404,10 @@ func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, se
 						{
 							Name:  "OPENVPN_STATUS_PATH",
 							Value: filepath.Join(volumeMountPathStatusDir, "openvpn.status"),
+						},
+						{
+							Name:  "ENDPOINT",
+							Value: v.values.Endpoint,
 						},
 						{
 							Name: "WIREGUARD_PRIVATE_KEY",
@@ -1055,6 +1038,11 @@ func (v *vpnSeedServer) Destroy(ctx context.Context) error {
 	for i := 0; i < v.values.HighAvailabilityNumberOfSeedServers; i++ {
 		objects = append(objects, v.emptyDestinationRule(&i), v.emptyService(&i))
 	}
+
+	if err := v.removeWireguardPublicKeysFromMultiplexerConfig(ctx); err != nil {
+		return err
+	}
+
 	return kubernetesutils.DeleteObjects(ctx, v.client, objects...)
 }
 
@@ -1119,33 +1107,14 @@ func getLabels() map[string]string {
 	}
 }
 
-func (v *vpnSeedServer) ensureWireguardSecret(ctx context.Context, privateKey, publicKey wgtypes.Key, secretName, targetNamespace string) error {
-	privateKeyString := hex.EncodeToString(privateKey[:])
-	publicKeyString := hex.EncodeToString(publicKey[:])
+const (
+	wireguardMultiplexerConfigMapName   = "wireguard-multiplexer-config"
+	wireguardMultiplexerPublicKeyClient = "client-"
+	wireguardMultiplexerPublicKeyServer = "server-"
+	istioIngressNamespace               = "istio-ingress" // FIXME where to get this const from
+)
 
-	// Store them in a secret
-	wireguardSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: targetNamespace,
-		},
-		// We must store the own private key and the remote public key in this this secret
-		StringData: map[string]string{
-			"privateKey":       privateKeyString,
-			"privateKeyBase64": privateKey.String(),
-			"publicKey":        publicKeyString,
-			"publicKeyBase64":  publicKey.String(),
-		},
-	}
-
-	if err := v.client.Create(ctx, wireguardSecret); client.IgnoreAlreadyExists(err) != nil {
-		return err
-	}
-	return nil
-}
-
-// FIXME for now only one shoot is supported
-func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vpnSeedSecretName, vpnShootSecretName, targetNamespace string) error {
+func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vpnSeedSecretName, vpnShootSecretName string) error {
 
 	vpnSeedSecret := &corev1.Secret{}
 	if err := v.client.Get(ctx, types.NamespacedName{Namespace: v.namespace, Name: vpnSeedSecretName}, vpnSeedSecret); err != nil {
@@ -1158,8 +1127,8 @@ func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vp
 
 	wireguardMultiplexerConfig := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wireguard-multiplexer-config", // FIXME constify
-			Namespace: targetNamespace,
+			Name:      wireguardMultiplexerConfigMapName,
+			Namespace: istioIngressNamespace,
 		},
 	}
 
@@ -1181,12 +1150,34 @@ func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vp
 	}
 
 	patch := client.MergeFrom(wireguardMultiplexerConfig.DeepCopy())
-	wireguardMultiplexerConfig.Data["client-"+v.namespace] = base64.StdEncoding.EncodeToString(shootPublicKey)
-	wireguardMultiplexerConfig.Data["server-"+v.namespace] = base64.StdEncoding.EncodeToString(seedPublicKey)
+	wireguardMultiplexerConfig.Data[wireguardMultiplexerPublicKeyClient+v.namespace] = base64.StdEncoding.EncodeToString(shootPublicKey)
+	wireguardMultiplexerConfig.Data[wireguardMultiplexerPublicKeyServer+v.namespace] = base64.StdEncoding.EncodeToString(seedPublicKey)
 
 	if err := v.client.Patch(ctx, wireguardMultiplexerConfig, patch); err != nil {
 		return err
 	}
 
+	return nil
+}
+func (v *vpnSeedServer) removeWireguardPublicKeysFromMultiplexerConfig(ctx context.Context) error {
+	wireguardMultiplexerConfig := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      wireguardMultiplexerConfigMapName,
+			Namespace: istioIngressNamespace,
+		},
+	}
+
+	if err := v.client.Get(ctx, client.ObjectKeyFromObject(wireguardMultiplexerConfig), wireguardMultiplexerConfig); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(wireguardMultiplexerConfig.DeepCopy())
+
+	delete(wireguardMultiplexerConfig.Data, wireguardMultiplexerPublicKeyClient+v.namespace)
+	delete(wireguardMultiplexerConfig.Data, wireguardMultiplexerPublicKeyServer+v.namespace)
+
+	if err := v.client.Patch(ctx, wireguardMultiplexerConfig, patch); err != nil {
+		return err
+	}
 	return nil
 }

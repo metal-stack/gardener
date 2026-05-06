@@ -303,6 +303,12 @@ func (r *Reconciler) runDeleteShootFlow(ctx context.Context, o *operation.Operat
 			SkipIf:       !cleanupShootResources,
 			Dependencies: flow.NewTaskIDs(deployGardenerResourceManager),
 		})
+		_ = g.Add(flow.Task{
+			Name:         "Deleting vpn-seed-server",
+			Fn:           botanist.Shoot.Components.ControlPlane.VPNSeedServer.Destroy,
+			SkipIf:       !cleanupShootResources,
+			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, waitUntilGardenerResourceManagerReady),
+		})
 		deployGardenerAccess = g.Add(flow.Task{
 			Name:         "Deploying Gardener shoot access resources",
 			Fn:           flow.TaskFn(botanist.Shoot.Components.GardenerAccess.Deploy).RetryUntilTimeout(defaultInterval, defaultTimeout),

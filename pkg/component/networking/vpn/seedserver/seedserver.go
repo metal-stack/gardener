@@ -9,6 +9,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -145,8 +146,6 @@ type Values struct {
 	HighAvailabilityNumberOfShootClients int
 	// VPAUpdateDisabled indicates whether the vertical pod autoscaler update should be disabled.
 	VPAUpdateDisabled bool
-	// TODO Describe
-	Endpoint string
 }
 
 // New creates a new instance of DeployWaiter for the vpn-seed-server.
@@ -404,10 +403,6 @@ func (v *vpnSeedServer) podTemplate(configMap *corev1.ConfigMap, secretCAVPN, se
 						{
 							Name:  "OPENVPN_STATUS_PATH",
 							Value: filepath.Join(volumeMountPathStatusDir, "openvpn.status"),
-						},
-						{
-							Name:  "ENDPOINT",
-							Value: v.values.Endpoint,
 						},
 						{
 							Name: "WIREGUARD_PRIVATE_KEY",
@@ -1114,6 +1109,11 @@ const (
 	istioIngressNamespace               = "istio-ingress" // FIXME where to get this const from
 )
 
+type endpoint struct {
+	PublicKey string `json:"publicKey"`
+	ForwardTo string `json:"forwardTo,omitempty"`
+}
+
 func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vpnSeedSecretName, vpnShootSecretName string) error {
 
 	vpnSeedSecret := &corev1.Secret{}
@@ -1149,9 +1149,40 @@ func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vp
 		return err
 	}
 
+	service := v.emptyService(nil)
+	if err := v.client.Get(ctx, client.ObjectKeyFromObject(service), service); err != nil {
+		return err
+	}
+
+	if len(service.Spec.ClusterIP) == 0 {
+		return fmt.Errorf("unable to get clusterip from vpn-seed-server service")
+	}
+
+	shootEp := endpoint{
+		PublicKey: base64.StdEncoding.EncodeToString(shootPublicKey),
+	}
+
+	seedEp := endpoint{
+		PublicKey: base64.StdEncoding.EncodeToString(seedPublicKey),
+		ForwardTo: fmt.Sprintf("%s:%d", service.Spec.ClusterIP, WireguardPort),
+	}
+
+	shootEpJson, err := json.Marshal(shootEp)
+	if err != nil {
+		return err
+	}
+
+	seedEpJson, err := json.Marshal(seedEp)
+	if err != nil {
+		return err
+	}
+
 	patch := client.MergeFrom(wireguardMultiplexerConfig.DeepCopy())
-	wireguardMultiplexerConfig.Data[wireguardMultiplexerPublicKeyClient+v.namespace] = base64.StdEncoding.EncodeToString(shootPublicKey)
-	wireguardMultiplexerConfig.Data[wireguardMultiplexerPublicKeyServer+v.namespace] = base64.StdEncoding.EncodeToString(seedPublicKey)
+	if wireguardMultiplexerConfig.Data == nil {
+		wireguardMultiplexerConfig.Data = make(map[string]string)
+	}
+	wireguardMultiplexerConfig.Data[wireguardMultiplexerPublicKeyClient+v.namespace] = string(shootEpJson)
+	wireguardMultiplexerConfig.Data[wireguardMultiplexerPublicKeyServer+v.namespace] = string(seedEpJson)
 
 	if err := v.client.Patch(ctx, wireguardMultiplexerConfig, patch); err != nil {
 		return err

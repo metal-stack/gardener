@@ -263,9 +263,6 @@ func (i *istiod) Deploy(ctx context.Context) error {
 					Namespace:   istioIngressGateway.Namespace,
 					Annotations: map[string]string{resourcesv1alpha1.Ignore: "true"},
 				},
-				Data: map[string]string{
-					"allow": "",
-				},
 			}
 
 			if err := registry.Add(wireguardMultiplexerConfig); err != nil {

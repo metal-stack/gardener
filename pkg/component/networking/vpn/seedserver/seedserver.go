@@ -1065,7 +1065,6 @@ const (
 	wireguardMultiplexerConfigMapName   = "wireguard-multiplexer-config"
 	wireguardMultiplexerPublicKeyClient = "client-"
 	wireguardMultiplexerPublicKeyServer = "server-"
-	istioIngressNamespace               = "istio-ingress" // FIXME where to get this const from
 )
 
 type endpoint struct {
@@ -1087,7 +1086,7 @@ func (v *vpnSeedServer) ensureWireguardMultiplexerConfig(ctx context.Context, vp
 	wireguardMultiplexerConfig := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      wireguardMultiplexerConfigMapName,
-			Namespace: istioIngressNamespace,
+			Namespace: v.istioNamespaceFunc(),
 		},
 	}
 
@@ -1153,7 +1152,7 @@ func (v *vpnSeedServer) removeWireguardPublicKeysFromMultiplexerConfig(ctx conte
 	wireguardMultiplexerConfig := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      wireguardMultiplexerConfigMapName,
-			Namespace: istioIngressNamespace,
+			Namespace: v.istioNamespaceFunc(),
 		},
 	}
 

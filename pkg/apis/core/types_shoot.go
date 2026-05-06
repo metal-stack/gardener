@@ -562,6 +562,8 @@ type ETCD struct {
 type ETCDConfig struct {
 	// Autoscaling contains auto-scaling configuration options for etcd.
 	Autoscaling *ControlPlaneAutoscaling
+	// BackupEncryption contains configuration for etcd backup encryption.
+	BackupEncryption *BackupEncryptionConfig
 }
 
 // ClusterAutoscaler contains the configuration flags for the Kubernetes cluster autoscaler.
@@ -829,6 +831,12 @@ type EncryptionProvider struct {
 	//   - "secretbox"
 	// Defaults to aescbc.
 	Type *EncryptionProviderType
+}
+
+// BackupEncryptionConfig contains information about the backup encryption configuration details.
+type BackupEncryptionConfig struct {
+	// Provider contains information about the encryption provider.
+	Provider EncryptionProvider
 }
 
 // ServiceAccountConfig is the kube-apiserver configuration for service accounts.

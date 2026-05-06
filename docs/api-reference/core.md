@@ -981,6 +981,43 @@ integer
 </table>
 
 
+<h3 id="backupencryptionconfig">BackupEncryptionConfig
+</h3>
+
+
+<p>
+(<em>Appears on:</em><a href="#etcdconfig">ETCDConfig</a>)
+</p>
+
+<p>
+BackupEncryptionConfig contains information about the backup encryption configuration details.
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+
+<tr>
+<td>
+<code>provider</code></br>
+<em>
+<a href="#encryptionprovider">EncryptionProvider</a>
+</em>
+</td>
+<td>
+<p>Provider contains information about the encryption provider.</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+
 <h3 id="backupentry">BackupEntry
 </h3>
 
@@ -3780,6 +3817,18 @@ ETCDConfig contains etcd configuration.
 <p>Autoscaling contains auto-scaling configuration options for etcd.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>backupEncryption</code></br>
+<em>
+<a href="#backupencryptionconfig">BackupEncryptionConfig</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>BackupEncryption contains configuration for etcd backup encryption.</p>
+</td>
+</tr>
 
 </tbody>
 </table>
@@ -3985,7 +4034,7 @@ string array
 
 
 <p>
-(<em>Appears on:</em><a href="#encryptionconfig">EncryptionConfig</a>)
+(<em>Appears on:</em><a href="#backupencryptionconfig">BackupEncryptionConfig</a>, <a href="#encryptionconfig">EncryptionConfig</a>)
 </p>
 
 <p>

@@ -45,6 +45,8 @@ func (*BackupBucketSpec) ProtoMessage() {}
 
 func (*BackupBucketStatus) ProtoMessage() {}
 
+func (*BackupEncryptionConfig) ProtoMessage() {}
+
 func (*BackupEntry) ProtoMessage() {}
 
 func (*BackupEntryList) ProtoMessage() {}

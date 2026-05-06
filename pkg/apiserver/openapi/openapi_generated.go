@@ -60,6 +60,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.BackupBucketProvider{}.OpenAPIModelName():                         schema_pkg_apis_core_v1beta1_BackupBucketProvider(ref),
 		v1beta1.BackupBucketSpec{}.OpenAPIModelName():                             schema_pkg_apis_core_v1beta1_BackupBucketSpec(ref),
 		v1beta1.BackupBucketStatus{}.OpenAPIModelName():                           schema_pkg_apis_core_v1beta1_BackupBucketStatus(ref),
+		v1beta1.BackupEncryptionConfig{}.OpenAPIModelName():                       schema_pkg_apis_core_v1beta1_BackupEncryptionConfig(ref),
 		v1beta1.BackupEntry{}.OpenAPIModelName():                                  schema_pkg_apis_core_v1beta1_BackupEntry(ref),
 		v1beta1.BackupEntryList{}.OpenAPIModelName():                              schema_pkg_apis_core_v1beta1_BackupEntryList(ref),
 		v1beta1.BackupEntrySpec{}.OpenAPIModelName():                              schema_pkg_apis_core_v1beta1_BackupEntrySpec(ref),
@@ -1702,6 +1703,29 @@ func schema_pkg_apis_core_v1beta1_BackupBucketStatus(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			v1beta1.LastError{}.OpenAPIModelName(), v1beta1.LastOperation{}.OpenAPIModelName(), corev1.SecretReference{}.OpenAPIModelName(), runtime.RawExtension{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_core_v1beta1_BackupEncryptionConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BackupEncryptionConfig contains information about the backup encryption configuration details.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"provider": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Provider contains information about the encryption provider.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(v1beta1.EncryptionProvider{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"provider"},
+			},
+		},
+		Dependencies: []string{
+			v1beta1.EncryptionProvider{}.OpenAPIModelName()},
 	}
 }
 
@@ -3789,11 +3813,17 @@ func schema_pkg_apis_core_v1beta1_ETCDConfig(ref common.ReferenceCallback) commo
 							Ref:         ref(v1beta1.ControlPlaneAutoscaling{}.OpenAPIModelName()),
 						},
 					},
+					"backupEncryption": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BackupEncryption contains configuration for etcd backup encryption.",
+							Ref:         ref(v1beta1.BackupEncryptionConfig{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1beta1.ControlPlaneAutoscaling{}.OpenAPIModelName()},
+			v1beta1.BackupEncryptionConfig{}.OpenAPIModelName(), v1beta1.ControlPlaneAutoscaling{}.OpenAPIModelName()},
 	}
 }
 

@@ -707,6 +707,9 @@ type ETCDConfig struct {
 	// Autoscaling contains auto-scaling configuration options for etcd.
 	// +optional
 	Autoscaling *ControlPlaneAutoscaling `json:"autoscaling,omitempty" protobuf:"bytes,1,opt,name=autoscaling"`
+	// BackupEncryption contains configuration for etcd backup encryption.
+	// +optional
+	BackupEncryption *BackupEncryptionConfig `json:"backupEncryption,omitempty" protobuf:"bytes,2,opt,name=backupEncryption"`
 }
 
 // ClusterAutoscaler contains the configuration flags for the Kubernetes cluster autoscaler.
@@ -1102,6 +1105,12 @@ type EncryptionProvider struct {
 	// Defaults to aescbc.
 	// +optional
 	Type *EncryptionProviderType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
+}
+
+// BackupEncryptionConfig contains information about the backup encryption configuration details.
+type BackupEncryptionConfig struct {
+	// Provider contains information about the encryption provider.
+	Provider EncryptionProvider `json:"provider" protobuf:"bytes,1,opt,name=provider"`
 }
 
 // ServiceAccountConfig is the kube-apiserver configuration for service accounts.

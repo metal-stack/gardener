@@ -246,6 +246,12 @@ message BackupBucketStatus {
   optional .k8s.io.api.core.v1.SecretReference generatedSecretRef = 5;
 }
 
+// BackupEncryptionConfig contains information about the backup encryption configuration details.
+message BackupEncryptionConfig {
+  // Provider contains information about the encryption provider.
+  optional EncryptionProvider provider = 1;
+}
+
 // BackupEntry holds details about shoot backup.
 message BackupEntry {
   // Standard object metadata.
@@ -1033,6 +1039,10 @@ message ETCDConfig {
   // Autoscaling contains auto-scaling configuration options for etcd.
   // +optional
   optional ControlPlaneAutoscaling autoscaling = 1;
+
+  // BackupEncryption contains configuration for etcd backup encryption.
+  // +optional
+  optional BackupEncryptionConfig backupEncryption = 2;
 }
 
 // ETCDEncryptionKeyRotation contains information about the ETCD encryption key credential rotation.

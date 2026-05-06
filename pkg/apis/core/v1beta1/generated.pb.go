@@ -68,6 +68,8 @@ func (m *BackupBucketSpec) Reset() { *m = BackupBucketSpec{} }
 
 func (m *BackupBucketStatus) Reset() { *m = BackupBucketStatus{} }
 
+func (m *BackupEncryptionConfig) Reset() { *m = BackupEncryptionConfig{} }
+
 func (m *BackupEntry) Reset() { *m = BackupEntry{} }
 
 func (m *BackupEntryList) Reset() { *m = BackupEntryList{} }
@@ -1280,6 +1282,39 @@ func (m *BackupBucketStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0xa
 	}
+	return len(dAtA) - i, nil
+}
+
+func (m *BackupEncryptionConfig) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *BackupEncryptionConfig) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *BackupEncryptionConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	{
+		size, err := m.Provider.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenerated(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -3867,6 +3902,18 @@ func (m *ETCDConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.BackupEncryption != nil {
+		{
+			size, err := m.BackupEncryption.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintGenerated(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.Autoscaling != nil {
 		{
 			size, err := m.Autoscaling.MarshalToSizedBuffer(dAtA[:i])
@@ -13760,6 +13807,17 @@ func (m *BackupBucketStatus) Size() (n int) {
 	return n
 }
 
+func (m *BackupEncryptionConfig) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.Provider.Size()
+	n += 1 + l + sovGenerated(uint64(l))
+	return n
+}
+
 func (m *BackupEntry) Size() (n int) {
 	if m == nil {
 		return 0
@@ -14736,6 +14794,10 @@ func (m *ETCDConfig) Size() (n int) {
 	_ = l
 	if m.Autoscaling != nil {
 		l = m.Autoscaling.Size()
+		n += 1 + l + sovGenerated(uint64(l))
+	}
+	if m.BackupEncryption != nil {
+		l = m.BackupEncryption.Size()
 		n += 1 + l + sovGenerated(uint64(l))
 	}
 	return n
@@ -18521,6 +18583,16 @@ func (this *BackupBucketStatus) String() string {
 	}, "")
 	return s
 }
+func (this *BackupEncryptionConfig) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BackupEncryptionConfig{`,
+		`Provider:` + strings.Replace(strings.Replace(this.Provider.String(), "EncryptionProvider", "EncryptionProvider", 1), `&`, ``, 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
 func (this *BackupEntry) String() string {
 	if this == nil {
 		return "nil"
@@ -19177,6 +19249,7 @@ func (this *ETCDConfig) String() string {
 	}
 	s := strings.Join([]string{`&ETCDConfig{`,
 		`Autoscaling:` + strings.Replace(this.Autoscaling.String(), "ControlPlaneAutoscaling", "ControlPlaneAutoscaling", 1) + `,`,
+		`BackupEncryption:` + strings.Replace(this.BackupEncryption.String(), "BackupEncryptionConfig", "BackupEncryptionConfig", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -24000,6 +24073,89 @@ func (m *BackupBucketStatus) Unmarshal(dAtA []byte) error {
 				m.GeneratedSecretRef = &v1.SecretReference{}
 			}
 			if err := m.GeneratedSecretRef.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGenerated(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *BackupEncryptionConfig) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGenerated
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BackupEncryptionConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BackupEncryptionConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Provider", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Provider.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -31356,6 +31512,42 @@ func (m *ETCDConfig) Unmarshal(dAtA []byte) error {
 				m.Autoscaling = &ControlPlaneAutoscaling{}
 			}
 			if err := m.Autoscaling.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupEncryption", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BackupEncryption == nil {
+				m.BackupEncryption = &BackupEncryptionConfig{}
+			}
+			if err := m.BackupEncryption.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

@@ -35,3 +35,8 @@ spec:
       registryBurst: 20
       protectKernelDefaults: true
       streamingConnectionIdleTimeout: 5m
+    etcd:
+      main:
+        backupEncryption:
+          provider:
+            type: aesgcm

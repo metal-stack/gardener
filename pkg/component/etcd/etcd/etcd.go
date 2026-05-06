@@ -426,7 +426,6 @@ func (e *etcd) Deploy(ctx context.Context) error {
 			GarbageCollectionPolicy: &garbageCollectionPolicy,
 			GarbageCollectionPeriod: &garbageCollectionPeriod,
 			SnapshotCompression:     &compressionSpec,
-			EncryptionKeyRefs:       encryptionKeyRefs,
 		}
 
 		if e.values.BackupConfig != nil {
@@ -452,6 +451,8 @@ func (e *etcd) Deploy(ctx context.Context) error {
 					ReelectionPeriod:      e.values.BackupConfig.LeaderElection.ReelectionPeriod,
 				}
 			}
+
+			e.etcd.Spec.Backup.EncryptionKeyRefs = encryptionKeyRefs
 		}
 
 		if e.values.StaticPodConfig != nil {

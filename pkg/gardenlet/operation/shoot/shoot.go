@@ -308,6 +308,13 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 		shoot.UsedEncryptionProvider = shootStatus.Credentials.EncryptionAtRest.Provider.Type
 	}
 
+	if etcd := shoot.GetInfo().Spec.Kubernetes.ETCD; etcd != nil &&
+		etcd.Main != nil &&
+		etcd.Main.BackupEncryption != nil &&
+		etcd.Main.BackupEncryption.Provider.Type != nil {
+		shoot.BackupEncryptionProvider = *etcd.Main.BackupEncryption.Provider.Type
+	}
+
 	if b.seed != nil {
 		shoot.TopologyAwareRoutingEnabled = v1beta1helper.IsTopologyAwareRoutingForShootControlPlaneEnabled(b.seed, shootObject)
 	}

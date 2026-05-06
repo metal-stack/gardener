@@ -105,6 +105,7 @@ type Shoot struct {
 	OSCSyncJitterPeriod                     *metav1.Duration
 	EncryptionProviderToUse                 gardencorev1beta1.EncryptionProviderType
 	UsedEncryptionProvider                  gardencorev1beta1.EncryptionProviderType
+	BackupEncryptionProvider                gardencorev1beta1.EncryptionProviderType
 	ResourcesToEncrypt                      []string
 	EncryptedResources                      []string
 	ServiceAccountIssuerHostname            *string

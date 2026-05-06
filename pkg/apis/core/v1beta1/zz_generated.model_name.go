@@ -100,6 +100,11 @@ func (in BackupBucketStatus) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in BackupEncryptionConfig) OpenAPIModelName() string {
+	return "com.github.gardener.gardener.pkg.apis.core.v1beta1.BackupEncryptionConfig"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in BackupEntry) OpenAPIModelName() string {
 	return "com.github.gardener.gardener.pkg.apis.core.v1beta1.BackupEntry"
 }

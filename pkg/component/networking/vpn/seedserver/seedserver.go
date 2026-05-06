@@ -260,9 +260,6 @@ func (v *vpnSeedServer) Deploy(ctx context.Context) error {
 		if err := v.deployService(ctx, nil); err != nil {
 			return err
 		}
-		if err := v.deployWireguardService(ctx, nil); err != nil {
-			return err
-		}
 		if err := v.deployDestinationRule(ctx, nil); err != nil {
 			return err
 		}
@@ -773,44 +770,6 @@ func (v *vpnSeedServer) deployService(ctx context.Context, idx *int) error {
 		// We need to publish the service even if no pod is ready yet to allow vpn clients to connect before regular traffic.
 		// The readiness check of the vpn server container only passes once vpn clients have connected and traffic can flow.
 		service.Spec.PublishNotReadyAddresses = true
-
-		return nil
-	})
-	return err
-}
-
-func (v *vpnSeedServer) deployWireguardService(ctx context.Context, idx *int) error {
-	service := v.emptyService(idx)
-	service.ObjectMeta.Name = "wireguard-server"
-
-	_, err := controllerutils.GetAndCreateOrMergePatch(ctx, v.client, service, func() error {
-		metav1.SetMetaDataAnnotation(&service.ObjectMeta, "networking.istio.io/exportTo", "*")
-
-		metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingPodLabelSelectorNamespaceAlias, v1beta1constants.LabelNetworkPolicyShootNamespaceAlias)
-		utilruntime.Must(gardenerutils.InjectNetworkPolicyNamespaceSelectors(service,
-			metav1.LabelSelector{MatchLabels: map[string]string{v1beta1constants.GardenRole: v1beta1constants.GardenRoleIstioIngress}},
-			metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: v1beta1constants.LabelExposureClassHandlerName, Operator: metav1.LabelSelectorOpExists}}}))
-		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForScrapeTargets(service, networkingv1.NetworkPolicyPort{Port: ptr.To(intstr.FromInt32(WireguardPort)), Protocol: ptr.To(corev1.ProtocolUDP)}))
-
-		service.Spec.Type = corev1.ServiceTypeLoadBalancer
-		service.Spec.Ports = []corev1.ServicePort{
-			{
-				Name:       "wireguard",
-				Port:       WireguardPort,
-				TargetPort: intstr.FromInt32(WireguardPort),
-				Protocol:   corev1.ProtocolUDP,
-			},
-		}
-
-		if idx == nil {
-			service.Spec.Selector = map[string]string{
-				v1beta1constants.LabelApp: deploymentName,
-			}
-		} else {
-			service.Spec.Selector = map[string]string{
-				"statefulset.kubernetes.io/pod-name": v.indexedName(idx),
-			}
-		}
 
 		return nil
 	})

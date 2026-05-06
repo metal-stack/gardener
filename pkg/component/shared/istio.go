@@ -25,8 +25,10 @@ import (
 	"github.com/gardener/gardener/pkg/component/networking/istio"
 	"github.com/gardener/gardener/pkg/component/networking/istiobasicauthserver"
 	vpnseedserver "github.com/gardener/gardener/pkg/component/networking/vpn/seedserver"
+	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 )
 
 // ImageVector is an alias for imagevector.Containers(). Exposed for testing.
@@ -358,6 +360,11 @@ func commonIstioIngressNetworkPolicyLabels(withShoots bool) map[string]string {
 		for i := range vpnseedserver.HighAvailabilityReplicaCount {
 			labels[gardenerutils.NetworkPolicyLabel(fmt.Sprintf("%s-%s-%d", v1beta1constants.LabelNetworkPolicyShootNamespaceAlias, v1beta1constants.DeploymentNameVPNSeedServer, i), vpnseedserver.OpenVPNPort)] = v1beta1constants.LabelNetworkPolicyAllowed
 		}
+
+		if utilfeature.DefaultFeatureGate.Enabled(features.WireguardVPN) {
+			labels[gardenerutils.NetworkPolicyLabelUDP(v1beta1constants.LabelNetworkPolicyShootNamespaceAlias+"-"+v1beta1constants.DeploymentNameVPNSeedServer, vpnseedserver.WireguardPort)] = v1beta1constants.LabelNetworkPolicyAllowed
+		}
+
 	}
 
 	return labels

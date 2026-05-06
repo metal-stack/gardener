@@ -247,13 +247,3 @@ spec:
           name: "wireguard-multiplexer-config"
           optional: true
       priorityClassName: {{ .Values.priorityClassName }}
-
-# ---
-# # Ensure at the beginning a empty secret is present
-# apiVersion: v1
-# kind: Secret
-# metadata:
-#   name: wireguard-multiplexer-config
-#   namespace: {{ .Release.Namespace }}
-# data:
-#   config.json: e30=

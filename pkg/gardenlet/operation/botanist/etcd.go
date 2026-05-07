@@ -115,6 +115,12 @@ func (b *Botanist) DeployEtcd(ctx context.Context) error {
 			DeltaSnapshotRetentionPeriod: deltaSnapshotRetentionPeriod,
 		})
 
+		if b.Shoot.GetInfo().Status.Credentials != nil &&
+			b.Shoot.GetInfo().Status.Credentials.Rotation != nil &&
+			b.Shoot.GetInfo().Status.Credentials.Rotation.ETCDEncryptionKey != nil {
+			b.Shoot.Components.ControlPlane.EtcdMain.SetBackupEncryptionRotationPhase(b.Shoot.GetInfo().Status.Credentials.Rotation.ETCDEncryptionKey.Phase)
+		}
+
 		b.Shoot.Components.ControlPlane.EtcdMain.SetBackupEncryptionProvider(b.Shoot.BackupEncryptionProvider)
 	}
 

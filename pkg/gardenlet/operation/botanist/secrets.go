@@ -94,6 +94,7 @@ func (b *Botanist) lastSecretRotationStartTimes() map[string]time.Time {
 
 		if shootStatus.Credentials.Rotation.ETCDEncryptionKey != nil && shootStatus.Credentials.Rotation.ETCDEncryptionKey.LastInitiationTime != nil {
 			rotation[v1beta1constants.SecretNameETCDEncryptionKey] = shootStatus.Credentials.Rotation.ETCDEncryptionKey.LastInitiationTime.Time
+			rotation[v1beta1constants.SecretNameGardenerETCDBackupEncryptionKey] = shootStatus.Credentials.Rotation.ETCDEncryptionKey.LastInitiationTime.Time
 		}
 	}
 

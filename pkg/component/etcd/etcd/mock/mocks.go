@@ -168,6 +168,18 @@ func (mr *MockInterfaceMockRecorder) SetBackupEncryptionProvider(arg0 any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBackupEncryptionProvider", reflect.TypeOf((*MockInterface)(nil).SetBackupEncryptionProvider), arg0)
 }
 
+// SetBackupEncryptionRotationPhase mocks base method.
+func (m *MockInterface) SetBackupEncryptionRotationPhase(arg0 v1beta1.CredentialsRotationPhase) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetBackupEncryptionRotationPhase", arg0)
+}
+
+// SetBackupEncryptionRotationPhase indicates an expected call of SetBackupEncryptionRotationPhase.
+func (mr *MockInterfaceMockRecorder) SetBackupEncryptionRotationPhase(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBackupEncryptionRotationPhase", reflect.TypeOf((*MockInterface)(nil).SetBackupEncryptionRotationPhase), arg0)
+}
+
 // SetReplicas mocks base method.
 func (m *MockInterface) SetReplicas(arg0 *int32) {
 	m.ctrl.T.Helper()

@@ -110,6 +110,8 @@ type Interface interface {
 	SetStaticPodControlPlaneNodesIPAddresses(...net.IP)
 	// SetBackupEncryptionProvider sets the encryption provider type to be used for encrypting the etcd backup.
 	SetBackupEncryptionProvider(gardencorev1beta1.EncryptionProviderType)
+	// SetBackupEncryptionRotationPhase sets the encryption rotation phase.
+	SetBackupEncryptionRotationPhase(gardencorev1beta1.CredentialsRotationPhase)
 }
 
 // New creates a new instance of DeployWaiter for the Etcd.
@@ -167,6 +169,7 @@ type Values struct {
 	TopologyAwareRoutingEnabled bool
 	StaticPodConfig             *StaticPodConfig
 	EncryptionProviderToUse     gardencorev1beta1.EncryptionProviderType
+	RotationPhase               gardencorev1beta1.CredentialsRotationPhase
 }
 
 // BackupConfig contains information for configuring the backup-restore sidecar so that it takes regularly backups of
@@ -237,6 +240,8 @@ func (e *etcd) Deploy(ctx context.Context) error {
 		resourcesBackupRestore = e.computeBackupRestoreContainerResources()
 	)
 
+	// IMPLEMENT ROTATION
+
 	if e.values.Class == ClassImportant {
 		if !e.values.HighAvailabilityEnabled {
 			annotations = map[string]string{"cluster-autoscaler.kubernetes.io/safe-to-evict": "false"}
@@ -298,14 +303,20 @@ func (e *etcd) Deploy(ctx context.Context) error {
 	var encryptionKeyRefs []*corev1.SecretReference
 
 	if e.values.EncryptionProviderToUse != "" {
+		options := []secretsmanager.GenerateOption{
+			secretsmanager.Persist(),
+			secretsmanager.Rotate(secretsmanager.KeepOld),
+		}
+
+		if e.values.RotationPhase == gardencorev1beta1.RotationCompleting {
+			options = append(options, secretsmanager.IgnoreOldSecrets())
+		}
+
 		etcdBackupEncryptionKey, err := e.secretsManager.Generate(ctx, &secretsutils.ETCDEncryptionKeySecretConfig{
 			Provider:     string(e.values.EncryptionProviderToUse),
 			Name:         v1beta1constants.SecretNameGardenerETCDBackupEncryptionKey,
 			SecretLength: 32,
-		},
-			secretsmanager.Persist(),
-			secretsmanager.Rotate(secretsmanager.KeepOld),
-		)
+		}, options...)
 		if err != nil {
 			return fmt.Errorf("unable to generate etcd backup encryption key: %w", err)
 		}
@@ -314,6 +325,13 @@ func (e *etcd) Deploy(ctx context.Context) error {
 			Name:      etcdBackupEncryptionKey.Name,
 			Namespace: etcdBackupEncryptionKey.Namespace,
 		})
+
+		if keySecretOld, ok := e.secretsManager.Get(v1beta1constants.SecretNameGardenerETCDBackupEncryptionKey, secretsmanager.Old); ok {
+			encryptionKeyRefs = append(encryptionKeyRefs, &corev1.SecretReference{
+				Name:      keySecretOld.Name,
+				Namespace: keySecretOld.Namespace,
+			})
+		}
 	}
 
 	clientService := &corev1.Service{}
@@ -912,6 +930,10 @@ func (e *etcd) SetBackupConfig(backupConfig *BackupConfig) { e.values.BackupConf
 
 func (e *etcd) SetBackupEncryptionProvider(p gardencorev1beta1.EncryptionProviderType) {
 	e.values.EncryptionProviderToUse = p
+}
+
+func (e *etcd) SetBackupEncryptionRotationPhase(r gardencorev1beta1.CredentialsRotationPhase) {
+	e.values.RotationPhase = r
 }
 
 func (e *etcd) Scale(ctx context.Context, replicas int32) error {

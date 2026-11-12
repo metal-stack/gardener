@@ -161,10 +161,6 @@ func RunInitFlow(ctx context.Context, b *gardenadmbotanist.GardenadmBotanist, op
 				WithDependencies(reconcileGardenerResourceManagerInPodNetwork).
 				SkipIf(podNetworkAvailable || opts.UseHostNetwork),
 		)
-		reconcileControlPlane = g.AddGroup(
-			b.ReconcileControlPlaneTaskGroup(false).
-				WithDependencies(gardenadmbotanist.TaskGroupReconcileExtensionControllers),
-		)
 		syncPointBootstrapped = flow.NewTaskIDs(
 			reconcileNetworkPolicies,
 			reconcileRuntimeGardenerResourceManager,
@@ -175,6 +171,10 @@ func RunInitFlow(ctx context.Context, b *gardenadmbotanist.GardenadmBotanist, op
 			reconcileExtensionControllersInPodNetwork,
 		)
 
+		reconcileControlPlane = g.AddGroup(
+			b.ReconcileControlPlaneTaskGroup(false).
+				WithDependencies(gardenadmbotanist.TaskGroupReconcileExtensionControllers),
+		)
 		// When extension-based exposure is configured, first deploy the SelfHostedShootExposure object
 		// so the extension controller provisions the necessary resources. The DNSRecord step then reads the
 		// resulting ingress from the status. For DNS-based exposure the SelfHostedShootExposure

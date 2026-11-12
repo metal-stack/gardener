@@ -14,8 +14,11 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/version"
 	"k8s.io/utils/clock"
@@ -27,8 +30,10 @@ import (
 	gardenletconfigv1alpha1 "github.com/gardener/gardener/pkg/apis/config/gardenlet/v1alpha1"
 	gardencorev1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	fakekubernetes "github.com/gardener/gardener/pkg/client/kubernetes/fake"
+	"github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/gardenadm"
 	gardenadmadmission "github.com/gardener/gardener/pkg/gardenadm/admission"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
@@ -154,7 +159,7 @@ func NewGardenadmBotanist(
 		return nil, fmt.Errorf("failed creating gardenadm botanist: %w", err)
 	}
 
-	if err := initializeShootResource(resources, gardenadmBotanist.FS, runsControlPlane); err != nil {
+	if err := initializeShootResource(ctx, clientSet, resources, gardenadmBotanist.FS, runsControlPlane); err != nil {
 		return nil, fmt.Errorf("failed initializing shoot resource: %w", err)
 	}
 
@@ -355,7 +360,7 @@ func newFakeSeedClientSet(kubernetesVersion string) kubernetes.Interface {
 		Build()
 }
 
-func initializeShootResource(resources gardenadm.Resources, fs afero.Afero, runsControlPlane bool) error {
+func initializeShootResource(ctx context.Context, clientSet kubernetes.Interface, resources gardenadm.Resources, fs afero.Afero, runsControlPlane bool) error {
 	shoot := resources.Shoot
 	shoot.Status.TechnicalID = gardenerutils.ComputeTechnicalID(resources.Project.Name, shoot)
 	shoot.Status.Gardener = gardencorev1beta1.Gardener{Name: "gardenadm", Version: version.Get().GitVersion}
@@ -386,7 +391,32 @@ func initializeShootResource(resources gardenadm.Resources, fs afero.Afero, runs
 	} else {
 		// For `gardenadm bootstrap`, we don't need a stable UID. We generate a random one instead, because we might not be
 		// able to persist the generated UID in /var/lib/gardenadm (e.g., when running `gardenadm bootstrap` on macOS).
-		shoot.Status.UID = uuid.NewUUID()
+		if clientSet == nil {
+			shoot.Status.UID = uuid.NewUUID()
+			return nil
+		}
+		extensionsGV := schema.GroupVersion{
+			Group:   "extensions.gardener.cloud",
+			Version: "v1alpha1",
+		}
+
+		if err := discovery.ServerSupportsVersion(clientSet.Kubernetes().Discovery(), extensionsGV); err != nil {
+			shoot.Status.UID = uuid.NewUUID()
+			return nil
+		}
+
+		cluster := &extensionsv1alpha1.Cluster{}
+		if err := clientSet.Client().Get(ctx, client.ObjectKey{Name: shoot.Status.TechnicalID}, cluster); apierrors.IsNotFound(err) {
+			shoot.Status.UID = uuid.NewUUID()
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("failed fetching cluster resource: %w", err)
+		}
+		shootFromCluster, err := extensions.ShootFromCluster(cluster)
+		if err != nil {
+			return fmt.Errorf("failed decoding shoot from cluster: %w", err)
+		}
+		shoot.Status.UID = shootFromCluster.Status.UID
 	}
 
 	return nil

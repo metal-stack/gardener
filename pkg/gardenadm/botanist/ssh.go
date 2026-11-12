@@ -154,7 +154,20 @@ func (b *GardenadmBotanist) CopyManifests(ctx context.Context, configDir fs.FS) 
 		return err
 	}
 
+	if err := b.copyShootUID(ctx); err != nil {
+		return err
+	}
+
 	return b.copyShootState(ctx)
+}
+
+func (b *GardenadmBotanist) copyShootUID(ctx context.Context) error {
+	var (
+		path        = filepath.Join(string(filepath.Separator), GardenadmBaseDir, "shoot-uid")
+		content     = []byte(b.Shoot.GetInfo().Status.UID)
+		permissions = "0600"
+	)
+	return b.sshConnection.Copy(ctx, path, permissions, content)
 }
 
 func prepareRemoteDirs(ctx context.Context, conn *sshutils.Connection) error {
